@@ -1,18 +1,31 @@
 #!/usr/bin/env bun
 import { runInit } from './commands/init.ts';
+import { runRun } from './commands/run.ts';
 
 const USAGE = `diffprompt — pairwise prompt evaluation
 
 Usage:
-  diffprompt init [--force]   Scaffold diffprompt.config.json, prompts/, data/
-  diffprompt run              (not yet implemented)
-  diffprompt calibrate        (not yet implemented)
-  diffprompt seed             (not yet implemented)
+  diffprompt init [--force]         Scaffold diffprompt.config.json, prompts/, data/
+  diffprompt run [options]          Run an evaluation
+    --config <path>                 Config file (default: ./diffprompt.config.json)
+    --mock                          Use deterministic mock provider + judge
+    --concurrency <n>               Override config.concurrency
+    --allow-langfuse                Accept Langfuse-style JSONL exports
+  diffprompt calibrate              (not yet implemented)
+  diffprompt seed                   (not yet implemented)
 
 See TODOS.md at the repo root for the v1 launch gate.
 `;
 
-function main(argv: string[]): number {
+function parseFlag(args: string[], name: string): string | undefined {
+  const i = args.indexOf(name);
+  if (i === -1) return undefined;
+  const v = args[i + 1];
+  if (v === undefined) throw new Error(`flag ${name} requires a value`);
+  return v;
+}
+
+async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
 
   if (!cmd || cmd === '--help' || cmd === '-h') {
@@ -29,7 +42,26 @@ function main(argv: string[]): number {
       process.stdout.write(`\nNext: edit prompts/baseline.md and prompts/candidate.md, then run \`diffprompt run\`.\n`);
       return 0;
     }
-    case 'run':
+    case 'run': {
+      try {
+        const configPath = parseFlag(rest, '--config');
+        const mock = rest.includes('--mock');
+        const concurrencyRaw = parseFlag(rest, '--concurrency');
+        const allowLangfuse = rest.includes('--allow-langfuse');
+        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse };
+        if (configPath) opts.configPath = configPath;
+        if (concurrencyRaw !== undefined) {
+          const n = Number(concurrencyRaw);
+          if (!Number.isFinite(n) || n < 1) throw new Error(`--concurrency must be a positive number, got "${concurrencyRaw}"`);
+          opts.concurrency = Math.floor(n);
+        }
+        const result = await runRun(opts);
+        return result.exitCode;
+      } catch (err) {
+        process.stderr.write(`diffprompt run: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
     case 'calibrate':
     case 'seed': {
       process.stderr.write(`diffprompt ${cmd}: not yet implemented. See TODOS.md at the repo root.\n`);
@@ -42,4 +74,4 @@ function main(argv: string[]): number {
   }
 }
 
-process.exit(main(process.argv.slice(2)));
+main(process.argv.slice(2)).then((code) => process.exit(code));
