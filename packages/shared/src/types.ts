@@ -17,6 +17,20 @@ export interface Case {
   metadata?: Record<string, unknown>;
 }
 
+export type FeedbackPolarity = 'positive' | 'negative';
+
+export interface Feedback {
+  polarity: FeedbackPolarity;
+  reason?: string;
+}
+
+export interface LangfuseLine {
+  input: string;
+  output: string;
+  feedback?: Feedback | FeedbackPolarity;
+  metadata?: Record<string, unknown>;
+}
+
 export type Verdict = 'a' | 'b' | 'tie';
 
 export interface JudgeResult {
