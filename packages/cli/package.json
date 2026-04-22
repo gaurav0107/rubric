@@ -11,6 +11,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@diffprompt/shared": "workspace:*"
+    "@diffprompt/shared": "*"
   }
 }

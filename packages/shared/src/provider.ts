@@ -1,3 +1,5 @@
+import { createOpenAI, type OpenAIProvider } from '@ai-sdk/openai';
+import { generateText } from 'ai';
 import type { ModelId } from './types.ts';
 
 export interface GenerateRequest {
@@ -54,14 +56,13 @@ export interface OpenAIProviderOptions {
   baseURL?: string;
 }
 
-/**
- * Stub OpenAI provider. The real implementation will wrap
- * @ai-sdk/openai's generateText via the Vercel AI SDK. Until that
- * dependency is wired up, calling generate() throws a descriptive
- * ProviderNotConfiguredError so callers fail fast with a clear fix.
- */
 export function createOpenAIProvider(opts: OpenAIProviderOptions = {}): Provider {
   const apiKey = opts.apiKey ?? (typeof process !== 'undefined' ? process.env?.OPENAI_API_KEY : undefined);
+  let client: OpenAIProvider | null = null;
+
+  const clientOptions: Parameters<typeof createOpenAI>[0] = {};
+  if (apiKey) clientOptions.apiKey = apiKey;
+  if (opts.baseURL) clientOptions.baseURL = opts.baseURL;
 
   return {
     name: 'openai',
@@ -72,17 +73,40 @@ export function createOpenAIProvider(opts: OpenAIProviderOptions = {}): Provider
         return false;
       }
     },
-    async generate(_req: GenerateRequest): Promise<GenerateResult> {
+    async generate(req: GenerateRequest): Promise<GenerateResult> {
       if (!apiKey) {
         throw new ProviderNotConfiguredError(
           'openai',
           'set OPENAI_API_KEY or pass { apiKey } to createOpenAIProvider()',
         );
       }
-      throw new ProviderNotConfiguredError(
-        'openai',
-        'Vercel AI SDK dependency (`ai` + `@ai-sdk/openai`) not yet installed',
-      );
+      if (!client) client = createOpenAI(clientOptions);
+
+      const { model } = splitModelId(req.modelId);
+      const started = Date.now();
+
+      const callOpts: Parameters<typeof generateText>[0] = {
+        model: client(model),
+        prompt: req.prompt,
+      };
+      if (req.system !== undefined) callOpts.system = req.system;
+      if (req.temperature !== undefined) callOpts.temperature = req.temperature;
+      if (req.maxOutputTokens !== undefined) callOpts.maxOutputTokens = req.maxOutputTokens;
+      if (req.signal) callOpts.abortSignal = req.signal;
+
+      const result = await generateText(callOpts);
+
+      const out: GenerateResult = {
+        text: result.text,
+        latencyMs: Date.now() - started,
+        resolvedModel: model,
+      };
+      const usage = result.usage;
+      if (usage) {
+        if (typeof usage.inputTokens === 'number') out.inputTokens = usage.inputTokens;
+        if (typeof usage.outputTokens === 'number') out.outputTokens = usage.outputTokens;
+      }
+      return out;
     },
   };
 }

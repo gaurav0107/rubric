@@ -43,10 +43,5 @@ describe('createOpenAIProvider', () => {
     ).rejects.toBeInstanceOf(ProviderNotConfiguredError);
   });
 
-  test('throws ProviderNotConfiguredError about missing SDK when key is set', async () => {
-    const p = createOpenAIProvider({ apiKey: 'sk-test' });
-    await expect(
-      p.generate({ modelId: 'openai/gpt-4o-mini' as ModelId, prompt: 'hi' }),
-    ).rejects.toThrow(/Vercel AI SDK/);
-  });
+  // Live path is covered by an integration test gated on OPENAI_API_KEY; not asserted here.
 });
