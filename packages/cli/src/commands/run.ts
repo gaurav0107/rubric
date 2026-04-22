@@ -3,10 +3,12 @@ import { resolve } from 'node:path';
 import {
   createMockJudge,
   createMockProvider,
+  createOpenAIJudge,
   createOpenAIProvider,
   loadConfig,
   parseCasesJsonl,
   runEval,
+  type Config,
   type Judge,
   type Provider,
   type RunSummary,
@@ -35,11 +37,23 @@ function buildProviders(mock: boolean): Provider[] {
   return [createOpenAIProvider()];
 }
 
-function buildJudge(mock: boolean): Judge {
+function buildJudge(mock: boolean, config: Config, providers: Provider[]): Judge {
   if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
-  throw new Error(
-    'live judge is not yet implemented. Re-run with --mock, or wait for the next commit that wires up the real judge.',
-  );
+
+  const rubric = typeof config.judge.rubric === 'string'
+    ? config.judge.rubric
+    : config.judge.rubric.custom;
+  const judgeProvider = providers.find((p) => p.supports(config.judge.model));
+  if (!judgeProvider) {
+    throw new Error(
+      `no provider accepts judge.model "${config.judge.model}". Only openai/* judges are supported in live mode today.`,
+    );
+  }
+  return createOpenAIJudge({
+    provider: judgeProvider,
+    model: config.judge.model,
+    rubric,
+  });
 }
 
 function fmtPct(n: number): string {
@@ -65,7 +79,7 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   write(`  mode:     ${mock ? 'mock' : 'live'}\n`);
 
   const providers = buildProviders(mock);
-  const judge = buildJudge(mock);
+  const judge = buildJudge(mock, loaded.config, providers);
 
   const onCell = (_cell: unknown, p: { done: number; total: number }) => {
     write(`  [${p.done}/${p.total}]\n`);
