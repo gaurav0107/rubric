@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   createMockJudge,
@@ -7,6 +7,7 @@ import {
   createOpenAIProvider,
   loadConfig,
   parseCasesJsonl,
+  renderReportHtml,
   runEval,
   type Config,
   type Judge,
@@ -20,6 +21,8 @@ export interface RunOptions {
   mock?: boolean;
   concurrency?: number;
   allowLangfuse?: boolean;
+  /** If set, write an HTML report to this absolute or cwd-relative path. */
+  reportPath?: string;
   /** Stream of output lines; defaults to process.stdout. */
   write?: (line: string) => void;
 }
@@ -103,6 +106,13 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   write(`  ties:    ${summary.ties}\n`);
   write(`  errors:  ${summary.errors}\n`);
   write(`  winRate: ${fmtPct(summary.winRate)} (of decisive ${summary.wins + summary.losses})\n`);
+
+  if (opts.reportPath) {
+    const absReport = resolve(cwd, opts.reportPath);
+    const html = renderReportHtml({ config: loaded.config, cases, cells, summary });
+    writeFileSync(absReport, html, 'utf8');
+    write(`\n  report:  ${absReport}\n`);
+  }
 
   return {
     total: cells.length,

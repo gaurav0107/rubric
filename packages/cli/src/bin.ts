@@ -11,6 +11,7 @@ Usage:
     --mock                          Use deterministic mock provider + judge
     --concurrency <n>               Override config.concurrency
     --allow-langfuse                Accept Langfuse-style JSONL exports
+    --report <path>                 Write a self-contained HTML report
   diffprompt calibrate              (not yet implemented)
   diffprompt seed                   (not yet implemented)
 
@@ -48,8 +49,10 @@ async function main(argv: string[]): Promise<number> {
         const mock = rest.includes('--mock');
         const concurrencyRaw = parseFlag(rest, '--concurrency');
         const allowLangfuse = rest.includes('--allow-langfuse');
+        const reportPath = parseFlag(rest, '--report');
         const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse };
         if (configPath) opts.configPath = configPath;
+        if (reportPath) opts.reportPath = reportPath;
         if (concurrencyRaw !== undefined) {
           const n = Number(concurrencyRaw);
           if (!Number.isFinite(n) || n < 1) throw new Error(`--concurrency must be a positive number, got "${concurrencyRaw}"`);
