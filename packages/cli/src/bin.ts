@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { runInit } from './commands/init.ts';
 import { runRun } from './commands/run.ts';
+import { runSeed } from './commands/seed.ts';
 
 const USAGE = `diffprompt — pairwise prompt evaluation
 
@@ -12,8 +13,9 @@ Usage:
     --concurrency <n>               Override config.concurrency
     --allow-langfuse                Accept Langfuse-style JSONL exports
     --report <path>                 Write a self-contained HTML report
+  diffprompt seed --from-langfuse <in.jsonl> [--out data/cases.jsonl]
+                                    Convert a Langfuse export into cases + calibration
   diffprompt calibrate              (not yet implemented)
-  diffprompt seed                   (not yet implemented)
 
 See TODOS.md at the repo root for the v1 launch gate.
 `;
@@ -65,8 +67,24 @@ async function main(argv: string[]): Promise<number> {
         return 1;
       }
     }
-    case 'calibrate':
     case 'seed': {
+      try {
+        const fromLangfuse = parseFlag(rest, '--from-langfuse');
+        if (!fromLangfuse) throw new Error('seed requires --from-langfuse <path>');
+        const out = parseFlag(rest, '--out') ?? 'data/cases.jsonl';
+        const calibrationOut = parseFlag(rest, '--calibration-out');
+        const opts: Parameters<typeof runSeed>[0] = { fromLangfuse, out };
+        if (calibrationOut) opts.calibrationOut = calibrationOut;
+        const result = runSeed(opts);
+        process.stdout.write(`  wrote   ${result.outPath} (${result.casesWritten} cases)\n`);
+        process.stdout.write(`  wrote   ${result.calibrationPath} (${result.calibrationWritten} labeled)\n`);
+        return 0;
+      } catch (err) {
+        process.stderr.write(`diffprompt seed: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
+    case 'calibrate': {
       process.stderr.write(`diffprompt ${cmd}: not yet implemented. See TODOS.md at the repo root.\n`);
       return 1;
     }
