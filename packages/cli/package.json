@@ -1,0 +1,16 @@
+{
+  "name": "diffprompt",
+  "version": "0.0.0",
+  "description": "Pairwise prompt evaluation framework — CLI and local server.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "diffprompt": "./src/bin.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@diffprompt/shared": "workspace:*"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@diffprompt/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Eval engine, config loader, and shared types. Pinned by CLI, web, and action via exact-major semver.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

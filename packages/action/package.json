@@ -1,0 +1,14 @@
+{
+  "name": "@diffprompt/action",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GitHub Action — runs diffprompt on pull requests and posts results.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@diffprompt/shared": "workspace:*"
+  }
+}
