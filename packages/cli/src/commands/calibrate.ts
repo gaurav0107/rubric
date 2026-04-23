@@ -22,6 +22,8 @@ export interface CalibrateOptions {
   labelsPath?: string;
   /** Report path (relative to cwd). Default: calibration.html. */
   reportPath?: string;
+  /** When set, also write the CalibrationReport as JSON to this path for `diffprompt comment` to consume. */
+  jsonPath?: string;
   mock?: boolean;
   concurrency?: number;
   write?: (line: string) => void;
@@ -134,6 +136,12 @@ export async function runCalibrate(opts: CalibrateOptions = {}): Promise<Calibra
   const html = renderCalibrationHtml(report);
   writeFileSync(reportPath, html, 'utf8');
   write(`\n  report:   ${reportPath}\n`);
+
+  if (opts.jsonPath) {
+    const absJson = resolve(cwd, opts.jsonPath);
+    writeFileSync(absJson, JSON.stringify(report) + '\n', 'utf8');
+    write(`  json:     ${absJson}\n`);
+  }
 
   return {
     report,

@@ -1,0 +1,115 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  renderPrComment,
+  type CalibrationReport,
+  type ModelId,
+  type RunSummary,
+} from '../../../shared/src/index.ts';
+import type { JsonPayload } from './run.ts';
+
+export interface CommentOptions {
+  /** Absolute or cwd-relative path to a `diffprompt run --json` payload. */
+  fromPath: string;
+  /** Optional CalibrationReport JSON (from `diffprompt calibrate --json`). */
+  calibrationPath?: string;
+  /** Optional URL to a hosted HTML report, linked from the comment footer. */
+  reportUrl?: string;
+  /** Agreement threshold below which calibrated judge is flagged weak. Default 0.8. */
+  minAgreement?: number;
+  /** Optional title suffix; e.g. "baseline.md vs candidate.md". */
+  title?: string;
+  cwd?: string;
+  write?: (line: string) => void;
+}
+
+export interface CommentResult {
+  markdown: string;
+  exitCode: number;
+}
+
+function parseJsonFile(path: string): unknown {
+  const text = readFileSync(path, 'utf8');
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`failed to parse JSON at ${path}: ${msg}`);
+  }
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function validateRunPayload(raw: unknown, path: string): JsonPayload {
+  if (!isRecord(raw)) throw new Error(`${path}: run payload must be a JSON object`);
+  if (raw.version !== 1) {
+    throw new Error(`${path}: unsupported run payload version ${JSON.stringify(raw.version)} (expected 1)`);
+  }
+  if (!isRecord(raw.summary)) throw new Error(`${path}: summary missing`);
+  if (!Array.isArray(raw.models)) throw new Error(`${path}: models must be an array`);
+  if (!isRecord(raw.judge) || typeof raw.judge.model !== 'string') {
+    throw new Error(`${path}: judge.model missing`);
+  }
+  if (!Array.isArray(raw.cells)) throw new Error(`${path}: cells must be an array`);
+  return raw as unknown as JsonPayload;
+}
+
+function validateCalibrationReport(raw: unknown, path: string): CalibrationReport {
+  if (!isRecord(raw)) throw new Error(`${path}: calibration report must be a JSON object`);
+  if (typeof raw.agreement !== 'number' || !isRecord(raw.matrix) || !Array.isArray(raw.results)) {
+    throw new Error(`${path}: calibration report shape mismatch (missing agreement/matrix/results)`);
+  }
+  return raw as unknown as CalibrationReport;
+}
+
+export function runComment(opts: CommentOptions): CommentResult {
+  const cwd = resolve(opts.cwd ?? process.cwd());
+  const write = opts.write ?? ((line: string) => process.stdout.write(line));
+
+  const fromAbs = resolve(cwd, opts.fromPath);
+  const payload = validateRunPayload(parseJsonFile(fromAbs), fromAbs);
+
+  let calibration: CalibrationReport | undefined;
+  if (opts.calibrationPath) {
+    const calAbs = resolve(cwd, opts.calibrationPath);
+    calibration = validateCalibrationReport(parseJsonFile(calAbs), calAbs);
+  }
+
+  // Reconstruct the cells the renderer expects. The --json payload uses a flat
+  // per-cell shape (winner/reason/error); the renderer wants CellResult-shaped
+  // values so it can produce the per-model breakdown. We only need judge +
+  // model + caseIndex here; outputs aren't rendered in the comment.
+  const cells = payload.cells.map((c) => ({
+    caseIndex: c.caseIndex,
+    model: c.model,
+    outputA: '',
+    outputB: '',
+    judge:
+      c.error !== undefined
+        ? { error: c.error }
+        : { winner: c.winner!, reason: c.reason ?? '' },
+    ...(c.latencyMs !== undefined ? { latencyMs: c.latencyMs } : {}),
+    ...(c.costUsd !== undefined ? { costUsd: c.costUsd } : {}),
+  }));
+
+  const summary: RunSummary = payload.summary;
+  const models: ModelId[] = payload.models;
+
+  const renderInput: Parameters<typeof renderPrComment>[0] = {
+    summary,
+    cells,
+    models,
+    judge: { model: payload.judge.model },
+  };
+  if (calibration) renderInput.calibration = calibration;
+  if (opts.reportUrl) renderInput.reportUrl = opts.reportUrl;
+  if (opts.minAgreement !== undefined) renderInput.minAgreement = opts.minAgreement;
+  if (opts.title) renderInput.title = opts.title;
+
+  const markdown = renderPrComment(renderInput);
+  write(markdown);
+
+  return { markdown, exitCode: 0 };
+}

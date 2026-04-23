@@ -36,6 +36,8 @@ export interface RunOptions {
    * human progress chatter on `write`. Intended for CI / PR-bot consumers.
    */
   json?: boolean;
+  /** When set, write the JSON payload to this path (stdout still gets it if `json` is true). */
+  jsonPath?: string;
   /** Stream of human-readable output; defaults to process.stdout. */
   write?: (line: string) => void;
   /** Stream for the JSON payload when `json` is true; defaults to process.stdout. */
@@ -207,9 +209,16 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     write(`\n  REGRESSION: candidate lost ${summary.losses} > won ${summary.wins} — failing per --fail-on-regress.\n`);
   }
 
-  if (json) {
+  const wantJson = json || opts.jsonPath !== undefined;
+  if (wantJson) {
     const payload = buildJsonPayload({ config: loaded.config, cells, summary, exitCode });
-    writeJson(JSON.stringify(payload) + '\n');
+    const serialized = JSON.stringify(payload) + '\n';
+    if (json) writeJson(serialized);
+    if (opts.jsonPath) {
+      const absJson = resolve(cwd, opts.jsonPath);
+      writeFileSync(absJson, serialized, 'utf8');
+      if (!json) write(`\n  json:    ${absJson}\n`);
+    }
   }
 
   return {
