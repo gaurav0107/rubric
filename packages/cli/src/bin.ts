@@ -29,8 +29,12 @@ Usage:
     --badge-out <path>              Write a status SVG badge (self-hostable in your repo)
     --calibration <path>            Color the badge by calibration agreement (paired with --badge-out)
     --cost-csv <path>               Write per-cell cost/latency CSV for spreadsheet analysis
-  diffprompt seed --from-langfuse <in.jsonl> [options]
-                                    Convert a Langfuse export into cases + calibration
+  diffprompt seed <source-flag> <in.jsonl> [options]
+                                    Convert an LLM-observability export into cases + calibration
+    --from-langfuse <path>          Langfuse JSONL export (input + output + optional feedback)
+    --from-helicone <path>          Helicone JSONL export (request.body.messages + response.body.choices)
+    --from-langsmith <path>         LangSmith trace JSONL (inputs.{input|messages} + outputs.{output|generations})
+    --from-openai-logs <path>       OpenAI chat JSONL (fine-tune shape or request/response pairs)
     --out <path>                    Output cases JSONL (default: data/cases.jsonl)
     --calibration-out <path>        Calibration sidecar (default: prompts/_calibration.json.local)
     --sample <n>                    Stratified-sample to n cases (by feedback polarity)
@@ -144,13 +148,29 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'seed': {
       try {
-        const fromLangfuse = parseFlag(rest, '--from-langfuse');
-        if (!fromLangfuse) throw new Error('seed requires --from-langfuse <path>');
+        const sources = [
+          ['--from-langfuse', 'langfuse'] as const,
+          ['--from-helicone', 'helicone'] as const,
+          ['--from-langsmith', 'langsmith'] as const,
+          ['--from-openai-logs', 'openai-logs'] as const,
+        ];
+        const found = sources
+          .map(([flag, src]) => ({ flag, src, path: parseFlag(rest, flag) }))
+          .filter((x) => x.path !== undefined);
+        if (found.length === 0) {
+          throw new Error('seed requires one of: --from-langfuse, --from-helicone, --from-langsmith, --from-openai-logs');
+        }
+        if (found.length > 1) {
+          throw new Error(`seed: pick exactly one source (got ${found.map((f) => f.flag).join(', ')})`);
+        }
+        const pick = found[0]!;
+        const fromPath = pick.path!;
+        const source = pick.src;
         const out = parseFlag(rest, '--out') ?? 'data/cases.jsonl';
         const calibrationOut = parseFlag(rest, '--calibration-out');
         const sampleRaw = parseFlag(rest, '--sample');
         const seedRaw = parseFlag(rest, '--seed');
-        const opts: Parameters<typeof runSeed>[0] = { fromLangfuse, out };
+        const opts: Parameters<typeof runSeed>[0] = { fromPath, source, out };
         if (calibrationOut) opts.calibrationOut = calibrationOut;
         if (sampleRaw !== undefined) {
           const n = Number(sampleRaw);

@@ -14,3 +14,4 @@ export * from './badge.ts';
 export * from './pii.ts';
 export * from './stratify.ts';
 export * from './csv.ts';
+export * from './adapters.ts';

@@ -4,20 +4,28 @@ import {
   detectPii,
   mulberry32,
   parseCasesJsonl,
+  parseHeliconeLogs,
+  parseLangSmithLogs,
+  parseOpenAiChatLogs,
   stratifiedSample,
   summarizePiiFindings,
   type Case,
   type PiiFinding,
 } from '../../../shared/src/index.ts';
 
+export type SeedSource = 'langfuse' | 'helicone' | 'langsmith' | 'openai-logs';
+
 export interface SeedOptions {
-  fromLangfuse: string;
+  /** Path to the source export. */
+  fromPath: string;
+  /** Upstream log format. Each source maps to a `metadata.langfuse`-shaped Case. */
+  source: SeedSource;
   out: string;
   cwd?: string;
   /** Sidecar path for calibration labels. Defaults to prompts/_calibration.json.local relative to out's dir. */
   calibrationOut?: string;
   /**
-   * If set, stratified-sample the Langfuse export down to this many cases.
+   * If set, stratified-sample the import down to this many cases.
    * Strata = feedback polarity (positive / negative / none).
    */
   sample?: number;
@@ -78,13 +86,26 @@ function collectPii(c: Case, caseIndex: number): PiiWarning[] {
   return warnings;
 }
 
+function parseBySource(text: string, source: SeedSource): Case[] {
+  switch (source) {
+    case 'langfuse':
+      return parseCasesJsonl(text, { allowLangfuse: true });
+    case 'helicone':
+      return parseHeliconeLogs(text);
+    case 'langsmith':
+      return parseLangSmithLogs(text);
+    case 'openai-logs':
+      return parseOpenAiChatLogs(text);
+  }
+}
+
 export function runSeed(opts: SeedOptions): SeedResult {
   const cwd = resolve(opts.cwd ?? process.cwd());
-  const inputPath = resolve(cwd, opts.fromLangfuse);
+  const inputPath = resolve(cwd, opts.fromPath);
   const outPath = resolve(cwd, opts.out);
 
   const text = readFileSync(inputPath, 'utf8');
-  const parsed = parseCasesJsonl(text, { allowLangfuse: true });
+  const parsed = parseBySource(text, opts.source);
   const totalIn = parsed.length;
 
   const cases = opts.sample !== undefined

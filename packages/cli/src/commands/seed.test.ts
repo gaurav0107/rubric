@@ -22,7 +22,8 @@ describe('runSeed', () => {
       writeFileSync(inPath, LANGFUSE);
 
       const result = runSeed({
-        fromLangfuse: inPath,
+        fromPath: inPath,
+        source: 'langfuse',
         out: 'data/cases.jsonl',
         cwd: dir,
       });
@@ -58,7 +59,8 @@ describe('runSeed', () => {
       );
 
       const result = runSeed({
-        fromLangfuse: inPath,
+        fromPath: inPath,
+        source: 'langfuse',
         out: 'data/cases.jsonl',
         cwd: dir,
       });

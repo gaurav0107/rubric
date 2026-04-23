@@ -87,8 +87,8 @@ Comments are idempotent — subsequent runs update the same comment via a hidden
 |--|--|
 | `diffprompt init [--force]` | Scaffold config, `prompts/`, `data/cases.jsonl`. |
 | `diffprompt serve [--mock] [--port] [--host]` | Three-pane local UI: prompts · cases · live grid. Toggle vary-prompts ↔ vary-models; in-UI calibration labeling. |
-| `diffprompt run [--mock] [--fail-on-regress] [--json-out] [--report] [--badge-out] [--calibration]` | Run the eval. |
-| `diffprompt seed --from-langfuse <export>` | Convert a Langfuse JSONL export into `data/cases.jsonl` + a calibration skeleton. |
+| `diffprompt run [--mock] [--fail-on-regress] [--json-out] [--report] [--badge-out] [--calibration] [--cost-csv]` | Run the eval. |
+| `diffprompt seed --from-{langfuse,helicone,langsmith,openai-logs} <export>` | Convert an LLM-observability export into `data/cases.jsonl` + a calibration skeleton. |
 | `diffprompt calibrate [--mock] [--labels] [--json-out] [--report]` | Measure judge vs. human agreement. |
 | `diffprompt comment --from <run.json> [--calibration] [--report-url] [--title]` | Render a Markdown PR comment (stdout) from a run payload. |
 | `diffprompt share --out <bundle.json> [--note] [--no-calibration]` | Export the workspace as a self-contained JSON bundle. |
