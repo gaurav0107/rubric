@@ -40,6 +40,7 @@ Usage:
     --from-helicone <path>          Helicone JSONL export (request.body.messages + response.body.choices)
     --from-langsmith <path>         LangSmith trace JSONL (inputs.{input|messages} + outputs.{output|generations})
     --from-openai-logs <path>       OpenAI chat JSONL (fine-tune shape or request/response pairs)
+    --from-synthetic <path>         Synthetic template JSON (literal cases[] or template + variables fan-out)
     --out <path>                    Output cases JSONL (default: data/cases.jsonl)
     --calibration-out <path>        Calibration sidecar (default: prompts/_calibration.json.local)
     --sample <n>                    Stratified-sample to n cases (by feedback polarity)
@@ -190,12 +191,13 @@ async function main(argv: string[]): Promise<number> {
           ['--from-helicone', 'helicone'] as const,
           ['--from-langsmith', 'langsmith'] as const,
           ['--from-openai-logs', 'openai-logs'] as const,
+          ['--from-synthetic', 'synthetic'] as const,
         ];
         const found = sources
           .map(([flag, src]) => ({ flag, src, path: parseFlag(rest, flag) }))
           .filter((x) => x.path !== undefined);
         if (found.length === 0) {
-          throw new Error('seed requires one of: --from-langfuse, --from-helicone, --from-langsmith, --from-openai-logs');
+          throw new Error('seed requires one of: --from-langfuse, --from-helicone, --from-langsmith, --from-openai-logs, --from-synthetic');
         }
         if (found.length > 1) {
           throw new Error(`seed: pick exactly one source (got ${found.map((f) => f.flag).join(', ')})`);

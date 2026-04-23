@@ -7,16 +7,17 @@ import {
   parseHeliconeLogs,
   parseLangSmithLogs,
   parseOpenAiChatLogs,
+  parseSyntheticTemplate,
   stratifiedSample,
   summarizePiiFindings,
   type Case,
   type PiiFinding,
 } from '../../../shared/src/index.ts';
 
-export type SeedSource = 'langfuse' | 'helicone' | 'langsmith' | 'openai-logs';
+export type SeedSource = 'langfuse' | 'helicone' | 'langsmith' | 'openai-logs' | 'synthetic';
 
 export interface SeedOptions {
-  /** Path to the source export. */
+  /** Path to the source export. For source='synthetic', path to a template JSON. */
   fromPath: string;
   /** Upstream log format. Each source maps to a `metadata.langfuse`-shaped Case. */
   source: SeedSource;
@@ -96,6 +97,8 @@ function parseBySource(text: string, source: SeedSource): Case[] {
       return parseLangSmithLogs(text);
     case 'openai-logs':
       return parseOpenAiChatLogs(text);
+    case 'synthetic':
+      return parseSyntheticTemplate(text);
   }
 }
 

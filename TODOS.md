@@ -46,7 +46,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 
 ## v2 (~6 weeks post v1)
 
-- [ ] Dataset bootstrapping: `--from-logs`, `--synthetic`.
+- [x] Dataset bootstrapping: `--from-logs` (covered by `--from-{helicone,langsmith,openai-logs}` adapters), `--from-synthetic` (template + variables cartesian fan-out, no LLM).
 - [x] Single-file binary via `bun build --compile` — `pnpm build:binary:all` + tagged-release workflow ship cross-platform binaries.
 - [ ] Homebrew tap.
 - [ ] VS Code extension.

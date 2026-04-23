@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { parseHeliconeLogs, parseLangSmithLogs, parseOpenAiChatLogs } from './adapters.ts';
+import {
+  parseHeliconeLogs,
+  parseLangSmithLogs,
+  parseOpenAiChatLogs,
+  parseSyntheticTemplate,
+  SyntheticTemplateError,
+} from './adapters.ts';
 
 function line(obj: unknown): string {
   return JSON.stringify(obj);
@@ -111,5 +117,86 @@ describe('parseLangSmithLogs', () => {
     });
     const cases = parseLangSmithLogs(text);
     expect(cases[0]!.input).toBe('hello');
+  });
+});
+
+describe('parseSyntheticTemplate', () => {
+  test('passes through a top-level array of cases', () => {
+    const text = JSON.stringify([
+      { input: 'q1', expected: 'a1' },
+      { input: 'q2' },
+    ]);
+    const cases = parseSyntheticTemplate(text);
+    expect(cases.length).toBe(2);
+    expect(cases[0]).toEqual({ input: 'q1', expected: 'a1' });
+    expect(cases[1]).toEqual({ input: 'q2' });
+  });
+
+  test('passes through { cases: [...] }', () => {
+    const text = JSON.stringify({ cases: [{ input: 'q', expected: 'a', metadata: { tag: 'x' } }] });
+    const cases = parseSyntheticTemplate(text);
+    expect(cases[0]).toEqual({ input: 'q', expected: 'a', metadata: { tag: 'x' } });
+  });
+
+  test('cartesian-expands template + variables', () => {
+    const text = JSON.stringify({
+      template: { input: 'summarize {{topic}} as a {{style}}' },
+      variables: { topic: ['cats', 'dogs'], style: ['haiku', 'ode'] },
+    });
+    const cases = parseSyntheticTemplate(text);
+    expect(cases.length).toBe(4);
+    const inputs = cases.map((c) => c.input).sort();
+    expect(inputs).toEqual([
+      'summarize cats as a haiku',
+      'summarize cats as a ode',
+      'summarize dogs as a haiku',
+      'summarize dogs as a ode',
+    ]);
+  });
+
+  test('substitutes placeholders in expected too', () => {
+    const text = JSON.stringify({
+      template: { input: 'translate "{{word}}" to french', expected: 'le {{word}}' },
+      variables: { word: ['chat', 'chien'] },
+    });
+    const cases = parseSyntheticTemplate(text);
+    expect(cases[0]!.expected).toBe('le chat');
+    expect(cases[1]!.expected).toBe('le chien');
+  });
+
+  test('emits single case when template has no variables', () => {
+    const text = JSON.stringify({ template: { input: 'static input' } });
+    const cases = parseSyntheticTemplate(text);
+    expect(cases).toEqual([{ input: 'static input' }]);
+  });
+
+  test('throws on unknown placeholder', () => {
+    const text = JSON.stringify({
+      template: { input: 'hi {{nope}}' },
+      variables: { other: ['x'] },
+    });
+    expect(() => parseSyntheticTemplate(text)).toThrow(SyntheticTemplateError);
+  });
+
+  test('throws on invalid JSON', () => {
+    expect(() => parseSyntheticTemplate('not json {')).toThrow(SyntheticTemplateError);
+  });
+
+  test('throws when template object is missing input', () => {
+    const text = JSON.stringify({ template: { expected: 'a' } });
+    expect(() => parseSyntheticTemplate(text)).toThrow(SyntheticTemplateError);
+  });
+
+  test('throws when neither cases nor template provided', () => {
+    const text = JSON.stringify({ unrelated: 'field' });
+    expect(() => parseSyntheticTemplate(text)).toThrow(SyntheticTemplateError);
+  });
+
+  test('throws when variables array is empty', () => {
+    const text = JSON.stringify({
+      template: { input: 'hi {{x}}' },
+      variables: { x: [] },
+    });
+    expect(() => parseSyntheticTemplate(text)).toThrow(SyntheticTemplateError);
   });
 });
