@@ -2,9 +2,11 @@
 import { runCalibrate } from './commands/calibrate.ts';
 import { runComment } from './commands/comment.ts';
 import { runInit } from './commands/init.ts';
+import { runPull } from './commands/pull.ts';
 import { runRun } from './commands/run.ts';
 import { formatPiiWarning, runSeed } from './commands/seed.ts';
 import { runServe } from './commands/serve.ts';
+import { runShare } from './commands/share.ts';
 
 const USAGE = `diffprompt — pairwise prompt evaluation
 
@@ -45,6 +47,16 @@ Usage:
     --report-url <url>              Link to a hosted HTML report
     --min-agreement <0..1>          Threshold for "weak" calibration banner (default: 0.8)
     --title <text>                  Title suffix (e.g. "baseline.md vs candidate.md")
+  diffprompt share --out <path> [options]
+                                    Export workspace as a self-contained bundle.json
+    --config <path>                 Config file (default: ./diffprompt.config.json)
+    --note <text>                   Attach a human-readable note
+    --no-calibration                Skip the _calibration.json.local sidecar
+  diffprompt pull <bundle> [options]
+                                    Import a bundle.json into the current dir
+    --target <dir>                  Target directory (default: .)
+    --force                         Overwrite existing files
+    --no-calibration                Don't restore the calibration sidecar
 
 See TODOS.md at the repo root for the v1 launch gate.
 `;
@@ -186,6 +198,61 @@ async function main(argv: string[]): Promise<number> {
         return result.exitCode;
       } catch (err) {
         process.stderr.write(`diffprompt comment: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
+    case 'share': {
+      try {
+        const configPath = parseFlag(rest, '--config');
+        const out = parseFlag(rest, '--out');
+        if (!out) throw new Error('share requires --out <path>');
+        const note = parseFlag(rest, '--note');
+        const noCalibration = rest.includes('--no-calibration');
+        const opts: Parameters<typeof runShare>[0] = { out, noCalibration };
+        if (configPath) opts.configPath = configPath;
+        if (note) opts.note = note;
+        const result = runShare(opts);
+        process.stdout.write(`  wrote   ${result.bundlePath} (${result.bytes} bytes, ${result.included.cases} cases`);
+        if (result.included.calibration) {
+          process.stdout.write(`, ${result.included.calibrationEntries} calibration entries`);
+        }
+        process.stdout.write(`)\n`);
+        return 0;
+      } catch (err) {
+        process.stderr.write(`diffprompt share: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
+    case 'pull': {
+      try {
+        const valueFlags = new Set(['--target', '--from']);
+        let positional: string | undefined;
+        for (let i = 0; i < rest.length; i++) {
+          const a = rest[i];
+          if (a === undefined) continue;
+          if (a.startsWith('--')) continue;
+          const prev = rest[i - 1];
+          if (prev !== undefined && valueFlags.has(prev)) continue;
+          positional = a;
+          break;
+        }
+        const bundlePath = positional ?? parseFlag(rest, '--from');
+        if (!bundlePath) throw new Error('pull requires a bundle path (positional) or --from <path>');
+        const target = parseFlag(rest, '--target');
+        const force = rest.includes('--force');
+        const noCalibration = rest.includes('--no-calibration');
+        const opts: Parameters<typeof runPull>[0] = { bundlePath, force, noCalibration };
+        if (target) opts.target = target;
+        const result = runPull(opts);
+        for (const p of result.written) process.stdout.write(`  wrote   ${p}\n`);
+        for (const p of result.skipped) process.stdout.write(`  skipped ${p} (exists; pass --force to overwrite)\n`);
+        if (result.calibrationEntries > 0) {
+          process.stdout.write(`\n  ${result.calibrationEntries} calibration entries restored\n`);
+        }
+        if (result.note) process.stdout.write(`\n  note: ${result.note}\n`);
+        return 0;
+      } catch (err) {
+        process.stderr.write(`diffprompt pull: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
