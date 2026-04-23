@@ -116,7 +116,7 @@ function openSse(res: ServerResponse): { send: (event: string, data: unknown) =>
 export interface Handlers {
   getWorkspace: () => WorkspaceSnapshot;
   savePrompt: (which: 'baseline' | 'candidate', content: string) => void;
-  runSweep: (opts: { mock: boolean }) => Promise<{
+  runSweep: (opts: { mock: boolean; mode?: 'compare-prompts' | 'compare-models' }) => Promise<{
     iterate: () => AsyncIterable<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } } | { type: 'done'; cells: CellResult[] }>;
   }>;
 }
@@ -132,10 +132,11 @@ export function makeHandlers(opts: ServerOptions): Handlers {
       const target = which === 'baseline' ? ws.resolved.baseline : ws.resolved.candidate;
       writeFileSync(target, content, 'utf8');
     },
-    async runSweep({ mock }) {
+    async runSweep({ mock, mode }) {
       const ws = loadWorkspace(cwd, configPath);
       const providers = buildProviders(mock);
       const judge = buildJudge(mock, ws.config, providers);
+      const configForRun: Config = mode ? { ...ws.config, mode } : ws.config;
 
       let pushCell: ((c: CellResult, p: { done: number; total: number }) => void) | null = null;
       const queue: Array<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } }> = [];
@@ -143,7 +144,7 @@ export function makeHandlers(opts: ServerOptions): Handlers {
       let resolveNext: (() => void) | null = null;
 
       const runPromise = runEval({
-        config: ws.config,
+        config: configForRun,
         cases: ws.cases,
         prompts: ws.prompts,
         providers,
@@ -231,11 +232,17 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         const body = req.headers['content-length'] && Number(req.headers['content-length']) > 0
           ? await readBody(req)
           : '{}';
-        const parsed = JSON.parse(body) as { mock?: boolean };
+        const parsed = JSON.parse(body) as { mock?: boolean; mode?: unknown };
         const mock = parsed.mock === true || opts.mock === true;
+        let mode: 'compare-prompts' | 'compare-models' | undefined;
+        if (parsed.mode === 'compare-prompts' || parsed.mode === 'compare-models') {
+          mode = parsed.mode;
+        }
         const sse = openSse(res);
         try {
-          const { iterate } = await handlers.runSweep({ mock });
+          const sweepOpts: { mock: boolean; mode?: 'compare-prompts' | 'compare-models' } = { mock };
+          if (mode) sweepOpts.mode = mode;
+          const { iterate } = await handlers.runSweep(sweepOpts);
           for await (const evt of iterate()) {
             sse.send(evt.type, evt);
             if (evt.type === 'done') break;

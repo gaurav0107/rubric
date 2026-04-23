@@ -56,6 +56,25 @@ export const INDEX_HTML = String.raw`<!doctype html>
   header label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
   header input[type=checkbox] { accent-color: var(--accent); }
 
+  .mode-toggle {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+    background: var(--panel-2);
+  }
+  .mode-toggle button {
+    background: transparent; border: 0; padding: 6px 10px; color: var(--muted); cursor: pointer;
+    font: inherit; border-radius: 0;
+  }
+  .mode-toggle button.active { background: var(--accent-weak); color: var(--text); }
+  .mode-toggle .label { padding: 6px 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+
+  .prompts-pane.locked-candidate .tabs button[data-which=candidate] {
+    opacity: .4; cursor: not-allowed;
+  }
+  .mode-hint {
+    padding: 6px 12px; border-bottom: 1px solid var(--border);
+    background: var(--accent-weak); color: var(--text); font-size: 11px; font-family: var(--mono);
+  }
+
   main {
     display: grid; grid-template-columns: 1fr 320px 1.3fr;
     gap: 0; flex: 1; min-height: 0;
@@ -169,6 +188,11 @@ export const INDEX_HTML = String.raw`<!doctype html>
     <h1>diffprompt</h1>
     <span class="sub" id="config-path">—</span>
     <span class="spacer"></span>
+    <div class="mode-toggle" id="mode-toggle" role="tablist" aria-label="compare mode">
+      <span class="label">vary</span>
+      <button data-mode="compare-prompts" class="active" aria-pressed="true">prompts</button>
+      <button data-mode="compare-models" aria-pressed="false">models</button>
+    </div>
     <label><input type="checkbox" id="mock-toggle"> mock mode</label>
     <button id="run-btn" class="primary">▶ Run</button>
   </header>
@@ -176,11 +200,12 @@ export const INDEX_HTML = String.raw`<!doctype html>
   <div id="err" class="err-banner" style="display:none"></div>
 
   <main>
-    <section class="prompts-pane">
+    <section class="prompts-pane" id="prompts-pane">
       <div class="pane-title">
         <span class="dot saved" id="prompt-dot"></span>
-        prompts
+        <span id="prompts-title">prompts</span>
       </div>
+      <div class="mode-hint" id="mode-hint" style="display:none"></div>
       <div class="tabs">
         <button id="tab-baseline" class="active" data-which="baseline">baseline</button>
         <button id="tab-candidate" data-which="candidate">candidate</button>
@@ -230,6 +255,7 @@ export const INDEX_HTML = String.raw`<!doctype html>
     active: 'baseline',
     dirty: false,
     running: false,
+    mode: 'compare-prompts',
   };
 
   function setError(msg) {
@@ -245,12 +271,47 @@ export const INDEX_HTML = String.raw`<!doctype html>
   }
 
   function activateTab(which) {
+    if (state.mode === 'compare-models' && which === 'candidate') return;
     state.active = which;
     for (const btn of document.querySelectorAll('.tabs button')) {
       btn.classList.toggle('active', btn.dataset.which === which);
     }
     $('prompt-editor').value = state.workspace ? state.workspace.prompts[which] : '';
     setDirty(false);
+  }
+
+  function applyMode() {
+    const pane = $('prompts-pane');
+    const hint = $('mode-hint');
+    const title = $('prompts-title');
+    const headerBtns = document.querySelectorAll('#mode-toggle button');
+    for (const btn of headerBtns) {
+      const active = btn.dataset.mode === state.mode;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    }
+    if (state.mode === 'compare-models') {
+      pane.classList.add('locked-candidate');
+      title.textContent = 'shared prompt';
+      const models = (state.workspace && state.workspace.config && state.workspace.config.models) || [];
+      const pair = models.length >= 2 ? models[0] + ' vs ' + models[1] : 'needs ≥2 models in config';
+      hint.textContent = 'compare-models: ' + pair + ' — candidate tab is disabled (single shared prompt)';
+      hint.style.display = 'block';
+      if (state.active === 'candidate') activateTab('baseline');
+    } else {
+      pane.classList.remove('locked-candidate');
+      title.textContent = 'prompts';
+      hint.style.display = 'none';
+      hint.textContent = '';
+    }
+  }
+
+  function setMode(m) {
+    if (state.running) return;
+    if (m !== 'compare-prompts' && m !== 'compare-models') return;
+    if (state.mode === m) return;
+    state.mode = m;
+    applyMode();
   }
 
   function renderCases() {
@@ -293,6 +354,11 @@ export const INDEX_HTML = String.raw`<!doctype html>
 
   function verdictLabel(j) {
     if (j.error) return { cls: 'err', label: 'ERR' };
+    if (state.mode === 'compare-models') {
+      if (j.winner === 'b') return { cls: 'win', label: 'B' };
+      if (j.winner === 'a') return { cls: 'loss', label: 'A' };
+      return { cls: 'tie', label: 'TIE' };
+    }
     if (j.winner === 'b') return { cls: 'win', label: 'CAND' };
     if (j.winner === 'a') return { cls: 'loss', label: 'BASE' };
     return { cls: 'tie', label: 'TIE' };
@@ -310,10 +376,11 @@ export const INDEX_HTML = String.raw`<!doctype html>
     else if (v.cls === 'tie') counts.ties++;
     else counts.errors++;
     const reason = cell.judge.error || cell.judge.reason || '';
+    const modelLabel = cell.modelB ? (cell.model + ' vs ' + cell.modelB) : cell.model;
     const row = document.createElement('tr');
     row.innerHTML =
       '<td class="idx">' + cell.caseIndex + '</td>' +
-      '<td class="model">' + escapeHtml(cell.model) + '</td>' +
+      '<td class="model">' + escapeHtml(modelLabel) + '</td>' +
       '<td class="input" title="' + escapeHtml(caseInput) + '">' + escapeHtml(caseInput) + '</td>' +
       '<td class="verdict ' + v.cls + '">' + v.label + '</td>' +
       '<td class="reason">' + escapeHtml(reason) + '</td>';
@@ -335,7 +402,10 @@ export const INDEX_HTML = String.raw`<!doctype html>
       state.workspace = await res.json();
       $('config-path').textContent = state.workspace.configPath;
       $('mock-toggle').checked = false;
-      activateTab(state.active);
+      const cfgMode = state.workspace.config && state.workspace.config.mode;
+      state.mode = cfgMode === 'compare-models' ? 'compare-models' : 'compare-prompts';
+      applyMode();
+      activateTab(state.mode === 'compare-models' ? 'baseline' : state.active);
       renderCases();
       setError(null);
     } catch (err) {
@@ -372,13 +442,14 @@ export const INDEX_HTML = String.raw`<!doctype html>
     counts.wins = 0; counts.losses = 0; counts.ties = 0; counts.errors = 0;
 
     const mock = $('mock-toggle').checked;
+    const mode = state.mode;
     const controller = new AbortController();
     let buffered = '';
     try {
       const res = await fetch('/api/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mock }),
+        body: JSON.stringify({ mock, mode }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
@@ -428,6 +499,9 @@ export const INDEX_HTML = String.raw`<!doctype html>
     if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); savePrompt(); }
   });
   $('run-btn').addEventListener('click', runSweep);
+  for (const btn of document.querySelectorAll('#mode-toggle button')) {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  }
 
   loadWorkspace();
 })();

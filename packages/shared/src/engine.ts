@@ -46,11 +46,23 @@ function pickProvider(providers: Provider[], modelId: ModelId): Provider {
 
 interface Cell {
   caseIndex: number;
+  /** A-side model. */
   model: ModelId;
+  /** B-side model (compare-models only); when omitted both sides run on `model`. */
+  modelB?: ModelId;
 }
 
-function planCells(cases: Case[], models: ModelId[]): Cell[] {
+function planCells(cases: Case[], models: ModelId[], mode: 'compare-prompts' | 'compare-models'): Cell[] {
   const cells: Cell[] = [];
+  if (mode === 'compare-models') {
+    if (models.length < 2) {
+      throw new Error(`mode="compare-models" requires at least 2 models, got ${models.length}`);
+    }
+    const a = models[0] as ModelId;
+    const b = models[1] as ModelId;
+    for (let i = 0; i < cases.length; i++) cells.push({ caseIndex: i, model: a, modelB: b });
+    return cells;
+  }
   for (let i = 0; i < cases.length; i++) {
     for (const model of models) cells.push({ caseIndex: i, model });
   }
@@ -64,23 +76,31 @@ async function runCell(
   providers: Provider[],
   judge: Judge,
   rubric: string,
+  mode: 'compare-prompts' | 'compare-models',
   signal: AbortSignal | undefined,
 ): Promise<CellResult> {
   const c = cases[cell.caseIndex];
   if (!c) throw new Error(`cell references missing case index ${cell.caseIndex}`);
 
   const started = Date.now();
+  const compareModels = mode === 'compare-models' && cell.modelB !== undefined;
   try {
-    const provider = pickProvider(providers, cell.model);
+    const promptA = compareModels ? prompts.baseline : prompts.baseline;
+    const promptB = compareModels ? prompts.baseline : prompts.candidate;
+    const modelA = cell.model;
+    const modelB = compareModels ? (cell.modelB as ModelId) : cell.model;
+    const providerA = pickProvider(providers, modelA);
+    const providerB = pickProvider(providers, modelB);
+
     const [outA, outB] = await Promise.all([
-      provider.generate({
-        modelId: cell.model,
-        prompt: renderPrompt(prompts.baseline, c),
+      providerA.generate({
+        modelId: modelA,
+        prompt: renderPrompt(promptA, c),
         ...(signal ? { signal } : {}),
       }),
-      provider.generate({
-        modelId: cell.model,
-        prompt: renderPrompt(prompts.candidate, c),
+      providerB.generate({
+        modelId: modelB,
+        prompt: renderPrompt(promptB, c),
         ...(signal ? { signal } : {}),
       }),
     ]);
@@ -100,18 +120,19 @@ async function runCell(
 
     const result: CellResult = {
       caseIndex: cell.caseIndex,
-      model: cell.model,
+      model: modelA,
       outputA: outA.text,
       outputB: outB.text,
       judge: verdict,
       latencyMs: Date.now() - started,
     };
+    if (compareModels) result.modelB = modelB;
     const costA = outA.costUsd ?? 0;
     const costB = outB.costUsd ?? 0;
     if (costA || costB) result.costUsd = costA + costB;
     return result;
   } catch (err) {
-    return {
+    const result: CellResult = {
       caseIndex: cell.caseIndex,
       model: cell.model,
       outputA: '',
@@ -119,6 +140,8 @@ async function runCell(
       judge: { error: err instanceof Error ? err.message : String(err) },
       latencyMs: Date.now() - started,
     };
+    if (compareModels && cell.modelB !== undefined) result.modelB = cell.modelB;
+    return result;
   }
 }
 
@@ -172,13 +195,14 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     return { cells: [], summary: { wins: 0, losses: 0, ties: 0, errors: 0, winRate: 0 } };
   }
   const concurrency = opts.concurrency ?? config.concurrency ?? 4;
+  const mode = config.mode ?? 'compare-prompts';
   const rubricString =
     typeof config.judge.rubric === 'string' ? config.judge.rubric : config.judge.rubric.custom;
 
-  const plan = planCells(cases, config.models);
+  const plan = planCells(cases, config.models, mode);
   let done = 0;
   const cells = await mapWithConcurrency(plan, concurrency, async (cell) => {
-    const result = await runCell(cell, cases, prompts, providers, judge, rubricString, signal);
+    const result = await runCell(cell, cases, prompts, providers, judge, rubricString, mode, signal);
     done++;
     opts.onCell?.(result, { done, total: plan.length });
     return result;

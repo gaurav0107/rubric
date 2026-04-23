@@ -40,7 +40,10 @@ export interface JudgeResult {
 
 export interface CellResult {
   caseIndex: number;
+  /** Primary model. In compare-prompts this is the only model in the cell; in compare-models this is the A-side model. */
   model: ModelId;
+  /** Present only when mode=compare-models: the B-side model. */
+  modelB?: ModelId;
   outputA: string;
   outputB: string;
   judge: JudgeResult | { error: string };
