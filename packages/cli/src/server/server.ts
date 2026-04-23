@@ -11,10 +11,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import {
+  createGroqProvider,
   createMockJudge,
   createMockProvider,
+  createOllamaProvider,
   createOpenAIJudge,
   createOpenAIProvider,
+  createOpenRouterProvider,
   loadConfig,
   parseCasesJsonl,
   resolveRubric,
@@ -57,7 +60,13 @@ function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
 }
 
 function buildProviders(mock: boolean): Provider[] {
-  return mock ? [createMockProvider({ acceptAll: true })] : [createOpenAIProvider()];
+  if (mock) return [createMockProvider({ acceptAll: true })];
+  return [
+    createOpenAIProvider(),
+    createGroqProvider(),
+    createOpenRouterProvider(),
+    createOllamaProvider(),
+  ];
 }
 
 function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string): Judge {

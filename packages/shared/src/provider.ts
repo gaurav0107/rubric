@@ -58,26 +58,61 @@ export interface OpenAIProviderOptions {
 
 export function createOpenAIProvider(opts: OpenAIProviderOptions = {}): Provider {
   const apiKey = opts.apiKey ?? (typeof process !== 'undefined' ? process.env?.OPENAI_API_KEY : undefined);
+  const providerOpts: OpenAICompatibleOptions = {
+    name: 'openai',
+    prefix: 'openai',
+    ...(apiKey ? { apiKey } : {}),
+    ...(opts.baseURL ? { baseURL: opts.baseURL } : {}),
+    keyHint: 'set OPENAI_API_KEY or pass { apiKey } to createOpenAIProvider()',
+  };
+  return createOpenAICompatibleProvider(providerOpts);
+}
+
+export interface OpenAICompatibleOptions {
+  /** Human-readable provider name surfaced in errors and logs. */
+  name: string;
+  /** The `provider/` prefix in ModelId that routes to this provider. */
+  prefix: string;
+  /** API key — may be omitted for local servers like Ollama. */
+  apiKey?: string;
+  /** OpenAI-compatible base URL (e.g. https://api.groq.com/openai/v1). */
+  baseURL?: string;
+  /** Hint surfaced in ProviderNotConfiguredError when apiKey is required. */
+  keyHint?: string;
+  /**
+   * When false, generate() does not require an apiKey. Intended for local
+   * OpenAI-compatible servers (Ollama) that accept unauthenticated calls.
+   */
+  requiresApiKey?: boolean;
+}
+
+/**
+ * Generic OpenAI-compatible provider. Powers openai, groq, openrouter, and
+ * ollama — anything that speaks the OpenAI Chat Completions wire format via
+ * a base URL. Each concrete factory below plugs in the right name/prefix/URL.
+ */
+export function createOpenAICompatibleProvider(opts: OpenAICompatibleOptions): Provider {
+  const requiresApiKey = opts.requiresApiKey ?? true;
   let client: OpenAIProvider | null = null;
 
   const clientOptions: Parameters<typeof createOpenAI>[0] = {};
-  if (apiKey) clientOptions.apiKey = apiKey;
+  if (opts.apiKey) clientOptions.apiKey = opts.apiKey;
   if (opts.baseURL) clientOptions.baseURL = opts.baseURL;
 
   return {
-    name: 'openai',
+    name: opts.name,
     supports(modelId: ModelId): boolean {
       try {
-        return splitModelId(modelId).providerPrefix === 'openai';
+        return splitModelId(modelId).providerPrefix === opts.prefix;
       } catch {
         return false;
       }
     },
     async generate(req: GenerateRequest): Promise<GenerateResult> {
-      if (!apiKey) {
+      if (requiresApiKey && !opts.apiKey) {
         throw new ProviderNotConfiguredError(
-          'openai',
-          'set OPENAI_API_KEY or pass { apiKey } to createOpenAIProvider()',
+          opts.name,
+          opts.keyHint ?? `${opts.name} requires an apiKey`,
         );
       }
       if (!client) client = createOpenAI(clientOptions);
@@ -109,4 +144,66 @@ export function createOpenAIProvider(opts: OpenAIProviderOptions = {}): Provider
       return out;
     },
   };
+}
+
+export interface GroqProviderOptions {
+  apiKey?: string;
+  baseURL?: string;
+}
+
+/** Groq — OpenAI-compatible, https://api.groq.com/openai/v1. ModelId prefix: groq/. */
+export function createGroqProvider(opts: GroqProviderOptions = {}): Provider {
+  const apiKey = opts.apiKey ?? (typeof process !== 'undefined' ? process.env?.GROQ_API_KEY : undefined);
+  const compatibleOpts: OpenAICompatibleOptions = {
+    name: 'groq',
+    prefix: 'groq',
+    baseURL: opts.baseURL ?? 'https://api.groq.com/openai/v1',
+    keyHint: 'set GROQ_API_KEY or pass { apiKey } to createGroqProvider()',
+  };
+  if (apiKey) compatibleOpts.apiKey = apiKey;
+  return createOpenAICompatibleProvider(compatibleOpts);
+}
+
+export interface OpenRouterProviderOptions {
+  apiKey?: string;
+  baseURL?: string;
+}
+
+/**
+ * OpenRouter — OpenAI-compatible router across many providers. Model ids
+ * carry their own vendor prefix (e.g. openrouter/anthropic/claude-3.5-sonnet),
+ * so splitModelId() returns `anthropic/claude-3.5-sonnet` as the model string
+ * — which OpenRouter expects verbatim.
+ */
+export function createOpenRouterProvider(opts: OpenRouterProviderOptions = {}): Provider {
+  const apiKey = opts.apiKey ?? (typeof process !== 'undefined' ? process.env?.OPENROUTER_API_KEY : undefined);
+  const compatibleOpts: OpenAICompatibleOptions = {
+    name: 'openrouter',
+    prefix: 'openrouter',
+    baseURL: opts.baseURL ?? 'https://openrouter.ai/api/v1',
+    keyHint: 'set OPENROUTER_API_KEY or pass { apiKey } to createOpenRouterProvider()',
+  };
+  if (apiKey) compatibleOpts.apiKey = apiKey;
+  return createOpenAICompatibleProvider(compatibleOpts);
+}
+
+export interface OllamaProviderOptions {
+  /** Defaults to http://localhost:11434/v1. */
+  baseURL?: string;
+}
+
+/**
+ * Ollama — local OpenAI-compatible server. No API key required; generate()
+ * skips the configured-check so users can run fully offline. ModelId prefix:
+ * ollama/ (e.g. ollama/llama3.1:8b).
+ */
+export function createOllamaProvider(opts: OllamaProviderOptions = {}): Provider {
+  return createOpenAICompatibleProvider({
+    name: 'ollama',
+    prefix: 'ollama',
+    baseURL: opts.baseURL ?? 'http://localhost:11434/v1',
+    // Ollama ignores the key but the AI SDK sends one anyway — pass a dummy.
+    apiKey: 'ollama',
+    requiresApiKey: false,
+  });
 }

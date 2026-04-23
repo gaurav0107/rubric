@@ -1,10 +1,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  createGroqProvider,
   createMockJudge,
   createMockProvider,
+  createOllamaProvider,
   createOpenAIJudge,
   createOpenAIProvider,
+  createOpenRouterProvider,
   loadConfig,
   parseCasesJsonl,
   resolveRubric,
@@ -72,7 +75,12 @@ const DEFAULT_CONFIG = 'diffprompt.config.json';
 
 function buildProviders(mock: boolean): Provider[] {
   if (mock) return [createMockProvider({ acceptAll: true })];
-  return [createOpenAIProvider()];
+  return [
+    createOpenAIProvider(),
+    createGroqProvider(),
+    createOpenRouterProvider(),
+    createOllamaProvider(),
+  ];
 }
 
 function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string): Judge {
@@ -81,7 +89,7 @@ function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
     throw new Error(
-      `no provider accepts judge.model "${config.judge.model}". Only openai/* judges are supported in live mode today.`,
+      `no provider accepts judge.model "${config.judge.model}". Supported prefixes: openai/, groq/, openrouter/, ollama/.`,
     );
   }
   return createOpenAIJudge({

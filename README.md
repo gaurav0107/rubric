@@ -2,7 +2,7 @@
 
 Pairwise prompt evaluation for pull requests. Compare `baseline.md` vs `candidate.md` across your dataset × models with a calibrated LLM-as-judge, and fail CI when the new prompt regresses.
 
-**Status:** Pre-alpha. The CLI (`init`, `serve`, `run`, `seed`, `calibrate`, `comment`, `share`, `pull`) and the GitHub Action wrapper are landed and exercised against mock and live OpenAI providers. Hosted web UI and the `diffprompt.dev` sandbox are not built yet — see [`TODOS.md`](TODOS.md).
+**Status:** Pre-alpha. The CLI (`init`, `serve`, `run`, `seed`, `calibrate`, `comment`, `share`, `pull`) and the GitHub Action wrapper are landed and exercised against mock and live providers (OpenAI, Groq, OpenRouter, Ollama — all OpenAI-compatible). Hosted web UI and the `diffprompt.dev` sandbox are not built yet — see [`TODOS.md`](TODOS.md).
 
 ## Why
 
@@ -95,6 +95,19 @@ Comments are idempotent — subsequent runs update the same comment via a hidden
 | `diffprompt pull <bundle.json> [--target] [--force] [--no-calibration]` | Scaffold a workspace from a shared bundle — Fork-to-local flow. |
 
 `--mock` on `run`, `serve`, and `calibrate` uses a deterministic stub provider/judge — useful for CI of diffprompt itself and for local smoke tests without spending tokens.
+
+### Providers
+
+Model ids are `provider/model` strings. Live mode auto-detects the right provider from the prefix:
+
+| Prefix | Provider | Env var | Notes |
+| ------ | -------- | ------- | ----- |
+| `openai/` | OpenAI | `OPENAI_API_KEY` | e.g. `openai/gpt-4o-mini` |
+| `groq/` | Groq | `GROQ_API_KEY` | OpenAI-compatible at `api.groq.com/openai/v1` |
+| `openrouter/` | OpenRouter | `OPENROUTER_API_KEY` | e.g. `openrouter/anthropic/claude-3.5-sonnet` |
+| `ollama/` | Ollama (local) | — | Expects a local server at `localhost:11434`; no key required |
+
+Judge models follow the same prefix rules — you can run evals on local Ollama and judge with Groq, or any mix.
 
 ### Comparison modes
 
