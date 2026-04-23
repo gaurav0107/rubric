@@ -1,0 +1,50 @@
+{"input":"I was charged twice this month. Can you refund the duplicate?","metadata":{"category":"billing","severity":"medium"}}
+{"input":"why is my card being declined","metadata":{"category":"billing","severity":"low"}}
+{"input":"I need an invoice for January but the download button is greyed out. We're filing taxes this week.","metadata":{"category":"billing","severity":"high"}}
+{"input":"Do you support purchase orders instead of credit card?","metadata":{"category":"billing","severity":"low"}}
+{"input":"Upgraded to Pro 10 minutes ago but my account still shows Free. The charge went through on my statement.","metadata":{"category":"billing","severity":"high"}}
+{"input":"Can't log in. Password reset email never arrives. Tried 4 times.","metadata":{"category":"account","severity":"high"}}
+{"input":"I'm locked out of my account after too many failed attempts. How long until the cooldown ends?","metadata":{"category":"account","severity":"medium"}}
+{"input":"My 2FA device is dead and I don't have the backup codes saved anywhere. What can I do?","metadata":{"category":"account","severity":"high"}}
+{"input":"how do i change my email","metadata":{"category":"account","severity":"low"}}
+{"input":"I want to delete my account and have all my data removed. GDPR request.","metadata":{"category":"privacy","severity":"high"}}
+{"input":"Export button just spins forever. I've been waiting 20 minutes for a 40MB file.","metadata":{"category":"bug","severity":"medium"}}
+{"input":"The dashboard graphs are showing 0 for everything today but the raw data is clearly there if I query the API directly.","metadata":{"category":"bug","severity":"high"}}
+{"input":"Your app crashed three times in a row when I tried to upload a PDF. Screenshot attached.","metadata":{"category":"bug","severity":"high"}}
+{"input":"Dark mode toggle doesn't stick between sessions","metadata":{"category":"bug","severity":"low"}}
+{"input":"The search bar is case-sensitive and it shouldn't be. \"widget\" should find \"Widget\".","metadata":{"category":"bug","severity":"medium"}}
+{"input":"I cancelled my subscription yesterday but was charged again today at midnight.","metadata":{"category":"refund","severity":"high"}}
+{"input":"Requesting a full refund. The service doesn't do what your landing page says it does.","metadata":{"category":"refund","severity":"medium"}}
+{"input":"Can I get a pro-rated refund for the remaining 3 weeks of my annual plan? Switching to a competitor.","metadata":{"category":"refund","severity":"medium"}}
+{"input":"I need to cancel before the next billing cycle but I can't find the cancel button anywhere.","metadata":{"category":"cancellation","severity":"medium"}}
+{"input":"Downgraded from Team to Solo but my teammates still have full access. Is there a sync delay?","metadata":{"category":"account","severity":"medium"}}
+{"input":"Order #A9F-2231 still says \"processing\" 8 days later. Expected delivery was last Friday.","metadata":{"category":"shipping","severity":"high"}}
+{"input":"Tracking number shows delivered but nothing arrived. Nobody signed for it.","metadata":{"category":"shipping","severity":"high"}}
+{"input":"Do you ship to the UK? Your checkout form only shows US states.","metadata":{"category":"shipping","severity":"low"}}
+{"input":"Received the wrong item. I ordered blue, got red. How do I exchange it?","metadata":{"category":"shipping","severity":"medium"}}
+{"input":"Does your API support webhooks for real-time notifications, or only polling?","metadata":{"category":"integration","severity":"low"}}
+{"input":"Getting 429s on every request after 50/minute but the docs say the limit is 200/minute for Pro.","metadata":{"category":"api","severity":"high"}}
+{"input":"what's your rate limit","metadata":{"category":"api","severity":"low"}}
+{"input":"The Python SDK is throwing `SSLCertVerificationError` on macOS Sonoma. Works fine on my Linux box.","metadata":{"category":"integration","severity":"medium"}}
+{"input":"Can you confirm whether EU user data is stored in EU-region servers? We're preparing a DPIA.","metadata":{"category":"privacy","severity":"medium"}}
+{"input":"Is SOC 2 Type II audit report available? My procurement team is asking.","metadata":{"category":"compliance","severity":"low"}}
+{"input":"I'd love to see a feature that lets me schedule reports instead of running them manually each Monday.","metadata":{"category":"feature","severity":"low"}}
+{"input":"Any plans to add a CLI? Would be great for CI integration.","metadata":{"category":"feature","severity":"low"}}
+{"input":"Our team needs SAML SSO before we can roll this out company-wide. Is that on the roadmap?","metadata":{"category":"feature","severity":"medium"}}
+{"input":"Can I bulk-import 12,000 contacts from a CSV or do I have to use the API?","metadata":{"category":"feature","severity":"medium"}}
+{"input":"Where do I find the changelog? Want to see what shipped this week.","metadata":{"category":"feature","severity":"low"}}
+{"input":"Your pricing page says \"per seat\" but I can't tell if that's monthly or annual. Clicking through to checkout didn't clarify it either.","metadata":{"category":"pricing","severity":"low"}}
+{"input":"We're a nonprofit — do you offer a discount?","metadata":{"category":"pricing","severity":"low"}}
+{"input":"What's the difference between Team and Business plans? The comparison table only shows 3 rows.","metadata":{"category":"pricing","severity":"low"}}
+{"input":"Need to add 20 more seats mid-cycle. Will I be charged the full month or pro-rated?","metadata":{"category":"pricing","severity":"medium"}}
+{"input":"I hate your new UI. Bring back the old one.","metadata":{"category":"feedback","severity":"low"}}
+{"input":"Just wanted to say the v3 release is excellent. The export to Notion thing saved me 2 hours this week.","metadata":{"category":"feedback","severity":"low"}}
+{"input":"This is the third time this month the app has been down during our Monday standup. Unacceptable.","metadata":{"category":"outage","severity":"high"}}
+{"input":"status page says all systems operational but I can't connect. Is it just me?","metadata":{"category":"outage","severity":"medium"}}
+{"input":"API returning 500 on every POST to /invoices. Started 10 minutes ago. Our billing is blocked.","metadata":{"category":"outage","severity":"high"}}
+{"input":"How do I transfer ownership of a workspace to another user?","metadata":{"category":"account","severity":"low"}}
+{"input":"I accidentally deleted an important project. Is there any way to recover it? It was 3 hours ago.","metadata":{"category":"data","severity":"high"}}
+{"input":"Do you back up user data? What's your RPO/RTO?","metadata":{"category":"compliance","severity":"low"}}
+{"input":"My integration with Slack stopped working after the Slack API deprecation. Do I need to reauthorize?","metadata":{"category":"integration","severity":"medium"}}
+{"input":"hi","metadata":{"category":"unclear","severity":"low"}}
+{"input":"Please help me ASAP this is urgent!!!","metadata":{"category":"unclear","severity":"medium"}}

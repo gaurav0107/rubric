@@ -11,7 +11,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [x] Langfuse JSONL parser + stratified sampler + feedback→label mapping. PII-scrub warnings on import.
 - [ ] Comparison-mode toggle in `serve` UI: "Vary [prompts | models]." Rubric variant for model mode. Reuses existing grid + judge plumbing.
 - [ ] `diffprompt serve` three-pane live-diff UI.
-- [ ] Launch dataset: 50 support tickets, 10 hand-audited, `examples/support-tickets.jsonl`.
+- [x] Launch dataset: 50 support tickets, 10 hand-audited, `examples/support-tickets.jsonl`.
 - [ ] Hosted `diffprompt.dev` anonymous sandbox.
 - [ ] Shareable URLs + **Remix-in-browser (primary)** + **Fork-to-local (secondary)**.
 - [ ] GitHub OAuth for persistent URLs.

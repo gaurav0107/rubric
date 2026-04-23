@@ -1,0 +1,64 @@
+{
+  "entries": [
+    {
+      "input": "I was charged twice this month. Can you refund the duplicate?",
+      "output": "I can see the duplicate charge on your account — both were processed on the same day, likely a retry after a temporary decline. I've issued a refund for the second one; it'll post back to your card in 3-5 business days. Let me know if you don't see it by Friday.",
+      "polarity": "positive",
+      "reason": "acknowledges the issue, states the root cause, takes action without asking the customer to re-send info, gives a concrete timeline"
+    },
+    {
+      "input": "I was charged twice this month. Can you refund the duplicate?",
+      "output": "Please log in, go to Billing > History, click the charge you think is a duplicate, and submit a refund request. Our team will review it within 10 business days.",
+      "polarity": "negative",
+      "reason": "pushes the work back onto the customer, vague SLA, no acknowledgment that a duplicate charge is a service failure"
+    },
+    {
+      "input": "My 2FA device is dead and I don't have the backup codes saved anywhere. What can I do?",
+      "output": "Since you don't have backup codes, the fastest recovery path is identity verification: reply to this email with a photo of a government-issued ID and the email address on your account. Once verified, we'll reset your 2FA and walk you through re-enabling it on a new device. Turnaround is usually under 2 hours during business hours.",
+      "polarity": "positive",
+      "reason": "names the exact recovery path, asks for the minimum information needed upfront, sets clear timing expectations"
+    },
+    {
+      "input": "Can't log in. Password reset email never arrives. Tried 4 times.",
+      "output": "Check your spam folder. If it's not there, try again.",
+      "polarity": "negative",
+      "reason": "dismissive, ignores that the user already tried 4 times, offers no diagnostics or escalation path"
+    },
+    {
+      "input": "The dashboard graphs are showing 0 for everything today but the raw data is clearly there if I query the API directly.",
+      "output": "Thanks for flagging — that sounds like the aggregation layer, not the raw data path. Can you share (1) your workspace ID or URL and (2) the time window where the dashboard is zeroing out? If you've got an HAR or a screenshot of the Network tab during a load, that'd speed things up. We'll escalate to engineering the moment you reply.",
+      "polarity": "positive",
+      "reason": "diagnoses the likely scope (aggregation not storage), asks for the specific artifacts engineering will need, commits to escalation on reply"
+    },
+    {
+      "input": "I cancelled my subscription yesterday but was charged again today at midnight.",
+      "output": "That charge overlapped with the cancellation by a few hours — your card was billed before our system registered the cancel. I've reversed it on our side; you should see the credit within 2-3 business days. Your account is now confirmed cancelled and won't renew.",
+      "polarity": "positive",
+      "reason": "owns the timing issue without blaming the customer, takes action, reconfirms the cancellation state to pre-empt a follow-up ticket"
+    },
+    {
+      "input": "Order #A9F-2231 still says \"processing\" 8 days later. Expected delivery was last Friday.",
+      "output": "I'm sorry about the delay. Looking at order A9F-2231, it was held up at our fulfillment center due to a stock check on one of the items. It shipped this morning via overnight, tracking number is DP-EXAMPLE-A9F2231 — you should have it tomorrow by end of day. I've applied a $10 credit to your account for the inconvenience.",
+      "polarity": "positive",
+      "reason": "quotes the specific order, gives the real root cause, provides tracking, proactively offers a make-good without being asked"
+    },
+    {
+      "input": "Any plans to add a CLI? Would be great for CI integration.",
+      "output": "A CLI has been on our roadmap since Q3 — it's actually in private beta right now. Happy to add you to the beta list if you reply with the email on your account. Public release is targeted for next month; we'll announce it on the changelog at /changelog.",
+      "polarity": "positive",
+      "reason": "answers the actual question with specifics (Q3, beta, public timeline), offers access, points to a source of truth for updates"
+    },
+    {
+      "input": "I accidentally deleted an important project. Is there any way to recover it? It was 3 hours ago.",
+      "output": "Yes — we keep soft-deleted projects for 30 days. Log in, go to Settings > Trash, and you'll see it there with a Restore button. If it's not in Trash, reply with the project name and roughly when you created it; we keep 7-day encrypted backups that an engineer can pull from if needed.",
+      "polarity": "positive",
+      "reason": "answers affirmatively up front, gives the self-serve path first, provides the engineering fallback with what's needed to trigger it"
+    },
+    {
+      "input": "Please help me ASAP this is urgent!!!",
+      "output": "Sure — to help quickly, could you tell me: (1) what you're trying to do, (2) what's happening instead, and (3) your account email or workspace URL? A screenshot or error message is a huge plus. I'm on this thread and will respond the moment you reply.",
+      "polarity": "positive",
+      "reason": "doesn't dismiss the urgency or demand calm; asks for the minimum viable context a responder needs to triage; commits to fast follow-up"
+    }
+  ]
+}
