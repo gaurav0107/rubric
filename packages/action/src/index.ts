@@ -1,1 +1,1 @@
-export {};
+export * from './post-comment.ts';
