@@ -4,11 +4,17 @@ import { runComment } from './commands/comment.ts';
 import { runInit } from './commands/init.ts';
 import { runRun } from './commands/run.ts';
 import { formatPiiWarning, runSeed } from './commands/seed.ts';
+import { runServe } from './commands/serve.ts';
 
 const USAGE = `diffprompt — pairwise prompt evaluation
 
 Usage:
   diffprompt init [--force]         Scaffold diffprompt.config.json, prompts/, data/
+  diffprompt serve [options]        Launch the three-pane local UI (prompts | cases | live grid)
+    --config <path>                 Config file (default: ./diffprompt.config.json)
+    --port <n>                      HTTP port (default: 5174)
+    --host <addr>                   Bind address (default: 127.0.0.1)
+    --mock                          Start in mock mode by default (toggleable in UI)
   diffprompt run [options]          Run an evaluation
     --config <path>                 Config file (default: ./diffprompt.config.json)
     --mock                          Use deterministic mock provider + judge
@@ -67,6 +73,29 @@ async function main(argv: string[]): Promise<number> {
       for (const path of result.skipped) process.stdout.write(`  skipped ${path} (exists; pass --force to overwrite)\n`);
       process.stdout.write(`\nNext: edit prompts/baseline.md and prompts/candidate.md, then run \`diffprompt run\`.\n`);
       return 0;
+    }
+    case 'serve': {
+      try {
+        const configPath = parseFlag(rest, '--config');
+        const portRaw = parseFlag(rest, '--port');
+        const host = parseFlag(rest, '--host');
+        const mock = rest.includes('--mock');
+        const opts: Parameters<typeof runServe>[0] = { mock };
+        if (configPath) opts.configPath = configPath;
+        if (host) opts.host = host;
+        if (portRaw !== undefined) {
+          const n = Number(portRaw);
+          if (!Number.isFinite(n) || n < 1 || n > 65535) {
+            throw new Error(`--port must be 1-65535, got "${portRaw}"`);
+          }
+          opts.port = Math.floor(n);
+        }
+        await runServe(opts);
+        return 0;
+      } catch (err) {
+        process.stderr.write(`diffprompt serve: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
     }
     case 'run': {
       try {
