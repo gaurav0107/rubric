@@ -1,0 +1,167 @@
+import type { CalibrationReport } from './calibrate.ts';
+import type { CellResult, ModelId, RunSummary, Verdict } from './types.ts';
+
+export interface PrCommentInput {
+  summary: RunSummary;
+  /** Used for the per-model breakdown. Omit if only aggregate matters. */
+  cells?: CellResult[];
+  models: ModelId[];
+  judge: { model: ModelId };
+  /**
+   * When omitted, the comment renders the "unverified judge" banner. When
+   * present, it shows the agreement %. A separate minAgreement threshold
+   * governs whether calibrated-but-weak is called out.
+   */
+  calibration?: CalibrationReport;
+  /** Bar below which a calibrated judge is flagged as weak. Default 0.8. */
+  minAgreement?: number;
+  /** Optional absolute URL to a generated HTML report. */
+  reportUrl?: string;
+  /** e.g. baseline.md -> candidate.md; shown in the header if provided. */
+  title?: string;
+}
+
+export type PrVerdict = 'pass' | 'regress' | 'tie' | 'error';
+
+export function classifyVerdict(summary: RunSummary): PrVerdict {
+  const decisive = summary.wins + summary.losses;
+  if (decisive === 0) {
+    return summary.errors > 0 ? 'error' : 'tie';
+  }
+  if (summary.wins > summary.losses) return 'pass';
+  if (summary.losses > summary.wins) return 'regress';
+  return 'tie';
+}
+
+interface ModelTally {
+  model: ModelId;
+  wins: number;
+  losses: number;
+  ties: number;
+  errors: number;
+}
+
+function tallyByModel(cells: CellResult[]): ModelTally[] {
+  const map = new Map<ModelId, ModelTally>();
+  for (const cell of cells) {
+    let t = map.get(cell.model);
+    if (!t) {
+      t = { model: cell.model, wins: 0, losses: 0, ties: 0, errors: 0 };
+      map.set(cell.model, t);
+    }
+    if ('error' in cell.judge) {
+      t.errors++;
+    } else {
+      const v: Verdict = cell.judge.winner;
+      if (v === 'b') t.wins++;
+      else if (v === 'a') t.losses++;
+      else t.ties++;
+    }
+  }
+  return [...map.values()];
+}
+
+function pct(n: number): string {
+  return `${(n * 100).toFixed(1)}%`;
+}
+
+function statusLine(v: PrVerdict, summary: RunSummary): string {
+  const decisive = summary.wins + summary.losses;
+  const rate = decisive === 0 ? '—' : pct(summary.winRate);
+  switch (v) {
+    case 'pass':
+      return `**PASS** — candidate wins ${summary.wins} / ${decisive} decisive (${rate}).`;
+    case 'regress':
+      return `**REGRESSION** — candidate loses ${summary.losses} > wins ${summary.wins} (${rate} win rate).`;
+    case 'tie':
+      return `**TIE** — wins ${summary.wins}, losses ${summary.losses}, ties ${summary.ties}.`;
+    case 'error':
+      return `**ERROR** — all ${summary.errors} cell(s) failed before a verdict could be reached.`;
+  }
+}
+
+function calibrationSection(
+  calibration: CalibrationReport | undefined,
+  judgeModel: ModelId,
+  minAgreement: number,
+): string {
+  if (!calibration) {
+    return [
+      `### Judge: \`${judgeModel}\` · calibration: **unverified**`,
+      '',
+      '> This judge has not been calibrated against human labels. Run `diffprompt calibrate` to measure agreement before trusting this verdict.',
+    ].join('\n');
+  }
+  const decisive = calibration.agreements + calibration.disagreements;
+  const weak = calibration.agreement < minAgreement;
+  const label = weak ? 'weak' : 'calibrated';
+  const lines = [
+    `### Judge: \`${judgeModel}\` · calibration: **${label}**`,
+    '',
+    `- Agreement: **${pct(calibration.agreement)}** (${calibration.agreements} / ${decisive} decisive, ${calibration.errors} error${calibration.errors === 1 ? '' : 's'})`,
+    `- Labels: ${calibration.total}`,
+  ];
+  if (weak) {
+    lines.push('', `> Judge agreement is below the ${pct(minAgreement)} threshold — treat verdicts as indicative, not authoritative.`);
+  }
+  return lines.join('\n');
+}
+
+function summaryTable(summary: RunSummary): string {
+  const decisive = summary.wins + summary.losses;
+  const rate = decisive === 0 ? '—' : pct(summary.winRate);
+  return [
+    '| wins | losses | ties | errors | win rate |',
+    '| ---: | -----: | ---: | -----: | -------: |',
+    `| ${summary.wins} | ${summary.losses} | ${summary.ties} | ${summary.errors} | ${rate} |`,
+  ].join('\n');
+}
+
+function modelTable(tallies: ModelTally[]): string {
+  if (tallies.length === 0) return '';
+  const rows = tallies.map((t) => {
+    const decisive = t.wins + t.losses;
+    const rate = decisive === 0 ? '—' : pct(t.wins / decisive);
+    return `| \`${t.model}\` | ${t.wins} | ${t.losses} | ${t.ties} | ${t.errors} | ${rate} |`;
+  });
+  return [
+    '<details><summary>Per-model breakdown</summary>',
+    '',
+    '| model | wins | losses | ties | errors | win rate |',
+    '| --- | ---: | ---: | ---: | ---: | ---: |',
+    ...rows,
+    '',
+    '</details>',
+  ].join('\n');
+}
+
+export function renderPrComment(input: PrCommentInput): string {
+  const verdict = classifyVerdict(input.summary);
+  const minAgreement = input.minAgreement ?? 0.8;
+
+  const header = input.title ? `# diffprompt — ${input.title}` : '# diffprompt';
+  const parts: string[] = [
+    header,
+    '',
+    statusLine(verdict, input.summary),
+    '',
+    summaryTable(input.summary),
+  ];
+
+  if (input.cells && input.cells.length > 0 && input.models.length > 1) {
+    const tallies = tallyByModel(input.cells);
+    if (tallies.length > 0) {
+      parts.push('', modelTable(tallies));
+    }
+  }
+
+  parts.push('', calibrationSection(input.calibration, input.judge.model, minAgreement));
+
+  if (input.reportUrl) {
+    parts.push('', `[Full report](${input.reportUrl})`);
+  }
+
+  parts.push('', '<sub>Posted by [diffprompt](https://diffprompt.dev).</sub>');
+
+  return parts.join('\n') + '\n';
+}

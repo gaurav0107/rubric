@@ -9,3 +9,4 @@ export * from './judge.ts';
 export * from './report.ts';
 export * from './grader.ts';
 export * from './calibrate.ts';
+export * from './comment.ts';
