@@ -13,7 +13,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [x] `diffprompt serve` three-pane live-diff UI.
 - [x] Launch dataset: 50 support tickets, 10 hand-audited, `examples/support-tickets.jsonl`.
 - [ ] Hosted `diffprompt.dev` anonymous sandbox.
-- [ ] Shareable URLs + **Remix-in-browser (primary)** + **Fork-to-local (secondary)**.
+- [ ] Shareable URLs + **Remix-in-browser (primary)** + **Fork-to-local (secondary)**. *(Fork-to-local via `share`/`pull` landed; shareable URLs + hosted Remix pending)*
 - [ ] GitHub OAuth for persistent URLs.
 - [ ] GitHub App `diffprompt-action`: webhook, comment rendering, direct-URL install. *(composite action landed; direct-URL install + hosted webhook pending)*
 - [ ] README badge SVG endpoint (60s cache, SWR). *(self-hostable SVG via `diffprompt run --badge-out` shipped; hosted endpoint pending)*
@@ -31,7 +31,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 ## Week-6 Polish (cuttable to v1.1 if slipping)
 
 - [ ] Steelman-my-prompt button (hosted + local).
-- [ ] Why-failed drawer with micro-steelman.
+- [ ] Why-failed drawer with micro-steelman. *(verdict-headline banner shipped; micro-steelman needs live LLM round-trip, deferred)*
 - [x] Cost tracker: post-run totals, status-bar rollup.
 
 ## v1.1 (1-2 weeks after v1)

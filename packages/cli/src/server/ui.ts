@@ -177,6 +177,36 @@ export const INDEX_HTML = String.raw`<!doctype html>
   table.grid tr.header-row { cursor: pointer; }
   table.grid tr.header-row:hover { background: rgba(255,255,255,0.02); }
   table.grid tr.detail-row td { padding: 0; background: var(--panel-2); border-bottom: 1px solid var(--border); }
+  .detail-verdict {
+    padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px; font-size: 12px;
+  }
+  .detail-verdict .headline {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  }
+  .detail-verdict .headline .pill {
+    padding: 2px 8px; border-radius: 3px; font-weight: 600;
+    background: var(--panel-2); border: 1px solid var(--border);
+  }
+  .detail-verdict.winner-a .pill { color: var(--loss); border-color: var(--loss); }
+  .detail-verdict.winner-b .pill { color: var(--win); border-color: var(--win); }
+  .detail-verdict.winner-tie .pill { color: var(--tie); border-color: var(--border); }
+  .detail-verdict.err .pill { color: var(--err); border-color: var(--err); }
+  .detail-verdict .reason {
+    color: var(--text); font-size: 13px; line-height: 1.45;
+    padding: 2px 0; white-space: pre-wrap; word-break: break-word;
+  }
+  .detail-verdict .expected {
+    font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: baseline;
+  }
+  .detail-verdict .expected .k {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em; font-size: 10px;
+  }
+  .detail-verdict .expected .v {
+    color: var(--text); font-family: var(--mono); font-size: 12px;
+    white-space: pre-wrap; word-break: break-word;
+  }
   .detail-box { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
   .detail-side {
     padding: 10px 12px; background: var(--panel-2);
@@ -424,7 +454,9 @@ export const INDEX_HTML = String.raw`<!doctype html>
   function addCellRow(evt) {
     const cell = evt.cell;
     const ws = state.workspace;
-    const caseInput = ws.cases[cell.caseIndex] ? ws.cases[cell.caseIndex].input : '(missing)';
+    const caseRec = ws.cases[cell.caseIndex];
+    const caseInput = caseRec ? caseRec.input : '(missing)';
+    const caseExpected = caseRec && typeof caseRec.expected === 'string' ? caseRec.expected : null;
     const v = verdictLabel(cell.judge);
     if (v.cls === 'win') counts.wins++;
     else if (v.cls === 'loss') counts.losses++;
@@ -443,7 +475,7 @@ export const INDEX_HTML = String.raw`<!doctype html>
     const detailRow = document.createElement('tr');
     detailRow.className = 'detail-row';
     detailRow.style.display = 'none';
-    detailRow.appendChild(buildDetailCell(cell, caseInput));
+    detailRow.appendChild(buildDetailCell(cell, caseInput, caseExpected));
     row.addEventListener('click', () => {
       const open = detailRow.style.display !== 'none';
       detailRow.style.display = open ? 'none' : '';
@@ -472,9 +504,12 @@ export const INDEX_HTML = String.raw`<!doctype html>
     $('progress').textContent = evt.progress.done + '/' + evt.progress.total;
   }
 
-  function buildDetailCell(cell, caseInput) {
+  function buildDetailCell(cell, caseInput, caseExpected) {
     const td = document.createElement('td');
     td.colSpan = 5;
+
+    td.appendChild(buildVerdictBanner(cell, caseExpected));
+
     const box = document.createElement('div');
     box.className = 'detail-box';
 
@@ -484,6 +519,61 @@ export const INDEX_HTML = String.raw`<!doctype html>
     box.appendChild(detailSide('B', labelB, cell.outputB, caseInput));
     td.appendChild(box);
     return td;
+  }
+
+  function buildVerdictBanner(cell, caseExpected) {
+    const j = cell.judge;
+    const block = document.createElement('div');
+    block.className = 'detail-verdict';
+
+    let pillLabel, headline;
+    if (j.error) {
+      block.classList.add('err');
+      pillLabel = 'ERROR';
+      headline = 'Judge errored before returning a verdict';
+    } else if (j.winner === 'b') {
+      block.classList.add('winner-b');
+      pillLabel = state.mode === 'compare-models' ? 'B WINS' : 'CAND WINS';
+      headline = 'Why this side won';
+    } else if (j.winner === 'a') {
+      block.classList.add('winner-a');
+      pillLabel = state.mode === 'compare-models' ? 'A WINS' : 'BASE WINS';
+      headline = state.mode === 'compare-models' ? 'Why B lost' : 'Why the candidate lost';
+    } else {
+      block.classList.add('winner-tie');
+      pillLabel = 'TIE';
+      headline = 'Judge called this a tie';
+    }
+
+    const head = document.createElement('div');
+    head.className = 'headline';
+    const pill = document.createElement('span');
+    pill.className = 'pill';
+    pill.textContent = pillLabel;
+    const hl = document.createElement('span');
+    hl.textContent = headline;
+    head.appendChild(pill);
+    head.appendChild(hl);
+    block.appendChild(head);
+
+    const reasonText = j.error || j.reason || '';
+    if (reasonText) {
+      const reason = document.createElement('div');
+      reason.className = 'reason';
+      reason.textContent = reasonText;
+      block.appendChild(reason);
+    }
+
+    if (caseExpected) {
+      const exp = document.createElement('div');
+      exp.className = 'expected';
+      exp.innerHTML = '<span class="k">expected</span><span class="v"></span>';
+      exp.querySelector('.v').textContent = caseExpected;
+      block.appendChild(exp);
+    }
+
+    block.addEventListener('click', (e) => e.stopPropagation());
+    return block;
   }
 
   function detailSide(side, modelName, output, caseInput) {
