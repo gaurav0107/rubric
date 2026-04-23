@@ -174,6 +174,39 @@ export const INDEX_HTML = String.raw`<!doctype html>
   table.grid td.verdict.tie { color: var(--tie); }
   table.grid td.verdict.err { color: var(--err); }
   table.grid td.reason { color: var(--muted); font-size: 11px; }
+  table.grid tr.header-row { cursor: pointer; }
+  table.grid tr.header-row:hover { background: rgba(255,255,255,0.02); }
+  table.grid tr.detail-row td { padding: 0; background: var(--panel-2); border-bottom: 1px solid var(--border); }
+  .detail-box { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+  .detail-side {
+    padding: 10px 12px; background: var(--panel-2);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .detail-side .side-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .detail-side .side-title .model-tag {
+    font-family: var(--mono); color: var(--text); text-transform: none; letter-spacing: 0;
+    background: var(--panel); padding: 1px 6px; border-radius: 3px; font-size: 10px;
+  }
+  .detail-side pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word;
+    font-family: var(--mono); font-size: 12px; color: var(--text);
+    max-height: 220px; overflow: auto;
+  }
+  .detail-side .label-row { display: flex; gap: 6px; align-items: center; }
+  .detail-side .label-row .hint { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .detail-side button.lbl {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 3px 8px; font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .detail-side button.lbl.pos:hover { border-color: var(--win); color: var(--win); }
+  .detail-side button.lbl.neg:hover { border-color: var(--loss); color: var(--loss); }
+  .detail-side button.lbl:disabled { opacity: .5; cursor: not-allowed; }
+  .detail-side .saved { color: var(--win); font-size: 11px; font-family: var(--mono); }
+  .detail-side .save-err { color: var(--loss); font-size: 11px; font-family: var(--mono); }
 
   .empty { padding: 32px 16px; color: var(--muted); text-align: center; }
 
@@ -378,13 +411,25 @@ export const INDEX_HTML = String.raw`<!doctype html>
     const reason = cell.judge.error || cell.judge.reason || '';
     const modelLabel = cell.modelB ? (cell.model + ' vs ' + cell.modelB) : cell.model;
     const row = document.createElement('tr');
+    row.className = 'header-row';
     row.innerHTML =
-      '<td class="idx">' + cell.caseIndex + '</td>' +
+      '<td class="idx">▸ ' + cell.caseIndex + '</td>' +
       '<td class="model">' + escapeHtml(modelLabel) + '</td>' +
       '<td class="input" title="' + escapeHtml(caseInput) + '">' + escapeHtml(caseInput) + '</td>' +
       '<td class="verdict ' + v.cls + '">' + v.label + '</td>' +
       '<td class="reason">' + escapeHtml(reason) + '</td>';
-    $('grid-body').appendChild(row);
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'detail-row';
+    detailRow.style.display = 'none';
+    detailRow.appendChild(buildDetailCell(cell, caseInput));
+    row.addEventListener('click', () => {
+      const open = detailRow.style.display !== 'none';
+      detailRow.style.display = open ? 'none' : '';
+      row.firstChild.innerHTML = (open ? '▸ ' : '▾ ') + cell.caseIndex;
+    });
+    const body = $('grid-body');
+    body.appendChild(row);
+    body.appendChild(detailRow);
 
     $('sum-wins').textContent = counts.wins;
     $('sum-losses').textContent = counts.losses;
@@ -393,6 +438,81 @@ export const INDEX_HTML = String.raw`<!doctype html>
     const decisive = counts.wins + counts.losses;
     $('sum-rate').textContent = decisive === 0 ? '—' : Math.round((counts.wins / decisive) * 100) + '%';
     $('progress').textContent = evt.progress.done + '/' + evt.progress.total;
+  }
+
+  function buildDetailCell(cell, caseInput) {
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    const box = document.createElement('div');
+    box.className = 'detail-box';
+
+    const labelA = cell.modelB ? cell.model : 'A (baseline)';
+    const labelB = cell.modelB ? cell.modelB : 'B (candidate)';
+    box.appendChild(detailSide('A', labelA, cell.outputA, caseInput));
+    box.appendChild(detailSide('B', labelB, cell.outputB, caseInput));
+    td.appendChild(box);
+    return td;
+  }
+
+  function detailSide(side, modelName, output, caseInput) {
+    const wrap = document.createElement('div');
+    wrap.className = 'detail-side';
+
+    const title = document.createElement('div');
+    title.className = 'side-title';
+    title.innerHTML = side + ' <span class="model-tag">' + escapeHtml(modelName) + '</span>';
+    wrap.appendChild(title);
+
+    const pre = document.createElement('pre');
+    pre.textContent = output || '(empty)';
+    pre.addEventListener('click', (e) => e.stopPropagation());
+    wrap.appendChild(pre);
+
+    const row = document.createElement('div');
+    row.className = 'label-row';
+    const pos = document.createElement('button');
+    pos.className = 'lbl pos';
+    pos.textContent = '+ good';
+    const neg = document.createElement('button');
+    neg.className = 'lbl neg';
+    neg.textContent = '− bad';
+    const hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = 'calibrate';
+    row.appendChild(pos);
+    row.appendChild(neg);
+    row.appendChild(hint);
+    wrap.appendChild(row);
+
+    const feedback = document.createElement('div');
+    feedback.className = 'saved';
+    feedback.style.display = 'none';
+    wrap.appendChild(feedback);
+
+    async function fire(polarity) {
+      pos.disabled = neg.disabled = true;
+      feedback.textContent = 'saving…';
+      feedback.className = 'saved';
+      feedback.style.display = 'block';
+      try {
+        const res = await fetch('/api/calibration', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ input: caseInput, output: output || '', polarity }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        feedback.textContent = 'saved (' + data.entryCount + ' labels)';
+      } catch (err) {
+        feedback.className = 'save-err';
+        feedback.textContent = 'save failed: ' + (err.message || err);
+      } finally {
+        pos.disabled = neg.disabled = false;
+      }
+    }
+    pos.addEventListener('click', (e) => { e.stopPropagation(); fire('positive'); });
+    neg.addEventListener('click', (e) => { e.stopPropagation(); fire('negative'); });
+    return wrap;
   }
 
   async function loadWorkspace() {
