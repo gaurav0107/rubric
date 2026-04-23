@@ -23,6 +23,11 @@ export interface RunOptions {
   allowLangfuse?: boolean;
   /** If set, write an HTML report to this absolute or cwd-relative path. */
   reportPath?: string;
+  /**
+   * Exit non-zero when candidate lost more cells than it won.
+   * Intended for CI gates — `summary.losses > summary.wins`.
+   */
+  failOnRegress?: boolean;
   /** Stream of output lines; defaults to process.stdout. */
   write?: (line: string) => void;
 }
@@ -61,6 +66,19 @@ function buildJudge(mock: boolean, config: Config, providers: Provider[]): Judge
 
 function fmtPct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
+}
+
+/**
+ * Pure exit-code decision for `diffprompt run`.
+ *
+ * Precedence: regression (2) wins over errors (1). Rationale: if CI is gating
+ * on --fail-on-regress, a judge error during a losing run should not be quieter
+ * than a clean loss — surface the regression first.
+ */
+export function decideExitCode(summary: RunSummary, failOnRegress: boolean): number {
+  if (failOnRegress && summary.losses > summary.wins) return 2;
+  if (summary.errors > 0) return 1;
+  return 0;
 }
 
 export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
@@ -114,9 +132,15 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     write(`\n  report:  ${absReport}\n`);
   }
 
+  const failOnRegress = opts.failOnRegress === true;
+  const exitCode = decideExitCode(summary, failOnRegress);
+  if (exitCode === 2) {
+    write(`\n  REGRESSION: candidate lost ${summary.losses} > won ${summary.wins} — failing per --fail-on-regress.\n`);
+  }
+
   return {
     total: cells.length,
     summary,
-    exitCode: summary.errors > 0 ? 1 : 0,
+    exitCode,
   };
 }

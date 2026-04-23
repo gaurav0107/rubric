@@ -14,6 +14,7 @@ Usage:
     --concurrency <n>               Override config.concurrency
     --allow-langfuse                Accept Langfuse-style JSONL exports
     --report <path>                 Write a self-contained HTML report
+    --fail-on-regress               Exit 2 when candidate loses more cells than it wins
   diffprompt seed --from-langfuse <in.jsonl> [--out data/cases.jsonl]
                                     Convert a Langfuse export into cases + calibration
   diffprompt calibrate [options]    Measure judge vs. human agreement
@@ -58,7 +59,8 @@ async function main(argv: string[]): Promise<number> {
         const concurrencyRaw = parseFlag(rest, '--concurrency');
         const allowLangfuse = rest.includes('--allow-langfuse');
         const reportPath = parseFlag(rest, '--report');
-        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse };
+        const failOnRegress = rest.includes('--fail-on-regress');
+        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress };
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;
         if (concurrencyRaw !== undefined) {
