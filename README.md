@@ -93,6 +93,7 @@ Comments are idempotent — subsequent runs update the same comment via a hidden
 | `diffprompt comment --from <run.json> [--calibration] [--report-url] [--title]` | Render a Markdown PR comment (stdout) from a run payload. |
 | `diffprompt share --out <bundle.json> [--note] [--no-calibration]` | Export the workspace as a self-contained JSON bundle. |
 | `diffprompt pull <bundle.json> [--target] [--force] [--no-calibration]` | Scaffold a workspace from a shared bundle — Fork-to-local flow. |
+| `diffprompt history [--file] [--limit] [--html]` | Git-log timeline for the prompt files — which commit changed what. |
 
 `--mock` on `run`, `serve`, and `calibrate` uses a deterministic stub provider/judge — useful for CI of diffprompt itself and for local smoke tests without spending tokens.
 

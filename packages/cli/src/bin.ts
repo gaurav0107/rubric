@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { runCalibrate } from './commands/calibrate.ts';
 import { runComment } from './commands/comment.ts';
+import { runHistory } from './commands/history.ts';
 import { runInit } from './commands/init.ts';
 import { runPull } from './commands/pull.ts';
 import { runRun } from './commands/run.ts';
@@ -66,6 +67,11 @@ Usage:
     --target <dir>                  Target directory (default: .)
     --force                         Overwrite existing files
     --no-calibration                Don't restore the calibration sidecar
+  diffprompt history [options]      Compact git-log timeline for the prompt files
+    --config <path>                 Config file (default: ./diffprompt.config.json)
+    --file <path>                   Track this path instead of config-declared prompts (repeatable)
+    --limit <n>                     Max commits (default: 100)
+    --html <path>                   Also write a self-contained HTML report
 
 See TODOS.md at the repo root for the v1 launch gate.
 `;
@@ -76,6 +82,17 @@ function parseFlag(args: string[], name: string): string | undefined {
   const v = args[i + 1];
   if (v === undefined) throw new Error(`flag ${name} requires a value`);
   return v;
+}
+
+function parseFlagRepeatable(args: string[], name: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] !== name) continue;
+    const v = args[i + 1];
+    if (v === undefined) throw new Error(`flag ${name} requires a value`);
+    out.push(v);
+  }
+  return out;
 }
 
 async function main(argv: string[]): Promise<number> {
@@ -296,6 +313,28 @@ async function main(argv: string[]): Promise<number> {
         return 0;
       } catch (err) {
         process.stderr.write(`diffprompt pull: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
+    case 'history': {
+      try {
+        const configPath = parseFlag(rest, '--config');
+        const files = parseFlagRepeatable(rest, '--file');
+        const htmlPath = parseFlag(rest, '--html');
+        const limitRaw = parseFlag(rest, '--limit');
+        const opts: Parameters<typeof runHistory>[0] = {};
+        if (configPath) opts.configPath = configPath;
+        if (files.length > 0) opts.files = files;
+        if (htmlPath) opts.htmlPath = htmlPath;
+        if (limitRaw !== undefined) {
+          const n = Number(limitRaw);
+          if (!Number.isFinite(n) || n < 1) throw new Error(`--limit must be a positive number, got "${limitRaw}"`);
+          opts.limit = Math.floor(n);
+        }
+        runHistory(opts);
+        return 0;
+      } catch (err) {
+        process.stderr.write(`diffprompt history: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
