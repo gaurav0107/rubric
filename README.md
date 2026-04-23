@@ -2,7 +2,7 @@
 
 Pairwise prompt evaluation for pull requests. Compare `baseline.md` vs `candidate.md` across your dataset × models with a calibrated LLM-as-judge, and fail CI when the new prompt regresses.
 
-**Status:** Pre-alpha. The CLI (`init`, `run`, `seed`, `calibrate`, `comment`) and the GitHub Action wrapper are landed and exercised against mock and live OpenAI providers. Hosted web UI and the `diffprompt.dev` sandbox are not built yet — see [`TODOS.md`](TODOS.md).
+**Status:** Pre-alpha. The CLI (`init`, `serve`, `run`, `seed`, `calibrate`, `comment`, `share`, `pull`) and the GitHub Action wrapper are landed and exercised against mock and live OpenAI providers. Hosted web UI and the `diffprompt.dev` sandbox are not built yet — see [`TODOS.md`](TODOS.md).
 
 ## Why
 
@@ -17,6 +17,9 @@ diffprompt init              # scaffolds diffprompt.config.json, prompts/, data/
 # edit prompts/baseline.md and prompts/candidate.md
 export OPENAI_API_KEY=sk-...
 diffprompt run               # runs the eval; prints win/loss/tie summary
+
+# or, iterate with a live-diff three-pane UI:
+diffprompt serve             # http://127.0.0.1:5174 — edit prompts, re-run, label pairs
 ```
 
 `diffprompt run` exits `0` on pass, `1` on judge errors, and — with `--fail-on-regress` — `2` when the candidate loses more cells than it wins. That's the CI gate.
@@ -83,12 +86,24 @@ Comments are idempotent — subsequent runs update the same comment via a hidden
 | Command | Purpose |
 |--|--|
 | `diffprompt init [--force]` | Scaffold config, `prompts/`, `data/cases.jsonl`. |
+| `diffprompt serve [--mock] [--port] [--host]` | Three-pane local UI: prompts · cases · live grid. Toggle vary-prompts ↔ vary-models; in-UI calibration labeling. |
 | `diffprompt run [--mock] [--fail-on-regress] [--json-out] [--report] [--badge-out] [--calibration]` | Run the eval. |
 | `diffprompt seed --from-langfuse <export>` | Convert a Langfuse JSONL export into `data/cases.jsonl` + a calibration skeleton. |
 | `diffprompt calibrate [--mock] [--labels] [--json-out] [--report]` | Measure judge vs. human agreement. |
 | `diffprompt comment --from <run.json> [--calibration] [--report-url] [--title]` | Render a Markdown PR comment (stdout) from a run payload. |
+| `diffprompt share --out <bundle.json> [--note] [--no-calibration]` | Export the workspace as a self-contained JSON bundle. |
+| `diffprompt pull <bundle.json> [--target] [--force] [--no-calibration]` | Scaffold a workspace from a shared bundle — Fork-to-local flow. |
 
-`--mock` on `run` and `calibrate` uses a deterministic stub provider/judge — useful for CI of diffprompt itself and for local smoke tests without spending tokens.
+`--mock` on `run`, `serve`, and `calibrate` uses a deterministic stub provider/judge — useful for CI of diffprompt itself and for local smoke tests without spending tokens.
+
+### Comparison modes
+
+`diffprompt.config.json` accepts `"mode": "compare-prompts"` (default) or `"compare-models"`.
+
+- **compare-prompts** — for every case × every model, run `baseline.md` on side A and `candidate.md` on side B. Picks the better *prompt*.
+- **compare-models** — one cell per case: run `baseline.md` on `models[0]` (side A) vs `models[1]` (side B). Picks the better *model* at a fixed prompt. Requires ≥ 2 models.
+
+`diffprompt serve` exposes a segmented control in the header so you can switch modes without editing the config.
 
 ## Repository layout
 
@@ -114,13 +129,14 @@ All cross-package imports use relative paths (`../../../shared/src/index.ts`) so
 - [x] Name locked: `diffprompt` (npm / diffprompt.dev / github.com/diffprompt all free as of 2026-04-22).
 - [x] Monorepo scaffold: `packages/{cli,web,action,shared}`.
 - [x] Eval engine with semver contract in `packages/shared`.
-- [x] CLI commands: `init`, `run`, `seed`, `calibrate`, `comment`.
+- [x] CLI commands: `init`, `serve`, `run`, `seed`, `calibrate`, `comment`, `share`, `pull`.
 - [x] `--fail-on-regress`, `--json-out`, `--report`, `--badge-out` on `run`.
-- [x] Calibration-aware PR comment + status badge SVG.
+- [x] Calibration-aware PR comment + status badge SVG + cost rollup.
+- [x] `diffprompt serve` three-pane live-diff UI with compare-prompts / compare-models toggle + in-UI labeling.
+- [x] `diffprompt share` + `diffprompt pull` — Fork-to-local workspace bundles.
 - [x] GitHub Action composite wrapper with idempotent comment upsert.
 - [ ] Provider-TOS review (OpenAI / Anthropic / Google on anonymous demo keys).
 - [ ] Week-1 spike: Cloudflare Workers + Durable Objects eval runner. Fly.io VPS fallback.
-- [ ] `diffprompt serve` three-pane live-diff UI.
 - [ ] Hosted `diffprompt.dev` anonymous sandbox + shareable URLs.
 - [ ] Abuse & cost containment ($50/day cap, per-IP rate limits, kill switch).
 - [ ] Publish to npm.
