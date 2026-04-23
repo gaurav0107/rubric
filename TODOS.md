@@ -5,9 +5,9 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 ## v1 Launch Gate (blocks ship)
 
 - [ ] Tech-stack spike (~half day, Week 1): Workers + Durable Objects eval runner with real workload. Fallback: Fly.io VPS for eval layer.
-- [ ] Monorepo scaffold: `packages/cli`, `packages/web`, `packages/action`, `packages/shared`.
-- [ ] `packages/shared` eval engine with semver contract.
-- [ ] `diffprompt init`, `serve`, `run`, `share`, `pull`, **`calibrate`**, **`seed --from-langfuse`** CLI commands.
+- [x] Monorepo scaffold: `packages/cli`, `packages/web`, `packages/action`, `packages/shared`.
+- [x] `packages/shared` eval engine with semver contract.
+- [ ] `diffprompt init`, `serve`, `run`, `share`, `pull`, **`calibrate`**, **`seed --from-langfuse`** CLI commands. *(init, run, calibrate, seed, comment landed; serve/share/pull pending)*
 - [x] Langfuse JSONL parser + stratified sampler + feedback→label mapping. PII-scrub warnings on import.
 - [ ] Comparison-mode toggle in `serve` UI: "Vary [prompts | models]." Rubric variant for model mode. Reuses existing grid + judge plumbing.
 - [ ] `diffprompt serve` three-pane live-diff UI.
@@ -15,11 +15,11 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [ ] Hosted `diffprompt.dev` anonymous sandbox.
 - [ ] Shareable URLs + **Remix-in-browser (primary)** + **Fork-to-local (secondary)**.
 - [ ] GitHub OAuth for persistent URLs.
-- [ ] GitHub App `diffprompt-action`: webhook, comment rendering, direct-URL install.
-- [ ] README badge SVG endpoint (60s cache, SWR).
-- [ ] `diffprompt calibrate` CLI + in-UI labeling flow + `_calibration.json` read/write.
-- [ ] Calibration-aware PR-bot comment + badge (unverified vs calibrated states).
-- [ ] `run --fail-on-regress` CLI flag.
+- [ ] GitHub App `diffprompt-action`: webhook, comment rendering, direct-URL install. *(composite action landed; direct-URL install + hosted webhook pending)*
+- [ ] README badge SVG endpoint (60s cache, SWR). *(self-hostable SVG via `diffprompt run --badge-out` shipped; hosted endpoint pending)*
+- [ ] `diffprompt calibrate` CLI + in-UI labeling flow + `_calibration.json` read/write. *(CLI + read/write landed; in-UI labeling pending)*
+- [x] Calibration-aware PR-bot comment + badge (unverified vs calibrated states).
+- [x] `run --fail-on-regress` CLI flag.
 - [ ] Abuse & Cost Containment: provider-TOS review, $50/day cap, per-IP rate limits, 4k-char prompt cap, 20-case dataset cap, OpenAI moderation endpoint, PII nudge, kill switch, budget alerting.
 - [ ] BYOK fallback mode (localStorage-only keys) shipped as feature flag.
 - [ ] Legal pages: TOS, privacy policy, DMCA (Vercel + Plausible templates).
