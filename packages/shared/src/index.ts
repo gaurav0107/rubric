@@ -7,3 +7,5 @@ export * from './mock.ts';
 export * from './engine.ts';
 export * from './judge.ts';
 export * from './report.ts';
+export * from './grader.ts';
+export * from './calibrate.ts';

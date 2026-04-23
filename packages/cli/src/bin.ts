@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { runCalibrate } from './commands/calibrate.ts';
 import { runInit } from './commands/init.ts';
 import { runRun } from './commands/run.ts';
 import { runSeed } from './commands/seed.ts';
@@ -15,7 +16,12 @@ Usage:
     --report <path>                 Write a self-contained HTML report
   diffprompt seed --from-langfuse <in.jsonl> [--out data/cases.jsonl]
                                     Convert a Langfuse export into cases + calibration
-  diffprompt calibrate              (not yet implemented)
+  diffprompt calibrate [options]    Measure judge vs. human agreement
+    --config <path>                 Config file (default: ./diffprompt.config.json)
+    --labels <path>                 Labels JSON (default: prompts/_calibration.json.local)
+    --report <path>                 HTML report path (default: calibration.html)
+    --mock                          Use deterministic mock grader
+    --concurrency <n>               Parallel grader calls (default: 4)
 
 See TODOS.md at the repo root for the v1 launch gate.
 `;
@@ -85,8 +91,27 @@ async function main(argv: string[]): Promise<number> {
       }
     }
     case 'calibrate': {
-      process.stderr.write(`diffprompt ${cmd}: not yet implemented. See TODOS.md at the repo root.\n`);
-      return 1;
+      try {
+        const configPath = parseFlag(rest, '--config');
+        const labelsPath = parseFlag(rest, '--labels');
+        const reportPath = parseFlag(rest, '--report');
+        const mock = rest.includes('--mock');
+        const concurrencyRaw = parseFlag(rest, '--concurrency');
+        const opts: Parameters<typeof runCalibrate>[0] = { mock };
+        if (configPath) opts.configPath = configPath;
+        if (labelsPath) opts.labelsPath = labelsPath;
+        if (reportPath) opts.reportPath = reportPath;
+        if (concurrencyRaw !== undefined) {
+          const n = Number(concurrencyRaw);
+          if (!Number.isFinite(n) || n < 1) throw new Error(`--concurrency must be a positive number, got "${concurrencyRaw}"`);
+          opts.concurrency = Math.floor(n);
+        }
+        const result = await runCalibrate(opts);
+        return result.exitCode;
+      } catch (err) {
+        process.stderr.write(`diffprompt calibrate: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
     }
     default: {
       process.stderr.write(`diffprompt: unknown command "${cmd}"\n\n${USAGE}`);
