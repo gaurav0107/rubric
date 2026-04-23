@@ -86,6 +86,21 @@ function fmtPct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+function fmtCost(usd: number): string {
+  if (usd === 0) return '$0.00';
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+function fmtDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  const rem = s - m * 60;
+  return `${m}m${rem.toFixed(0)}s`;
+}
+
 /**
  * Pure exit-code decision for `diffprompt run`.
  *
@@ -201,6 +216,13 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   write(`  ties:    ${summary.ties}\n`);
   write(`  errors:  ${summary.errors}\n`);
   write(`  winRate: ${fmtPct(summary.winRate)} (of decisive ${summary.wins + summary.losses})\n`);
+  if (summary.totalCostUsd !== undefined) {
+    const avg = summary.costedCells && summary.costedCells > 0 ? summary.totalCostUsd / summary.costedCells : 0;
+    write(`  cost:    ${fmtCost(summary.totalCostUsd)} (avg ${fmtCost(avg)}/cell × ${summary.costedCells})\n`);
+  }
+  if (summary.totalLatencyMs !== undefined) {
+    write(`  time:    ${fmtDuration(summary.totalLatencyMs)} wall-sum\n`);
+  }
 
   if (opts.reportPath) {
     const absReport = resolve(cwd, opts.reportPath);

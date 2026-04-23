@@ -117,6 +117,19 @@ function summaryTable(summary: RunSummary): string {
   ].join('\n');
 }
 
+function fmtUsd(usd: number): string {
+  if (usd === 0) return '$0.00';
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
+function costLine(summary: RunSummary): string | null {
+  if (summary.totalCostUsd === undefined) return null;
+  const cells = summary.costedCells ?? 0;
+  const avg = cells > 0 ? summary.totalCostUsd / cells : 0;
+  return `Cost: **${fmtUsd(summary.totalCostUsd)}** across ${cells} cell${cells === 1 ? '' : 's'} (avg ${fmtUsd(avg)}/cell).`;
+}
+
 function modelTable(tallies: ModelTally[]): string {
   if (tallies.length === 0) return '';
   const rows = tallies.map((t) => {
@@ -147,6 +160,9 @@ export function renderPrComment(input: PrCommentInput): string {
     '',
     summaryTable(input.summary),
   ];
+
+  const costStr = costLine(input.summary);
+  if (costStr) parts.push('', costStr);
 
   if (input.cells && input.cells.length > 0 && input.models.length > 1) {
     const tallies = tallyByModel(input.cells);

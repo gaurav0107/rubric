@@ -205,6 +205,25 @@ describe('renderPrComment', () => {
     expect(md.startsWith('# diffprompt — baseline.md vs candidate.md')).toBe(true);
   });
 
+  test('renders cost line when summary has totalCostUsd', () => {
+    const md = renderPrComment({
+      summary: sum({ wins: 2, losses: 1, winRate: 0.667, totalCostUsd: 0.1234, costedCells: 3 }),
+      models: ['openai/gpt-4o-mini' as ModelId],
+      judge: JUDGE,
+    });
+    expect(md).toContain('Cost: **$0.12** across 3 cells');
+    expect(md).toContain('avg $0.04/cell');
+  });
+
+  test('omits cost line when summary has no totalCostUsd', () => {
+    const md = renderPrComment({
+      summary: sum({ wins: 2, losses: 1, winRate: 0.667 }),
+      models: ['openai/gpt-4o-mini' as ModelId],
+      judge: JUDGE,
+    });
+    expect(md).not.toContain('Cost:');
+  });
+
   test('output is valid-looking Markdown ending in newline', () => {
     const md = renderPrComment({
       summary: sum({ wins: 1, winRate: 1 }),

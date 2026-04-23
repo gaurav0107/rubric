@@ -31,7 +31,7 @@ describe('runEval', () => {
     });
 
     expect(cells.length).toBe(4);
-    expect(summary).toEqual({ wins: 4, losses: 0, ties: 0, errors: 0, winRate: 1 });
+    expect(summary).toMatchObject({ wins: 4, losses: 0, ties: 0, errors: 0, winRate: 1 });
     for (const cell of cells) {
       expect(cell.outputA.startsWith('[')).toBe(true);
       expect(cell.outputB.startsWith('[')).toBe(true);
@@ -166,6 +166,47 @@ describe('runEval', () => {
     ).rejects.toThrow(/at least 2 models/);
   });
 
+  test('summarizes total cost + latency when cells report them', async () => {
+    const cases: Case[] = [{ input: '1' }, { input: '2' }];
+    const config = makeConfig(['mock/m1'] as ModelId[]);
+    const provider = createMockProvider({ costUsd: 0.012, latencyMs: 50 });
+    const judge = createMockJudge();
+
+    const { cells, summary } = await runEval({
+      config,
+      cases,
+      prompts,
+      providers: [provider],
+      judge,
+    });
+
+    expect(cells.length).toBe(2);
+    for (const c of cells) {
+      // 0.012 per side × 2 sides
+      expect(c.costUsd).toBeCloseTo(0.024, 6);
+    }
+    expect(summary.totalCostUsd).toBeCloseTo(0.048, 6);
+    expect(summary.costedCells).toBe(2);
+    expect(summary.totalLatencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test('omits totalCostUsd when no cell has a cost', async () => {
+    const cases: Case[] = [{ input: '1' }];
+    const config = makeConfig(['mock/m1'] as ModelId[]);
+    const provider = createMockProvider();
+    const judge = createMockJudge();
+
+    const { summary } = await runEval({
+      config,
+      cases,
+      prompts,
+      providers: [provider],
+      judge,
+    });
+    expect(summary.totalCostUsd).toBeUndefined();
+    expect(summary.costedCells).toBeUndefined();
+  });
+
   test('mixes wins/losses/ties in summary', async () => {
     const cases: Case[] = [{ input: '1' }, { input: '2' }, { input: '3' }, { input: '4' }];
     const config = makeConfig(['mock/m1'] as ModelId[]);
@@ -185,6 +226,6 @@ describe('runEval', () => {
       providers: [provider],
       judge,
     });
-    expect(summary).toEqual({ wins: 1, losses: 1, ties: 2, errors: 0, winRate: 0.5 });
+    expect(summary).toMatchObject({ wins: 1, losses: 1, ties: 2, errors: 0, winRate: 0.5 });
   });
 });

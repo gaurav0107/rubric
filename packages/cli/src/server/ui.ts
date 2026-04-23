@@ -139,7 +139,7 @@ export const INDEX_HTML = String.raw`<!doctype html>
 
   .results-pane { display: flex; flex-direction: column; }
   .results-pane .summary {
-    display: grid; grid-template-columns: repeat(5, 1fr);
+    display: grid; grid-template-columns: repeat(7, 1fr);
     gap: 1px; background: var(--border);
     border-bottom: 1px solid var(--border);
   }
@@ -266,6 +266,8 @@ export const INDEX_HTML = String.raw`<!doctype html>
         <div class="cell tie"><div class="n" id="sum-ties">0</div><div class="k">ties</div></div>
         <div class="cell err"><div class="n" id="sum-errors">0</div><div class="k">errors</div></div>
         <div class="cell"><div class="n" id="sum-rate">—</div><div class="k">win rate</div></div>
+        <div class="cell"><div class="n" id="sum-cost">—</div><div class="k">cost</div></div>
+        <div class="cell"><div class="n" id="sum-time">—</div><div class="k">wall sum</div></div>
       </div>
       <div class="grid-wrap">
         <table class="grid">
@@ -382,7 +384,27 @@ export const INDEX_HTML = String.raw`<!doctype html>
     $('sum-ties').textContent = '0';
     $('sum-errors').textContent = '0';
     $('sum-rate').textContent = '—';
+    $('sum-cost').textContent = '—';
+    $('sum-time').textContent = '—';
     $('progress').textContent = '';
+    costRoll.totalUsd = 0;
+    costRoll.costed = 0;
+    costRoll.totalMs = 0;
+    costRoll.timed = 0;
+  }
+
+  const costRoll = { totalUsd: 0, costed: 0, totalMs: 0, timed: 0 };
+
+  function fmtCost(usd) {
+    if (usd === 0) return '$0.00';
+    if (usd < 0.01) return '$' + usd.toFixed(4);
+    return '$' + usd.toFixed(2);
+  }
+  function fmtMs(ms) {
+    if (ms < 1000) return Math.round(ms) + 'ms';
+    const s = ms / 1000;
+    if (s < 60) return s.toFixed(1) + 's';
+    return Math.floor(s / 60) + 'm' + Math.round(s % 60) + 's';
   }
 
   function verdictLabel(j) {
@@ -437,6 +459,16 @@ export const INDEX_HTML = String.raw`<!doctype html>
     $('sum-errors').textContent = counts.errors;
     const decisive = counts.wins + counts.losses;
     $('sum-rate').textContent = decisive === 0 ? '—' : Math.round((counts.wins / decisive) * 100) + '%';
+    if (typeof cell.costUsd === 'number') {
+      costRoll.totalUsd += cell.costUsd;
+      costRoll.costed++;
+      $('sum-cost').textContent = fmtCost(costRoll.totalUsd);
+    }
+    if (typeof cell.latencyMs === 'number') {
+      costRoll.totalMs += cell.latencyMs;
+      costRoll.timed++;
+      $('sum-time').textContent = fmtMs(costRoll.totalMs);
+    }
     $('progress').textContent = evt.progress.done + '/' + evt.progress.total;
   }
 

@@ -32,7 +32,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 
 - [ ] Steelman-my-prompt button (hosted + local).
 - [ ] Why-failed drawer with micro-steelman.
-- [ ] Cost tracker: post-run totals, status-bar rollup.
+- [x] Cost tracker: post-run totals, status-bar rollup.
 
 ## v1.1 (1-2 weeks after v1)
 

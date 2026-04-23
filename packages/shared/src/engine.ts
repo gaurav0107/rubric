@@ -174,19 +174,37 @@ function summarize(cells: CellResult[]): RunSummary {
   let losses = 0;
   let ties = 0;
   let errors = 0;
+  let totalCostUsd = 0;
+  let costedCells = 0;
+  let totalLatencyMs = 0;
+  let latencyCells = 0;
   for (const cell of cells) {
     if ('error' in cell.judge) {
       errors++;
-      continue;
+    } else {
+      const w: Verdict = cell.judge.winner;
+      if (w === 'b') wins++;
+      else if (w === 'a') losses++;
+      else ties++;
     }
-    const w: Verdict = cell.judge.winner;
-    if (w === 'b') wins++;
-    else if (w === 'a') losses++;
-    else ties++;
+    if (typeof cell.costUsd === 'number') {
+      totalCostUsd += cell.costUsd;
+      costedCells++;
+    }
+    if (typeof cell.latencyMs === 'number') {
+      totalLatencyMs += cell.latencyMs;
+      latencyCells++;
+    }
   }
   const decisive = wins + losses;
   const winRate = decisive === 0 ? 0 : wins / decisive;
-  return { wins, losses, ties, errors, winRate };
+  const summary: RunSummary = { wins, losses, ties, errors, winRate };
+  if (costedCells > 0) {
+    summary.totalCostUsd = totalCostUsd;
+    summary.costedCells = costedCells;
+  }
+  if (latencyCells > 0) summary.totalLatencyMs = totalLatencyMs;
+  return summary;
 }
 
 export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {

@@ -40,6 +40,13 @@ function renderHeader(title: string, config: Config, summary: RunSummary, when: 
   const winRatePct = decisive === 0 ? '—' : `${(summary.winRate * 100).toFixed(1)}%`;
   const rubric = typeof config.judge.rubric === 'string' ? config.judge.rubric : 'custom';
 
+  const extraStats: string[] = [];
+  if (summary.totalCostUsd !== undefined) {
+    const usd = summary.totalCostUsd;
+    const fmt = usd === 0 ? '$0.00' : usd < 0.01 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`;
+    extraStats.push(`<div class="stat stat-cost"><span class="n">${escape(fmt)}</span><span class="l">total cost (${summary.costedCells ?? 0} cells)</span></div>`);
+  }
+
   return `
 <header>
   <h1>${escape(title)}</h1>
@@ -52,6 +59,7 @@ function renderHeader(title: string, config: Config, summary: RunSummary, when: 
     <div class="stat stat-tie"><span class="n">${summary.ties}</span><span class="l">ties</span></div>
     <div class="stat stat-err"><span class="n">${summary.errors}</span><span class="l">errors</span></div>
     <div class="stat stat-rate"><span class="n">${escape(winRatePct)}</span><span class="l">win rate (of ${decisive} decisive)</span></div>
+    ${extraStats.join('\n    ')}
   </div>
 </header>
 `;

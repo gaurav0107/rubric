@@ -57,4 +57,10 @@ export interface RunSummary {
   ties: number;
   errors: number;
   winRate: number;
+  /** Sum of per-cell costUsd (both sides), when any cell reported a cost. Omitted if every cell was cost-less (e.g. mock run). */
+  totalCostUsd?: number;
+  /** Sum of per-cell latencyMs, when any cell reported a latency. */
+  totalLatencyMs?: number;
+  /** Number of cells that contributed to totalCostUsd (i.e. had a defined costUsd). */
+  costedCells?: number;
 }
