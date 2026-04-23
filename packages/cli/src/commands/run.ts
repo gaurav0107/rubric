@@ -7,8 +7,10 @@ import {
   createOpenAIProvider,
   loadConfig,
   parseCasesJsonl,
+  renderBadgeSvg,
   renderReportHtml,
   runEval,
+  type CalibrationReport,
   type CellResult,
   type Config,
   type Judge,
@@ -38,6 +40,10 @@ export interface RunOptions {
   json?: boolean;
   /** When set, write the JSON payload to this path (stdout still gets it if `json` is true). */
   jsonPath?: string;
+  /** When set, write a self-contained status SVG badge to this path. */
+  badgePath?: string;
+  /** Optional calibration JSON path; colors the badge accordingly. */
+  calibrationPath?: string;
   /** Stream of human-readable output; defaults to process.stdout. */
   write?: (line: string) => void;
   /** Stream for the JSON payload when `json` is true; defaults to process.stdout. */
@@ -219,6 +225,19 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
       writeFileSync(absJson, serialized, 'utf8');
       if (!json) write(`\n  json:    ${absJson}\n`);
     }
+  }
+
+  if (opts.badgePath) {
+    const absBadge = resolve(cwd, opts.badgePath);
+    const badgeInput: Parameters<typeof renderBadgeSvg>[0] = { summary };
+    if (opts.calibrationPath) {
+      const calAbs = resolve(cwd, opts.calibrationPath);
+      const raw = readFileSync(calAbs, 'utf8');
+      const parsed = JSON.parse(raw) as CalibrationReport;
+      badgeInput.calibration = parsed;
+    }
+    writeFileSync(absBadge, renderBadgeSvg(badgeInput), 'utf8');
+    write(`\n  badge:   ${absBadge}\n`);
   }
 
   return {

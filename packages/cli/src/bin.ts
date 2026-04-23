@@ -18,6 +18,8 @@ Usage:
     --fail-on-regress               Exit 2 when candidate loses more cells than it wins
     --json                          Emit machine-readable JSON on stdout (human logs → stderr)
     --json-out <path>               Also write the JSON payload to this file
+    --badge-out <path>              Write a status SVG badge (self-hostable in your repo)
+    --calibration <path>            Color the badge by calibration agreement (paired with --badge-out)
   diffprompt seed --from-langfuse <in.jsonl> [--out data/cases.jsonl]
                                     Convert a Langfuse export into cases + calibration
   diffprompt calibrate [options]    Measure judge vs. human agreement
@@ -72,10 +74,14 @@ async function main(argv: string[]): Promise<number> {
         const failOnRegress = rest.includes('--fail-on-regress');
         const json = rest.includes('--json');
         const jsonPath = parseFlag(rest, '--json-out');
+        const badgePath = parseFlag(rest, '--badge-out');
+        const calibrationPath = parseFlag(rest, '--calibration');
         const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json };
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;
         if (jsonPath) opts.jsonPath = jsonPath;
+        if (badgePath) opts.badgePath = badgePath;
+        if (calibrationPath) opts.calibrationPath = calibrationPath;
         if (concurrencyRaw !== undefined) {
           const n = Number(concurrencyRaw);
           if (!Number.isFinite(n) || n < 1) throw new Error(`--concurrency must be a positive number, got "${concurrencyRaw}"`);
