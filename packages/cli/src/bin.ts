@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { runCalibrate } from './commands/calibrate.ts';
 import { runComment } from './commands/comment.ts';
 import { runHistory } from './commands/history.ts';
@@ -9,6 +12,17 @@ import type { RunLimits } from '../../shared/src/index.ts';
 import { formatPiiWarning, runSeed } from './commands/seed.ts';
 import { runServe } from './commands/serve.ts';
 import { runShare } from './commands/share.ts';
+
+function readCliVersion(): string {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = resolve(here, '..', 'package.json');
+    const raw = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: unknown };
+    return typeof raw.version === 'string' ? raw.version : '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
 
 const USAGE = `diffprompt — pairwise prompt evaluation
 
@@ -102,6 +116,11 @@ async function main(argv: string[]): Promise<number> {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     process.stdout.write(USAGE);
     return cmd ? 0 : 1;
+  }
+
+  if (cmd === '--version' || cmd === '-v') {
+    process.stdout.write(`diffprompt ${readCliVersion()}\n`);
+    return 0;
   }
 
   switch (cmd) {

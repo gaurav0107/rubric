@@ -49,7 +49,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 
 - [x] Dataset bootstrapping: `--from-logs` (covered by `--from-{helicone,langsmith,openai-logs}` adapters), `--from-synthetic` (template + variables cartesian fan-out, no LLM).
 - [x] Single-file binary via `bun build --compile` — `pnpm build:binary:all` + tagged-release workflow ship cross-platform binaries.
-- [ ] Homebrew tap.
+- [x] Homebrew tap — formula template + release-driven build script at `packaging/homebrew/`. Blocks on first published release for hashes; scaffold + `--version` CLI support landed.
 - [ ] VS Code extension.
 - [x] Team preset / shared rubric file.
 - [x] Prompt history scrubber (git-log visualization).

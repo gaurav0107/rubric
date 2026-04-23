@@ -1,0 +1,68 @@
+# Homebrew formula template for diffprompt.
+#
+# The `release` GitHub workflow produces five single-file binaries per tag
+# push: darwin-{x64,arm64}, linux-{x64,arm64}, windows-x64. The Homebrew
+# tap only needs the two darwin binaries plus the two linux binaries —
+# Homebrew does not support Windows.
+#
+# How to publish after a `vX.Y.Z` release:
+#
+#   1. Download the four unix binaries from the GitHub release page:
+#        diffprompt-darwin-arm64
+#        diffprompt-darwin-x64
+#        diffprompt-linux-arm64
+#        diffprompt-linux-x64
+#
+#   2. Compute sha256 for each:
+#        shasum -a 256 diffprompt-*
+#
+#   3. Substitute version + each sha256 into the six `__...__` placeholders
+#      below and drop the result at `Formula/diffprompt.rb` in a companion
+#      tap repo (`homebrew-diffprompt`, conventionally).
+#
+#      Users then `brew tap diffprompt/diffprompt && brew install diffprompt`.
+#
+# Keeping this as a `.rb.template` in-repo rather than a live Formula means
+# the main repo is not blocked on a first release to commit the scaffold —
+# and future releases can automate the substitution via a small workflow.
+
+class Diffprompt < Formula
+  desc "Pairwise prompt evaluation for pull requests"
+  homepage "https://diffprompt.dev"
+  version "__VERSION__"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-darwin-arm64"
+      sha256 "__DARWIN_ARM64_SHA__"
+    end
+    on_intel do
+      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-darwin-x64"
+      sha256 "__DARWIN_X64_SHA__"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-linux-arm64"
+      sha256 "__LINUX_ARM64_SHA__"
+    end
+    on_intel do
+      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-linux-x64"
+      sha256 "__LINUX_X64_SHA__"
+    end
+  end
+
+  def install
+    # bun --compile emits a platform-specific filename; rename to `diffprompt`
+    # so the shim on PATH matches the CLI name users expect.
+    binary = Dir["diffprompt-*"].first
+    chmod 0755, binary
+    bin.install binary => "diffprompt"
+  end
+
+  test do
+    assert_match "diffprompt #{version}", shell_output("#{bin}/diffprompt --version")
+  end
+end

@@ -169,6 +169,16 @@ bun run build:binary:all        # linux-x64/arm64, darwin-x64/arm64, windows-x64
 
 The `release` GitHub workflow builds all five targets on tag push (`v*.*.*`) and attaches them to the release.
 
+### Homebrew tap
+
+`packaging/homebrew/diffprompt.rb.template` is a ready-to-publish Formula scaffold. After a release is cut, run:
+
+```bash
+packaging/homebrew/build-formula.sh 0.1.0 ./downloaded-binaries/ > Formula/diffprompt.rb
+```
+
+and commit the generated `Formula/diffprompt.rb` to a companion `homebrew-diffprompt` tap repo. Users then `brew tap diffprompt/diffprompt && brew install diffprompt` to get the correct platform binary, auto-renamed to `diffprompt` on PATH.
+
 ## Planning artifacts
 
 - [`docs/design.md`](docs/design.md) — Builder-mode design doc. Approach C (local server + live diff playground). APPROVED.
