@@ -20,7 +20,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [x] `diffprompt calibrate` CLI + in-UI labeling flow + `_calibration.json` read/write.
 - [x] Calibration-aware PR-bot comment + badge (unverified vs calibrated states).
 - [x] `run --fail-on-regress` CLI flag.
-- [ ] Abuse & Cost Containment: provider-TOS review, $50/day cap, per-IP rate limits, 4k-char prompt cap, 20-case dataset cap, OpenAI moderation endpoint, PII nudge, kill switch, budget alerting.
+- [ ] Abuse & Cost Containment: provider-TOS review, $50/day cap, per-IP rate limits, 4k-char prompt cap, 20-case dataset cap, OpenAI moderation endpoint, PII nudge, kill switch, budget alerting. *(CLI-side enforcement — `--max-prompt-chars`, `--max-cases`, `--scan-pii` — landed; hosted sandbox caps + rate limits + moderation + budget alerting pending)*
 - [ ] BYOK fallback mode (localStorage-only keys) shipped as feature flag.
 - [ ] Legal pages: TOS, privacy policy, DMCA (Vercel + Plausible templates).
 - [ ] Observability: Sentry + spend dashboard.

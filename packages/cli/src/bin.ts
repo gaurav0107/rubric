@@ -4,6 +4,7 @@ import { runComment } from './commands/comment.ts';
 import { runInit } from './commands/init.ts';
 import { runPull } from './commands/pull.ts';
 import { runRun } from './commands/run.ts';
+import type { RunLimits } from '../../shared/src/index.ts';
 import { formatPiiWarning, runSeed } from './commands/seed.ts';
 import { runServe } from './commands/serve.ts';
 import { runShare } from './commands/share.ts';
@@ -29,6 +30,9 @@ Usage:
     --badge-out <path>              Write a status SVG badge (self-hostable in your repo)
     --calibration <path>            Color the badge by calibration agreement (paired with --badge-out)
     --cost-csv <path>               Write per-cell cost/latency CSV for spreadsheet analysis
+    --max-prompt-chars <n>          Fail if baseline/candidate exceed n characters
+    --max-cases <n>                 Fail if the dataset has more than n cases
+    --scan-pii                      Warn when case input/expected looks like PII (non-fatal)
   diffprompt seed <source-flag> <in.jsonl> [options]
                                     Convert an LLM-observability export into cases + calibration
     --from-langfuse <path>          Langfuse JSONL export (input + output + optional feedback)
@@ -127,6 +131,9 @@ async function main(argv: string[]): Promise<number> {
         const badgePath = parseFlag(rest, '--badge-out');
         const calibrationPath = parseFlag(rest, '--calibration');
         const costCsvPath = parseFlag(rest, '--cost-csv');
+        const maxPromptCharsRaw = parseFlag(rest, '--max-prompt-chars');
+        const maxCasesRaw = parseFlag(rest, '--max-cases');
+        const scanPii = rest.includes('--scan-pii');
         const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json };
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;
@@ -134,6 +141,19 @@ async function main(argv: string[]): Promise<number> {
         if (badgePath) opts.badgePath = badgePath;
         if (calibrationPath) opts.calibrationPath = calibrationPath;
         if (costCsvPath) opts.costCsvPath = costCsvPath;
+        const limits: RunLimits = {};
+        if (maxPromptCharsRaw !== undefined) {
+          const n = Number(maxPromptCharsRaw);
+          if (!Number.isFinite(n) || n < 1) throw new Error(`--max-prompt-chars must be a positive number, got "${maxPromptCharsRaw}"`);
+          limits.maxPromptChars = Math.floor(n);
+        }
+        if (maxCasesRaw !== undefined) {
+          const n = Number(maxCasesRaw);
+          if (!Number.isFinite(n) || n < 1) throw new Error(`--max-cases must be a positive number, got "${maxCasesRaw}"`);
+          limits.maxCases = Math.floor(n);
+        }
+        if (scanPii) limits.scanPii = true;
+        if (Object.keys(limits).length > 0) opts.limits = limits;
         if (concurrencyRaw !== undefined) {
           const n = Number(concurrencyRaw);
           if (!Number.isFinite(n) || n < 1) throw new Error(`--concurrency must be a positive number, got "${concurrencyRaw}"`);

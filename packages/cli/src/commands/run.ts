@@ -11,12 +11,14 @@ import {
   renderCostCsv,
   renderReportHtml,
   runEval,
+  validateRunInputs,
   type CalibrationReport,
   type CellResult,
   type Config,
   type Judge,
   type ModelId,
   type Provider,
+  type RunLimits,
   type RunSummary,
   type Verdict,
 } from '../../../shared/src/index.ts';
@@ -47,6 +49,12 @@ export interface RunOptions {
   calibrationPath?: string;
   /** When set, write a per-cell cost/latency CSV for spreadsheet analysis. */
   costCsvPath?: string;
+  /**
+   * Input caps enforced before any provider call. Local CLI defaults leave
+   * these undefined (permissive). The hosted sandbox enforces 4k prompt /
+   * 20 cases / PII-scan per the v1 abuse budget.
+   */
+  limits?: RunLimits;
   /** Stream of human-readable output; defaults to process.stdout. */
   write?: (line: string) => void;
   /** Stream for the JSON payload when `json` is true; defaults to process.stdout. */
@@ -189,6 +197,15 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   };
   const datasetText = readFileSync(loaded.resolved.dataset, 'utf8');
   const cases = parseCasesJsonl(datasetText, { allowLangfuse: opts.allowLangfuse ?? false });
+
+  if (opts.limits) {
+    const { errors, warnings } = validateRunInputs({ prompts, cases, limits: opts.limits });
+    for (const w of warnings) write(`  ⚠ ${w.message}\n`);
+    if (errors.length > 0) {
+      for (const e of errors) write(`  ✖ ${e.message}\n`);
+      throw new Error(`input validation failed (${errors.length} error${errors.length === 1 ? '' : 's'})`);
+    }
+  }
 
   write(`diffprompt: ${cases.length} case(s) x ${loaded.config.models.length} model(s) = ${cases.length * loaded.config.models.length} cell(s)\n`);
   write(`  config:   ${loaded.path}\n`);
