@@ -115,7 +115,7 @@ export async function runCalibrate(opts: CalibrateOptions = {}): Promise<Calibra
   const loaded = loadConfig(configPath);
   const entries = readLabels(labelsPath);
 
-  const providers: Provider[] = mock ? [createMockProvider()] : [createOpenAIProvider()];
+  const providers: Provider[] = mock ? [createMockProvider({ acceptAll: true })] : [createOpenAIProvider()];
   const rubric = typeof loaded.config.judge.rubric === 'string'
     ? loaded.config.judge.rubric
     : loaded.config.judge.rubric.custom;

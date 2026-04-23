@@ -55,7 +55,7 @@ function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
 }
 
 function buildProviders(mock: boolean): Provider[] {
-  return mock ? [createMockProvider()] : [createOpenAIProvider()];
+  return mock ? [createMockProvider({ acceptAll: true })] : [createOpenAIProvider()];
 }
 
 function buildJudge(mock: boolean, config: Config, providers: Provider[]): Judge {

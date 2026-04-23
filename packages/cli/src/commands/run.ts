@@ -59,7 +59,7 @@ export interface RunResult {
 const DEFAULT_CONFIG = 'diffprompt.config.json';
 
 function buildProviders(mock: boolean): Provider[] {
-  if (mock) return [createMockProvider()];
+  if (mock) return [createMockProvider({ acceptAll: true })];
   return [createOpenAIProvider()];
 }
 

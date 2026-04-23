@@ -109,6 +109,24 @@ describe('runEval', () => {
     if ('error' in cell.judge) expect(cell.judge.error).toMatch(/no provider accepted/);
   });
 
+  test('mock provider with acceptAll runs any ModelId (enables --mock with live config)', async () => {
+    const cases: Case[] = [{ input: 'one' }];
+    const config = makeConfig(['openai/gpt-4o-mini' as ModelId, 'anthropic/claude' as ModelId]);
+    const provider = createMockProvider({ acceptAll: true });
+    const judge = createMockJudge({ verdict: 'b' });
+
+    const { cells, summary } = await runEval({
+      config,
+      cases,
+      prompts,
+      providers: [provider],
+      judge,
+    });
+    expect(cells.length).toBe(2);
+    expect(summary.errors).toBe(0);
+    expect(summary.wins).toBe(2);
+  });
+
   test('onCell callback receives progress counts', async () => {
     const cases: Case[] = [{ input: 'one' }, { input: 'two' }];
     const config = makeConfig(['mock/m1'] as ModelId[]);

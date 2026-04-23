@@ -14,16 +14,24 @@ export interface MockProviderOptions {
   costUsd?: number;
   /** Provider prefix to match (default: "mock"). */
   prefix?: string;
+  /**
+   * When true, supports() accepts any ModelId regardless of prefix. Intended
+   * for `diffprompt run --mock` / `serve --mock` so users can test against
+   * their live config (e.g. openai/*) without rewriting it.
+   */
+  acceptAll?: boolean;
 }
 
 export function createMockProvider(opts: MockProviderOptions = {}): Provider {
   const prefix = opts.prefix ?? 'mock';
   const latencyMs = opts.latencyMs ?? 0;
   const respond = opts.respond ?? ((req) => `[${req.modelId}] ${req.prompt}`);
+  const acceptAll = opts.acceptAll === true;
 
   return {
     name: 'mock',
     supports(modelId: ModelId): boolean {
+      if (acceptAll) return true;
       try {
         return splitModelId(modelId).providerPrefix === prefix;
       } catch {
