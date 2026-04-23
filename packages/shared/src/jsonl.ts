@@ -66,10 +66,10 @@ function parseCaseObject(obj: Record<string, unknown>, line: number, opts: Parse
     if (typeof obj.output !== 'string') {
       throw new JsonlParseError('Langfuse line: `output` must be a string', line);
     }
-    metadata.langfuse = {
-      output: obj.output,
-      feedback: parseFeedback(obj.feedback, line),
-    } satisfies Partial<LangfuseLine>;
+    const parsedFeedback = parseFeedback(obj.feedback, line);
+    const langfuse: Partial<LangfuseLine> = { output: obj.output };
+    if (parsedFeedback !== undefined) langfuse.feedback = parsedFeedback;
+    metadata.langfuse = langfuse;
   }
 
   if (Object.keys(metadata).length > 0) out.metadata = metadata;
