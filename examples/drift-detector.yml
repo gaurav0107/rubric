@@ -1,0 +1,94 @@
+# Scheduled drift-detection workflow for diffprompt.
+#
+# Runs the eval once a week against the same baseline + dataset. When the
+# candidate loses more cells than it wins (`diffprompt run --fail-on-regress`
+# exit 2), we render the calibration-aware PR-comment body and upsert a
+# single GitHub issue per `marker` so the backlog does not fill up with
+# duplicate drift reports. A closed drift issue is reopened when a new
+# regression lands, which keeps the tracker accurate across runs.
+#
+# Framed as best-effort, not an SLA. Good enough for "did last week's model
+# update quietly shift behaviour?" without paging anyone.
+#
+# Drop this file into `.github/workflows/` and flip the schedule to suit.
+
+name: diffprompt-drift
+
+on:
+  schedule:
+    # Mondays at 14:00 UTC. Tune to your release cadence.
+    - cron: '0 14 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      # Upstream tokens. Swap or add providers to match your config.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install diffprompt
+        run: npm install --global diffprompt
+
+      - name: Run eval (baseline frozen)
+        id: run
+        run: |
+          set +e
+          diffprompt run \
+            --config diffprompt.config.json \
+            --json-out diffprompt-run.json \
+            --fail-on-regress
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Calibrate (if labels exist)
+        if: hashFiles('prompts/_calibration.json.local') != ''
+        run: |
+          diffprompt calibrate \
+            --config diffprompt.config.json \
+            --labels prompts/_calibration.json.local \
+            --json-out diffprompt-cal.json
+
+      - name: Render comment body for the issue
+        if: steps.run.outputs.exit == '2'
+        run: |
+          ARGS=( "--from" "diffprompt-run.json" )
+          if [ -f diffprompt-cal.json ]; then
+            ARGS+=( "--calibration" "diffprompt-cal.json" )
+          fi
+          ARGS+=( "--title" "drift check — $(date -u +%Y-%m-%d)" )
+          diffprompt comment "${ARGS[@]}" > drift-body.md
+
+      - name: Upsert drift issue
+        if: steps.run.outputs.exit == '2'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DIFFPROMPT_DRIFT_MARKER: diffprompt-bot:drift-issue
+        run: |
+          npx --yes tsx@4 \
+            node_modules/diffprompt-action/src/bin.ts \
+            --drift \
+            --title "diffprompt drift — candidate regressed on scheduled check" \
+            --labels "drift,diffprompt" \
+            --body drift-body.md
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diffprompt-drift-${{ github.run_id }}
+          path: |
+            diffprompt-run.json
+            diffprompt-cal.json
+            drift-body.md
+          if-no-files-found: ignore
+          retention-days: 30

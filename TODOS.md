@@ -36,9 +36,10 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 
 ## v1.1 (1-2 weeks after v1)
 
-- [ ] Drift detector: monthly cron, GitHub-issue-only notification (email + Slack → v1.2).
+- [x] Drift detector: scheduled cron, GitHub-issue-only notification (email + Slack → v1.2).
   - Framed as best-effort, not SLA.
-  - Reuses v1 model-comparison mode — cron just schedules it.
+  - Reuses v1 `run --fail-on-regress` exit code — cron just schedules it.
+  - `examples/drift-detector.yml` workflow template + `diffprompt-action --drift` bin mode upsert a single issue per marker (reopens closed issues on new regressions).
 - [x] Import adapters: Helicone, LangSmith, OpenAI chat-completion logs. Same pattern as Langfuse adapter.
 - [x] CSV export from cost tracker.
 - [ ] Hand-audit launch dataset from 10 → 50 samples.

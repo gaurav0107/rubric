@@ -83,6 +83,10 @@ jobs:
 
 Comments are idempotent — subsequent runs update the same comment via a hidden HTML marker instead of stacking.
 
+### Drift detection (scheduled)
+
+Drop `examples/drift-detector.yml` into `.github/workflows/` to run the eval on a schedule and upsert a GitHub issue when the candidate starts losing. Same idempotency trick as the PR comment: one issue per `DIFFPROMPT_DRIFT_MARKER`, reopened if a previous drift report was closed. Best-effort — good enough for "did last week's model update quietly shift behaviour?" without paging anyone.
+
 ## Command reference
 
 | Command | Purpose |

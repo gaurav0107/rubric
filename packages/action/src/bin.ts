@@ -7,6 +7,7 @@
  * `diffprompt` CLI; this binary only cares about posting the result.
  */
 import { readFileSync } from 'node:fs';
+import { upsertDriftIssue } from './drift-issue.ts';
 import { upsertPrComment } from './post-comment.ts';
 
 function requireEnv(name: string): string {
@@ -44,26 +45,41 @@ function readEventPrNumber(eventPath: string): number {
   throw new Error(`could not find a PR number in GITHUB_EVENT_PATH — is this workflow running on pull_request?`);
 }
 
+function parseFlag(argv: string[], name: string): string | undefined {
+  const i = argv.indexOf(name);
+  if (i === -1) return undefined;
+  const v = argv[i + 1];
+  return v;
+}
+
 export async function main(argv: string[]): Promise<number> {
-  const i = argv.indexOf('--body');
-  if (i === -1) {
-    process.stderr.write('diffprompt-action: missing --body <path>\n');
-    return 2;
-  }
-  const bodyPath = argv[i + 1];
+  const drift = argv.includes('--drift');
+  const bodyPath = parseFlag(argv, '--body');
   if (!bodyPath) {
-    process.stderr.write('diffprompt-action: --body requires a path\n');
+    process.stderr.write('diffprompt-action: missing --body <path>\n');
     return 2;
   }
 
   const token = requireEnv('GITHUB_TOKEN');
   const repo = requireEnv('GITHUB_REPOSITORY');
-  const eventPath = requireEnv('GITHUB_EVENT_PATH');
   const apiUrl = process.env.GITHUB_API_URL || 'https://api.github.com';
+  const body = readFileSync(bodyPath, 'utf8');
+
+  if (drift) {
+    const title = parseFlag(argv, '--title') ?? 'diffprompt: candidate has regressed against baseline';
+    const marker = process.env.DIFFPROMPT_DRIFT_MARKER || 'diffprompt-bot:drift-issue';
+    const labelsRaw = parseFlag(argv, '--labels');
+    const labels = labelsRaw ? labelsRaw.split(',').map((s) => s.trim()).filter(Boolean) : ['drift'];
+
+    const result = await upsertDriftIssue({ repo, token, title, body, marker, labels, apiUrl });
+    process.stdout.write(`diffprompt-action: ${result.action} drift issue #${result.issueNumber} — ${result.url}\n`);
+    return 0;
+  }
+
+  const eventPath = requireEnv('GITHUB_EVENT_PATH');
   const marker = process.env.DIFFPROMPT_COMMENT_MARKER || 'diffprompt-bot:pr-comment';
   const prNumber = readEventPrNumber(eventPath);
 
-  const body = readFileSync(bodyPath, 'utf8');
   const upsertArgs: Parameters<typeof upsertPrComment>[0] = {
     repo,
     prNumber,
