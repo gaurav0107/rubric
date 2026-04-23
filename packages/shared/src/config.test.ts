@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigError, loadConfig, validateConfig } from './config.ts';
+import { ConfigError, loadConfig, resolveRubric, validateConfig } from './config.ts';
 
 describe('validateConfig', () => {
   test('accepts a minimal valid config', () => {
@@ -108,5 +108,43 @@ describe('loadConfig', () => {
 
   test('throws ConfigError on missing file', () => {
     expect(() => loadConfig('/tmp/this-file-does-not-exist-diffprompt.json')).toThrow(ConfigError);
+  });
+});
+
+describe('resolveRubric', () => {
+  test('passes built-in string rubrics through', () => {
+    expect(resolveRubric('default', '/irrelevant')).toBe('default');
+    expect(resolveRubric('model-comparison', '/irrelevant')).toBe('model-comparison');
+  });
+
+  test('inlines custom rubric text', () => {
+    expect(resolveRubric({ custom: 'be strict' }, '/irrelevant')).toBe('be strict');
+  });
+
+  test('loads rubric from a file relative to baseDir', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'diffprompt-rubric-'));
+    try {
+      writeFileSync(join(dir, 'rubric.md'), '# Team rubric\nJudge harshly but fairly.');
+      const text = resolveRubric({ file: 'rubric.md' }, dir);
+      expect(text).toBe('# Team rubric\nJudge harshly but fairly.');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('throws ConfigError when the rubric file is missing', () => {
+    expect(() => resolveRubric({ file: 'nope.md' }, '/tmp')).toThrow(ConfigError);
+  });
+});
+
+describe('validateConfig — team rubric file', () => {
+  test('accepts { file: "path.md" } rubric', () => {
+    const cfg = validateConfig({
+      prompts: { baseline: 'a.md', candidate: 'b.md' },
+      dataset: 'data.jsonl',
+      models: ['openai/gpt-4o-mini'],
+      judge: { model: 'openai/gpt-4o', rubric: { file: 'rubric.md' } },
+    });
+    expect(cfg.judge.rubric).toEqual({ file: 'rubric.md' });
   });
 });

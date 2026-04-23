@@ -215,7 +215,11 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
   const concurrency = opts.concurrency ?? config.concurrency ?? 4;
   const mode = config.mode ?? 'compare-prompts';
   const rubricString =
-    typeof config.judge.rubric === 'string' ? config.judge.rubric : config.judge.rubric.custom;
+    typeof config.judge.rubric === 'string'
+      ? config.judge.rubric
+      : 'custom' in config.judge.rubric
+        ? config.judge.rubric.custom
+        : (() => { throw new Error('engine received a { file } rubric — caller must resolve with resolveRubric() first'); })();
 
   const plan = planCells(cases, config.models, mode);
   let done = 0;

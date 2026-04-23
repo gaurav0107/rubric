@@ -50,7 +50,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [ ] Single-file binary via `bun build --compile`.
 - [ ] Homebrew tap.
 - [ ] VS Code extension.
-- [ ] Team preset / shared rubric file.
+- [x] Team preset / shared rubric file.
 - [ ] Prompt history scrubber (git-log visualization).
 - [ ] Tool-call / structured-output comparison.
 - [ ] Provider parity testing for Groq / OpenRouter / Ollama.

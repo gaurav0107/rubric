@@ -6,6 +6,7 @@ import {
   createOpenAIProvider,
   loadConfig,
   renderCalibrationHtml,
+  resolveRubric,
   runCalibration,
   type CalibrationEntry,
   type CalibrationReport,
@@ -116,9 +117,7 @@ export async function runCalibrate(opts: CalibrateOptions = {}): Promise<Calibra
   const entries = readLabels(labelsPath);
 
   const providers: Provider[] = mock ? [createMockProvider({ acceptAll: true })] : [createOpenAIProvider()];
-  const rubric = typeof loaded.config.judge.rubric === 'string'
-    ? loaded.config.judge.rubric
-    : loaded.config.judge.rubric.custom;
+  const rubric = resolveRubric(loaded.config.judge.rubric, loaded.baseDir);
   const grader = buildGrader(mock, loaded.config.judge.model, providers, rubric);
 
   write(`diffprompt calibrate: ${entries.length} label(s)\n`);

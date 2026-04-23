@@ -1,6 +1,11 @@
 export type ModelId = `${string}/${string}`;
 
-export type Rubric = 'default' | 'model-comparison' | { custom: string };
+export type Rubric =
+  | 'default'
+  | 'model-comparison'
+  | { custom: string }
+  /** Team preset — loaded from a file relative to the config's baseDir. */
+  | { file: string };
 
 export interface Config {
   prompts: { baseline: string; candidate: string };

@@ -38,7 +38,9 @@ ${body}
 function renderHeader(title: string, config: Config, summary: RunSummary, when: Date): string {
   const decisive = summary.wins + summary.losses;
   const winRatePct = decisive === 0 ? '—' : `${(summary.winRate * 100).toFixed(1)}%`;
-  const rubric = typeof config.judge.rubric === 'string' ? config.judge.rubric : 'custom';
+  const rubric = typeof config.judge.rubric === 'string'
+    ? config.judge.rubric
+    : 'file' in config.judge.rubric ? `file:${config.judge.rubric.file}` : 'custom';
 
   const extraStats: string[] = [];
   if (summary.totalCostUsd !== undefined) {

@@ -7,6 +7,7 @@ import {
   createOpenAIProvider,
   loadConfig,
   parseCasesJsonl,
+  resolveRubric,
   renderBadgeSvg,
   renderCostCsv,
   renderReportHtml,
@@ -74,12 +75,9 @@ function buildProviders(mock: boolean): Provider[] {
   return [createOpenAIProvider()];
 }
 
-function buildJudge(mock: boolean, config: Config, providers: Provider[]): Judge {
+function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string): Judge {
   if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
 
-  const rubric = typeof config.judge.rubric === 'string'
-    ? config.judge.rubric
-    : config.judge.rubric.custom;
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
     throw new Error(
@@ -211,15 +209,22 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   write(`  config:   ${loaded.path}\n`);
   write(`  mode:     ${mock ? 'mock' : 'live'}\n`);
 
+  // Flatten { file: path } rubrics to text before the engine sees them; the
+  // engine is cwd-free and can't resolve file paths itself.
+  const rubricText = resolveRubric(loaded.config.judge.rubric, loaded.baseDir);
+  const resolvedConfig: Config = {
+    ...loaded.config,
+    judge: { ...loaded.config.judge, rubric: { custom: rubricText } },
+  };
   const providers = buildProviders(mock);
-  const judge = buildJudge(mock, loaded.config, providers);
+  const judge = buildJudge(mock, resolvedConfig, providers, rubricText);
 
   const onCell = (_cell: unknown, p: { done: number; total: number }) => {
     write(`  [${p.done}/${p.total}]\n`);
   };
 
   const runOpts: Parameters<typeof runEval>[0] = {
-    config: loaded.config,
+    config: resolvedConfig,
     cases,
     prompts,
     providers,

@@ -25,8 +25,11 @@ function validateRubric(v: unknown, path?: string): Rubric {
   if (isRecord(v) && typeof v.custom === 'string' && v.custom.length > 0) {
     return { custom: v.custom };
   }
+  if (isRecord(v) && typeof v.file === 'string' && v.file.length > 0) {
+    return { file: v.file };
+  }
   throw new ConfigError(
-    'judge.rubric must be "default", "model-comparison", or { custom: string }',
+    'judge.rubric must be "default", "model-comparison", { custom: string }, or { file: string }',
     path,
   );
 }
@@ -75,6 +78,30 @@ export function validateConfig(raw: unknown, path?: string): Config {
   }
 
   return out;
+}
+
+/**
+ * Flatten a Rubric into the plain-text form the judge/grader consumes.
+ *
+ * - string rubrics ("default" | "model-comparison") pass through verbatim;
+ *   the judge implementation resolves them against its built-in rubric map.
+ * - { custom } inlines the rubric text.
+ * - { file } loads the rubric text from `path` (resolved against baseDir).
+ *
+ * Callers that previously did `typeof rubric === 'string' ? rubric :
+ * rubric.custom` should switch to this helper so shared-rubric-file configs
+ * work transparently.
+ */
+export function resolveRubric(rubric: Rubric, baseDir: string): string {
+  if (typeof rubric === 'string') return rubric;
+  if ('custom' in rubric) return rubric.custom;
+  const filePath = isAbsolute(rubric.file) ? rubric.file : resolve(baseDir, rubric.file);
+  try {
+    return readFileSync(filePath, 'utf8');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new ConfigError(`failed to read rubric file (${msg})`, filePath);
+  }
 }
 
 export interface LoadedConfig {

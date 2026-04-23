@@ -17,6 +17,7 @@ import {
   createOpenAIProvider,
   loadConfig,
   parseCasesJsonl,
+  resolveRubric,
   runEval,
   type Case,
   type CellResult,
@@ -41,6 +42,7 @@ export interface WorkspaceSnapshot {
   prompts: { baseline: string; candidate: string };
   cases: Case[];
   resolved: { baseline: string; candidate: string; dataset: string };
+  baseDir: string;
 }
 
 function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
@@ -51,18 +53,15 @@ function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
   };
   const datasetText = readFileSync(loaded.resolved.dataset, 'utf8');
   const cases = parseCasesJsonl(datasetText, { allowLangfuse: false });
-  return { configPath: loaded.path, config: loaded.config, prompts, cases, resolved: loaded.resolved };
+  return { configPath: loaded.path, config: loaded.config, prompts, cases, resolved: loaded.resolved, baseDir: loaded.baseDir };
 }
 
 function buildProviders(mock: boolean): Provider[] {
   return mock ? [createMockProvider({ acceptAll: true })] : [createOpenAIProvider()];
 }
 
-function buildJudge(mock: boolean, config: Config, providers: Provider[]): Judge {
+function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string): Judge {
   if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
-  const rubric = typeof config.judge.rubric === 'string'
-    ? config.judge.rubric
-    : config.judge.rubric.custom;
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
     throw new Error(`no provider accepts judge.model "${config.judge.model}"`);
@@ -181,8 +180,13 @@ export function makeHandlers(opts: ServerOptions): Handlers {
     async runSweep({ mock, mode }) {
       const ws = loadWorkspace(cwd, configPath);
       const providers = buildProviders(mock);
-      const judge = buildJudge(mock, ws.config, providers);
-      const configForRun: Config = mode ? { ...ws.config, mode } : ws.config;
+      const rubricText = resolveRubric(ws.config.judge.rubric, ws.baseDir);
+      const judge = buildJudge(mock, ws.config, providers, rubricText);
+      const base: Config = {
+        ...ws.config,
+        judge: { ...ws.config.judge, rubric: { custom: rubricText } },
+      };
+      const configForRun: Config = mode ? { ...base, mode } : base;
 
       let pushCell: ((c: CellResult, p: { done: number; total: number }) => void) | null = null;
       const queue: Array<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } }> = [];
