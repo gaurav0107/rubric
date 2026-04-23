@@ -11,3 +11,5 @@ export * from './grader.ts';
 export * from './calibrate.ts';
 export * from './comment.ts';
 export * from './badge.ts';
+export * from './pii.ts';
+export * from './stratify.ts';

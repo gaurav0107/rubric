@@ -3,7 +3,7 @@ import { runCalibrate } from './commands/calibrate.ts';
 import { runComment } from './commands/comment.ts';
 import { runInit } from './commands/init.ts';
 import { runRun } from './commands/run.ts';
-import { runSeed } from './commands/seed.ts';
+import { formatPiiWarning, runSeed } from './commands/seed.ts';
 
 const USAGE = `diffprompt — pairwise prompt evaluation
 
@@ -20,8 +20,12 @@ Usage:
     --json-out <path>               Also write the JSON payload to this file
     --badge-out <path>              Write a status SVG badge (self-hostable in your repo)
     --calibration <path>            Color the badge by calibration agreement (paired with --badge-out)
-  diffprompt seed --from-langfuse <in.jsonl> [--out data/cases.jsonl]
+  diffprompt seed --from-langfuse <in.jsonl> [options]
                                     Convert a Langfuse export into cases + calibration
+    --out <path>                    Output cases JSONL (default: data/cases.jsonl)
+    --calibration-out <path>        Calibration sidecar (default: prompts/_calibration.json.local)
+    --sample <n>                    Stratified-sample to n cases (by feedback polarity)
+    --seed <n>                      Sampler RNG seed (default: 1)
   diffprompt calibrate [options]    Measure judge vs. human agreement
     --config <path>                 Config file (default: ./diffprompt.config.json)
     --labels <path>                 Labels JSON (default: prompts/_calibration.json.local)
@@ -100,11 +104,30 @@ async function main(argv: string[]): Promise<number> {
         if (!fromLangfuse) throw new Error('seed requires --from-langfuse <path>');
         const out = parseFlag(rest, '--out') ?? 'data/cases.jsonl';
         const calibrationOut = parseFlag(rest, '--calibration-out');
+        const sampleRaw = parseFlag(rest, '--sample');
+        const seedRaw = parseFlag(rest, '--seed');
         const opts: Parameters<typeof runSeed>[0] = { fromLangfuse, out };
         if (calibrationOut) opts.calibrationOut = calibrationOut;
+        if (sampleRaw !== undefined) {
+          const n = Number(sampleRaw);
+          if (!Number.isFinite(n) || n < 1) throw new Error(`--sample must be a positive number, got "${sampleRaw}"`);
+          opts.sample = Math.floor(n);
+        }
+        if (seedRaw !== undefined) {
+          const n = Number(seedRaw);
+          if (!Number.isFinite(n)) throw new Error(`--seed must be a finite number, got "${seedRaw}"`);
+          opts.seed = Math.floor(n);
+        }
         const result = runSeed(opts);
+        if (opts.sample !== undefined) {
+          process.stdout.write(`  sampled ${result.casesWritten} of ${result.totalIn} (stratified by feedback polarity)\n`);
+        }
         process.stdout.write(`  wrote   ${result.outPath} (${result.casesWritten} cases)\n`);
         process.stdout.write(`  wrote   ${result.calibrationPath} (${result.calibrationWritten} labeled)\n`);
+        if (result.piiWarnings.length > 0) {
+          process.stderr.write(`\n  PII detected in ${result.piiWarnings.length} field(s) — review before publishing:\n`);
+          for (const w of result.piiWarnings) process.stderr.write(formatPiiWarning(w) + '\n');
+        }
         return 0;
       } catch (err) {
         process.stderr.write(`diffprompt seed: ${err instanceof Error ? err.message : String(err)}\n`);
