@@ -131,6 +131,15 @@ Judge models follow the same prefix rules — you can run evals on local Ollama 
 
 `diffprompt serve` exposes a segmented control in the header so you can switch modes without editing the config.
 
+### Steelman-my-prompt
+
+`diffprompt serve` ships two revise-with-LLM helpers that reuse your configured judge model:
+
+- **✨ Steelman** (prompts-pane footer) — rewrites the currently active prompt with tighter constraints and clearer format guidance. No case anchor; fast when you want a second opinion on the prompt alone.
+- **✨ Steelman the losing prompt** (per-cell verdict banner) — opens on any decided cell (not tie, not error) and rewrites the losing prompt *anchored on that failing case*, with one-click apply → editor. Useful for "why did this one fail?" drilldown without re-running the sweep.
+
+Both go to the judge model by default, so the revision is costed against the same budget as grading. Use `mock` mode in the header to sanity-check the wiring without spending tokens — the default mock provider will return a parse error since it has no steelman response to echo.
+
 ## Repository layout
 
 ```

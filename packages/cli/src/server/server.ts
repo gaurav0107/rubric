@@ -23,12 +23,15 @@ import {
   parseCasesJsonl,
   resolveRubric,
   runEval,
+  runSteelman,
   type Case,
   type CellResult,
   type Config,
   type Judge,
   type Provider,
   type Rubric,
+  type SteelmanFailingCase,
+  type SteelmanResult,
 } from '../../../shared/src/index.ts';
 
 export interface ServerOptions {
@@ -131,6 +134,13 @@ export interface CalibrationLabel {
   reason?: string;
 }
 
+export interface SteelmanRequestBody {
+  which: 'baseline' | 'candidate';
+  failingCases?: SteelmanFailingCase[];
+  guidance?: string;
+  mock?: boolean;
+}
+
 export interface Handlers {
   getWorkspace: () => WorkspaceSnapshot;
   savePrompt: (which: 'baseline' | 'candidate', content: string) => void;
@@ -138,6 +148,7 @@ export interface Handlers {
   runSweep: (opts: { mock: boolean; mode?: 'compare-prompts' | 'compare-models' }) => Promise<{
     iterate: () => AsyncIterable<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } } | { type: 'done'; cells: CellResult[] }>;
   }>;
+  steelman: (body: SteelmanRequestBody) => Promise<SteelmanResult & { which: 'baseline' | 'candidate' }>;
 }
 
 function calibrationPathFor(ws: WorkspaceSnapshot): string {
@@ -188,6 +199,25 @@ export function makeHandlers(opts: ServerOptions): Handlers {
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, JSON.stringify({ entries: existing }, null, 2) + '\n', 'utf8');
       return { path, entryCount: existing.length };
+    },
+    async steelman(body) {
+      const ws = loadWorkspace(cwd, configPath);
+      const prompt = body.which === 'baseline' ? ws.prompts.baseline : ws.prompts.candidate;
+      const mock = body.mock === true || opts.mock === true;
+      const providers = buildProviders(mock);
+      const provider = providers.find((p) => p.supports(ws.config.judge.model));
+      if (!provider) {
+        throw new Error(`no provider accepts judge.model "${ws.config.judge.model}" for steelman`);
+      }
+      const steelmanOpts: Parameters<typeof runSteelman>[0] = {
+        provider,
+        model: ws.config.judge.model,
+        prompt,
+      };
+      if (body.failingCases !== undefined) steelmanOpts.failingCases = body.failingCases;
+      if (body.guidance !== undefined) steelmanOpts.guidance = body.guidance;
+      const result = await runSteelman(steelmanOpts);
+      return { ...result, which: body.which };
     },
     async runSweep({ mock, mode }) {
       const ws = loadWorkspace(cwd, configPath);
@@ -309,6 +339,34 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         if (typeof parsed.reason === 'string' && parsed.reason.length > 0) label.reason = parsed.reason;
         const result = handlers.appendCalibrationLabel(label);
         sendJson(res, 200, { ok: true, path: result.path, entryCount: result.entryCount });
+        return;
+      }
+
+      if (method === 'POST' && url === '/api/steelman') {
+        const body = await readBody(req);
+        const parsed = JSON.parse(body) as Partial<SteelmanRequestBody>;
+        if (parsed.which !== 'baseline' && parsed.which !== 'candidate') {
+          sendJson(res, 400, { error: 'which must be "baseline" or "candidate"' });
+          return;
+        }
+        if (parsed.failingCases !== undefined && !Array.isArray(parsed.failingCases)) {
+          sendJson(res, 400, { error: 'failingCases must be an array' });
+          return;
+        }
+        if (parsed.guidance !== undefined && typeof parsed.guidance !== 'string') {
+          sendJson(res, 400, { error: 'guidance must be a string' });
+          return;
+        }
+        const reqBody: SteelmanRequestBody = { which: parsed.which };
+        if (parsed.failingCases !== undefined) reqBody.failingCases = parsed.failingCases as SteelmanFailingCase[];
+        if (parsed.guidance !== undefined) reqBody.guidance = parsed.guidance;
+        if (parsed.mock === true) reqBody.mock = true;
+        try {
+          const result = await handlers.steelman(reqBody);
+          sendJson(res, 200, result);
+        } catch (err) {
+          sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
         return;
       }
 

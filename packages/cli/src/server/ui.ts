@@ -244,6 +244,56 @@ export const INDEX_HTML = String.raw`<!doctype html>
     padding: 10px 16px; background: #3a1f1f; color: #ffbbbb; border-bottom: 1px solid var(--border);
     font-family: var(--mono); font-size: 12px;
   }
+
+  .steelman-panel {
+    border-top: 1px solid var(--border); background: var(--panel-2);
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px;
+  }
+  .steelman-panel.err { background: #3a1f1f; color: #ffbbbb; }
+  .steelman-panel .title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+  }
+  .steelman-panel .title .spacer { flex: 1; }
+  .steelman-panel .title button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 8px; font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .steelman-panel .title button.apply { border-color: var(--accent); color: var(--accent); }
+  .steelman-panel .rationale { color: var(--text); line-height: 1.45; }
+  .steelman-panel pre.revised {
+    margin: 0; white-space: pre-wrap; word-break: break-word;
+    font-family: var(--mono); font-size: 12px; color: var(--text);
+    background: var(--panel); padding: 8px 10px; border-radius: 4px;
+    max-height: 240px; overflow: auto;
+  }
+
+  .detail-verdict .steelman-row { display: flex; align-items: center; gap: 8px; }
+  .detail-verdict .steelman-row button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 8px; font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .detail-verdict .steelman-row button:hover { border-color: var(--accent); color: var(--accent); }
+  .detail-verdict .steelman-row button:disabled { opacity: .5; cursor: not-allowed; }
+  .detail-verdict .micro-steelman {
+    margin-top: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 12px;
+  }
+  .detail-verdict .micro-steelman.err { border-color: var(--loss); color: #ffbbbb; }
+  .detail-verdict .micro-steelman .ms-title {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .detail-verdict .micro-steelman .ms-title .spacer { flex: 1; }
+  .detail-verdict .micro-steelman .ms-title button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 6px; font: inherit; font-size: 10px; cursor: pointer;
+  }
+  .detail-verdict .micro-steelman .ms-title button.apply { border-color: var(--accent); color: var(--accent); }
+  .detail-verdict .micro-steelman pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word;
+    font-family: var(--mono); font-size: 11px; color: var(--text);
+  }
 </style>
 </head>
 <body>
@@ -276,8 +326,10 @@ export const INDEX_HTML = String.raw`<!doctype html>
       <textarea id="prompt-editor" spellcheck="false"></textarea>
       <div class="footer">
         <button id="save-btn">Save (⌘S)</button>
+        <button id="steelman-btn" title="Ask the judge model to strengthen this prompt">✨ Steelman</button>
         <span class="hint" id="save-hint">editor is clean</span>
       </div>
+      <div id="steelman-panel" class="steelman-panel" style="display:none"></div>
     </section>
 
     <section class="cases-pane">
@@ -572,8 +624,118 @@ export const INDEX_HTML = String.raw`<!doctype html>
       block.appendChild(exp);
     }
 
+    if (!j.error && (j.winner === 'a' || j.winner === 'b')) {
+      const row = document.createElement('div');
+      row.className = 'steelman-row';
+      const btn = document.createElement('button');
+      btn.textContent = '✨ Steelman the losing prompt';
+      const hint = document.createElement('span');
+      hint.style.color = 'var(--muted)';
+      hint.style.fontSize = '11px';
+      hint.textContent = 'rewrite using this case as the anchor';
+      row.appendChild(btn);
+      row.appendChild(hint);
+      block.appendChild(row);
+
+      const target = document.createElement('div');
+      block.appendChild(target);
+
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await runMicroSteelman(cell, block, target, btn);
+      });
+    }
+
     block.addEventListener('click', (e) => e.stopPropagation());
     return block;
+  }
+
+  async function runMicroSteelman(cell, block, target, btn) {
+    const j = cell.judge;
+    if (j.error || (j.winner !== 'a' && j.winner !== 'b')) return;
+
+    const ws = state.workspace;
+    const caseRec = ws.cases[cell.caseIndex];
+    if (!caseRec) return;
+
+    const which = state.mode === 'compare-models'
+      ? 'baseline'
+      : (j.winner === 'a' ? 'candidate' : 'baseline');
+    const failedOutput = j.winner === 'a' ? cell.outputB : cell.outputA;
+    const betterOutput = j.winner === 'a' ? cell.outputA : cell.outputB;
+
+    const failing = [{
+      input: caseRec.input,
+      failedOutput: failedOutput || '',
+      betterOutput: betterOutput || '',
+      judgeReason: j.reason || '',
+    }];
+    if (typeof caseRec.expected === 'string') failing[0].expected = caseRec.expected;
+
+    btn.disabled = true;
+    btn.textContent = '✨ Thinking…';
+    target.innerHTML = '';
+
+    const mock = $('mock-toggle').checked;
+    try {
+      const res = await fetch('/api/steelman', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ which, failingCases: failing, mock }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+
+      const panel = document.createElement('div');
+      panel.className = 'micro-steelman';
+
+      const head = document.createElement('div');
+      head.className = 'ms-title';
+      const lbl = document.createElement('span');
+      lbl.textContent = 'steelman of ' + which + ' (anchored on this case)';
+      const spacer = document.createElement('span');
+      spacer.className = 'spacer';
+      const applyBtn = document.createElement('button');
+      applyBtn.className = 'apply';
+      applyBtn.textContent = 'Apply → editor';
+      const dismissBtn = document.createElement('button');
+      dismissBtn.textContent = 'Dismiss';
+      head.appendChild(lbl);
+      head.appendChild(spacer);
+      head.appendChild(applyBtn);
+      head.appendChild(dismissBtn);
+      panel.appendChild(head);
+
+      const rationale = document.createElement('div');
+      rationale.style.color = 'var(--muted)';
+      rationale.textContent = data.rationale;
+      panel.appendChild(rationale);
+
+      const pre = document.createElement('pre');
+      pre.textContent = data.revised;
+      panel.appendChild(pre);
+
+      applyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activateTab(which);
+        $('prompt-editor').value = data.revised;
+        setDirty(true);
+      });
+      dismissBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        target.innerHTML = '';
+      });
+
+      target.appendChild(panel);
+    } catch (err) {
+      const panel = document.createElement('div');
+      panel.className = 'micro-steelman err';
+      panel.textContent = 'steelman failed: ' + (err.message || err);
+      target.appendChild(panel);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✨ Steelman the losing prompt';
+    }
   }
 
   function detailSide(side, modelName, output, caseInput) {
@@ -743,6 +905,82 @@ export const INDEX_HTML = String.raw`<!doctype html>
   $('run-btn').addEventListener('click', runSweep);
   for (const btn of document.querySelectorAll('#mode-toggle button')) {
     btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  }
+  $('steelman-btn').addEventListener('click', steelmanActivePrompt);
+
+  async function steelmanActivePrompt() {
+    if (!state.workspace) return;
+    const which = state.active;
+    const panel = $('steelman-panel');
+    const btn = $('steelman-btn');
+    btn.disabled = true;
+    btn.textContent = '✨ Thinking…';
+    panel.style.display = 'block';
+    panel.className = 'steelman-panel';
+    panel.innerHTML = '<div class="title">steelman of ' + which + '</div><div class="rationale" style="color:var(--muted)">asking the judge model…</div>';
+
+    const mock = $('mock-toggle').checked;
+    try {
+      const res = await fetch('/api/steelman', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ which, mock }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+
+      panel.innerHTML = '';
+
+      const title = document.createElement('div');
+      title.className = 'title';
+      const tlabel = document.createElement('span');
+      tlabel.textContent = 'steelman of ' + which;
+      const spacer = document.createElement('span');
+      spacer.className = 'spacer';
+      const applyBtn = document.createElement('button');
+      applyBtn.className = 'apply';
+      applyBtn.textContent = 'Apply → editor';
+      const dismissBtn = document.createElement('button');
+      dismissBtn.textContent = 'Dismiss';
+      title.appendChild(tlabel);
+      title.appendChild(spacer);
+      title.appendChild(applyBtn);
+      title.appendChild(dismissBtn);
+      panel.appendChild(title);
+
+      const rationale = document.createElement('div');
+      rationale.className = 'rationale';
+      rationale.textContent = data.rationale;
+      panel.appendChild(rationale);
+
+      const pre = document.createElement('pre');
+      pre.className = 'revised';
+      pre.textContent = data.revised;
+      panel.appendChild(pre);
+
+      applyBtn.addEventListener('click', () => {
+        activateTab(which);
+        $('prompt-editor').value = data.revised;
+        setDirty(true);
+      });
+      dismissBtn.addEventListener('click', () => {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+      });
+    } catch (err) {
+      panel.className = 'steelman-panel err';
+      panel.innerHTML = '';
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = 'steelman failed';
+      const body = document.createElement('div');
+      body.textContent = err.message || String(err);
+      panel.appendChild(title);
+      panel.appendChild(body);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✨ Steelman';
+    }
   }
 
   loadWorkspace();

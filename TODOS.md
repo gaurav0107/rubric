@@ -30,8 +30,8 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 
 ## Week-6 Polish (cuttable to v1.1 if slipping)
 
-- [ ] Steelman-my-prompt button (hosted + local).
-- [ ] Why-failed drawer with micro-steelman. *(verdict-headline banner shipped; micro-steelman needs live LLM round-trip, deferred)*
+- [x] Steelman-my-prompt button (local). *(hosted pending sandbox)*
+- [x] Why-failed drawer with micro-steelman. *(per-cell "Steelman the losing prompt" anchors a micro-rewrite on the failing case, one-click apply → editor)*
 - [x] Cost tracker: post-run totals, status-bar rollup.
 
 ## v1.1 (1-2 weeks after v1)
