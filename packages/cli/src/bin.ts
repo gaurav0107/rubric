@@ -28,6 +28,7 @@ Usage:
     --json-out <path>               Also write the JSON payload to this file
     --badge-out <path>              Write a status SVG badge (self-hostable in your repo)
     --calibration <path>            Color the badge by calibration agreement (paired with --badge-out)
+    --cost-csv <path>               Write per-cell cost/latency CSV for spreadsheet analysis
   diffprompt seed --from-langfuse <in.jsonl> [options]
                                     Convert a Langfuse export into cases + calibration
     --out <path>                    Output cases JSONL (default: data/cases.jsonl)
@@ -121,12 +122,14 @@ async function main(argv: string[]): Promise<number> {
         const jsonPath = parseFlag(rest, '--json-out');
         const badgePath = parseFlag(rest, '--badge-out');
         const calibrationPath = parseFlag(rest, '--calibration');
+        const costCsvPath = parseFlag(rest, '--cost-csv');
         const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json };
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;
         if (jsonPath) opts.jsonPath = jsonPath;
         if (badgePath) opts.badgePath = badgePath;
         if (calibrationPath) opts.calibrationPath = calibrationPath;
+        if (costCsvPath) opts.costCsvPath = costCsvPath;
         if (concurrencyRaw !== undefined) {
           const n = Number(concurrencyRaw);
           if (!Number.isFinite(n) || n < 1) throw new Error(`--concurrency must be a positive number, got "${concurrencyRaw}"`);

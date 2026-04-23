@@ -8,6 +8,7 @@ import {
   loadConfig,
   parseCasesJsonl,
   renderBadgeSvg,
+  renderCostCsv,
   renderReportHtml,
   runEval,
   type CalibrationReport,
@@ -44,6 +45,8 @@ export interface RunOptions {
   badgePath?: string;
   /** Optional calibration JSON path; colors the badge accordingly. */
   calibrationPath?: string;
+  /** When set, write a per-cell cost/latency CSV for spreadsheet analysis. */
+  costCsvPath?: string;
   /** Stream of human-readable output; defaults to process.stdout. */
   write?: (line: string) => void;
   /** Stream for the JSON payload when `json` is true; defaults to process.stdout. */
@@ -247,6 +250,12 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
       writeFileSync(absJson, serialized, 'utf8');
       if (!json) write(`\n  json:    ${absJson}\n`);
     }
+  }
+
+  if (opts.costCsvPath) {
+    const absCsv = resolve(cwd, opts.costCsvPath);
+    writeFileSync(absCsv, renderCostCsv({ cells, summary }), 'utf8');
+    write(`\n  cost csv: ${absCsv}\n`);
   }
 
   if (opts.badgePath) {

@@ -40,7 +40,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
   - Framed as best-effort, not SLA.
   - Reuses v1 model-comparison mode — cron just schedules it.
 - [ ] Import adapters: Helicone, LangSmith, OpenAI chat-completion logs. Same pattern as Langfuse adapter.
-- [ ] CSV export from cost tracker.
+- [x] CSV export from cost tracker.
 - [ ] Hand-audit launch dataset from 10 → 50 samples.
 - [ ] Calibrate remix-rate threshold based on first-week data.
 
