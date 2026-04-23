@@ -24,7 +24,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [ ] BYOK fallback mode (localStorage-only keys) shipped as feature flag.
 - [ ] Legal pages: TOS, privacy policy, DMCA (Vercel + Plausible templates).
 - [ ] Observability: Sentry + spend dashboard.
-- [ ] Name availability check: `diffprompt.dev` domain, `diffprompt` npm package, `diffprompt` GitHub org. Fallbacks: `promptcmp`, `diffprompt`, `prompteval`.
+- [x] Name availability check: `diffprompt.dev` domain, `diffprompt` npm package, `diffprompt` GitHub org (all locked as of 2026-04-22).
 - [ ] Launch gif recorded on curated dataset.
 - [ ] HN / X / Reddit posts drafted.
 
