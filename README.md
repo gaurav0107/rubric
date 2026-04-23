@@ -12,6 +12,8 @@ Prompt changes ship with almost no safety net. "Looks better" usually means "I t
 
 ```bash
 npm install -g diffprompt    # not published yet — use `npm link` from packages/cli for now
+# or download the single-file binary for your platform from a GitHub release:
+#   diffprompt-{linux,darwin,windows}-{x64,arm64}
 
 diffprompt init              # scaffolds diffprompt.config.json, prompts/, data/cases.jsonl
 # edit prompts/baseline.md and prompts/candidate.md
@@ -141,6 +143,18 @@ action.yml  — composite GitHub Action: install → run → calibrate → comme
 ```
 
 All cross-package imports use relative paths (`../../../shared/src/index.ts`) so `bun` and `tsx` can run TypeScript sources directly without a build step.
+
+### Building standalone binaries
+
+`packages/cli/package.json` exposes `bun build --compile` scripts that produce a single-file, dependency-free executable per target:
+
+```bash
+cd packages/cli
+bun run build:binary            # native target (current OS/arch)
+bun run build:binary:all        # linux-x64/arm64, darwin-x64/arm64, windows-x64
+```
+
+The `release` GitHub workflow builds all five targets on tag push (`v*.*.*`) and attaches them to the release.
 
 ## Planning artifacts
 

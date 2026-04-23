@@ -47,7 +47,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 ## v2 (~6 weeks post v1)
 
 - [ ] Dataset bootstrapping: `--from-logs`, `--synthetic`.
-- [ ] Single-file binary via `bun build --compile`.
+- [x] Single-file binary via `bun build --compile` — `pnpm build:binary:all` + tagged-release workflow ship cross-platform binaries.
 - [ ] Homebrew tap.
 - [ ] VS Code extension.
 - [x] Team preset / shared rubric file.
