@@ -109,6 +109,16 @@ Model ids are `provider/model` strings. Live mode auto-detects the right provide
 
 Judge models follow the same prefix rules — you can run evals on local Ollama and judge with Groq, or any mix.
 
+### Rubrics
+
+`judge.rubric` picks how outputs are compared:
+
+- `"default"` — pairwise LLM judge with a general "more correct, concise, on-task" rubric.
+- `"model-comparison"` — pairwise LLM judge biased toward correctness + specificity (paired with `mode: "compare-models"`).
+- `"structural-json"` — deterministic, **no LLM call**. Parses A and B as JSON and picks the side that deep-equals `case.expected`. Great for tool-call / structured-output evals.
+- `{ "custom": "prose rubric..." }` — inline custom prose for the LLM judge.
+- `{ "file": "rubric.md" }` — load the rubric text from a file (team preset).
+
 ### Comparison modes
 
 `diffprompt.config.json` accepts `"mode": "compare-prompts"` (default) or `"compare-models"`.

@@ -18,6 +18,7 @@ import {
   createOpenAIJudge,
   createOpenAIProvider,
   createOpenRouterProvider,
+  createStructuralJudge,
   loadConfig,
   parseCasesJsonl,
   resolveRubric,
@@ -27,6 +28,7 @@ import {
   type Config,
   type Judge,
   type Provider,
+  type Rubric,
 } from '../../../shared/src/index.ts';
 
 export interface ServerOptions {
@@ -69,8 +71,9 @@ function buildProviders(mock: boolean): Provider[] {
   ];
 }
 
-function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string): Judge {
+function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string, originalRubric: Rubric): Judge {
   if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
+  if (originalRubric === 'structural-json') return createStructuralJudge();
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
     throw new Error(`no provider accepts judge.model "${config.judge.model}"`);
@@ -190,7 +193,7 @@ export function makeHandlers(opts: ServerOptions): Handlers {
       const ws = loadWorkspace(cwd, configPath);
       const providers = buildProviders(mock);
       const rubricText = resolveRubric(ws.config.judge.rubric, ws.baseDir);
-      const judge = buildJudge(mock, ws.config, providers, rubricText);
+      const judge = buildJudge(mock, ws.config, providers, rubricText, ws.config.judge.rubric);
       const base: Config = {
         ...ws.config,
         judge: { ...ws.config.judge, rubric: { custom: rubricText } },

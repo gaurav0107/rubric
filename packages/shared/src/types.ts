@@ -3,6 +3,8 @@ export type ModelId = `${string}/${string}`;
 export type Rubric =
   | 'default'
   | 'model-comparison'
+  /** Deterministic structural judge — parses outputs as JSON and compares to `expected`; no LLM call. */
+  | 'structural-json'
   | { custom: string }
   /** Team preset — loaded from a file relative to the config's baseDir. */
   | { file: string };

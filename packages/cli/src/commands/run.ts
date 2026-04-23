@@ -8,6 +8,7 @@ import {
   createOpenAIJudge,
   createOpenAIProvider,
   createOpenRouterProvider,
+  createStructuralJudge,
   loadConfig,
   parseCasesJsonl,
   resolveRubric,
@@ -22,6 +23,7 @@ import {
   type Judge,
   type ModelId,
   type Provider,
+  type Rubric,
   type RunLimits,
   type RunSummary,
   type Verdict,
@@ -83,8 +85,12 @@ function buildProviders(mock: boolean): Provider[] {
   ];
 }
 
-function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string): Judge {
+function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string, originalRubric: Rubric): Judge {
   if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
+
+  // Structural rubric skips the LLM and judges outputs deterministically
+  // against `expected` — useful for tool-call / structured-output evals.
+  if (originalRubric === 'structural-json') return createStructuralJudge();
 
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
@@ -225,7 +231,7 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     judge: { ...loaded.config.judge, rubric: { custom: rubricText } },
   };
   const providers = buildProviders(mock);
-  const judge = buildJudge(mock, resolvedConfig, providers, rubricText);
+  const judge = buildJudge(mock, resolvedConfig, providers, rubricText, loaded.config.judge.rubric);
 
   const onCell = (_cell: unknown, p: { done: number; total: number }) => {
     write(`  [${p.done}/${p.total}]\n`);

@@ -21,7 +21,7 @@ function validateModelId(v: unknown, field: string, path?: string): ModelId {
 }
 
 function validateRubric(v: unknown, path?: string): Rubric {
-  if (v === 'default' || v === 'model-comparison') return v;
+  if (v === 'default' || v === 'model-comparison' || v === 'structural-json') return v;
   if (isRecord(v) && typeof v.custom === 'string' && v.custom.length > 0) {
     return { custom: v.custom };
   }
@@ -29,7 +29,7 @@ function validateRubric(v: unknown, path?: string): Rubric {
     return { file: v.file };
   }
   throw new ConfigError(
-    'judge.rubric must be "default", "model-comparison", { custom: string }, or { file: string }',
+    'judge.rubric must be "default", "model-comparison", "structural-json", { custom: string }, or { file: string }',
     path,
   );
 }

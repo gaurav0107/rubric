@@ -148,3 +148,15 @@ describe('validateConfig — team rubric file', () => {
     expect(cfg.judge.rubric).toEqual({ file: 'rubric.md' });
   });
 });
+
+describe('validateConfig — structural rubric', () => {
+  test('accepts "structural-json" rubric', () => {
+    const cfg = validateConfig({
+      prompts: { baseline: 'a.md', candidate: 'b.md' },
+      dataset: 'data.jsonl',
+      models: ['openai/gpt-4o-mini'],
+      judge: { model: 'openai/gpt-4o', rubric: 'structural-json' },
+    });
+    expect(cfg.judge.rubric).toBe('structural-json');
+  });
+});

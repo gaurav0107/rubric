@@ -52,7 +52,7 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [ ] VS Code extension.
 - [x] Team preset / shared rubric file.
 - [ ] Prompt history scrubber (git-log visualization).
-- [ ] Tool-call / structured-output comparison.
+- [x] Tool-call / structured-output comparison.
 - [x] Provider parity testing for Groq / OpenRouter / Ollama.
 - [ ] GitHub Marketplace listing (started Week 4, review 2-4 weeks wall clock).
 
