@@ -7,10 +7,10 @@ Tracked work items from CEO plan `ceo-plans/2026-04-21-diffprompt.md` and design
 - [ ] Tech-stack spike (~half day, Week 1): Workers + Durable Objects eval runner with real workload. Fallback: Fly.io VPS for eval layer.
 - [x] Monorepo scaffold: `packages/cli`, `packages/web`, `packages/action`, `packages/shared`.
 - [x] `packages/shared` eval engine with semver contract.
-- [ ] `diffprompt init`, `serve`, `run`, `share`, `pull`, **`calibrate`**, **`seed --from-langfuse`** CLI commands. *(init, run, calibrate, seed, comment landed; serve/share/pull pending)*
+- [ ] `diffprompt init`, `serve`, `run`, `share`, `pull`, **`calibrate`**, **`seed --from-langfuse`** CLI commands. *(init, serve, run, calibrate, seed, comment landed; share/pull pending)*
 - [x] Langfuse JSONL parser + stratified sampler + feedback→label mapping. PII-scrub warnings on import.
 - [ ] Comparison-mode toggle in `serve` UI: "Vary [prompts | models]." Rubric variant for model mode. Reuses existing grid + judge plumbing.
-- [ ] `diffprompt serve` three-pane live-diff UI.
+- [x] `diffprompt serve` three-pane live-diff UI.
 - [x] Launch dataset: 50 support tickets, 10 hand-audited, `examples/support-tickets.jsonl`.
 - [ ] Hosted `diffprompt.dev` anonymous sandbox.
 - [ ] Shareable URLs + **Remix-in-browser (primary)** + **Fork-to-local (secondary)**.
