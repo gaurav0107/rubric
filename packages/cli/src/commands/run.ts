@@ -9,10 +9,13 @@ import {
   parseCasesJsonl,
   renderReportHtml,
   runEval,
+  type CellResult,
   type Config,
   type Judge,
+  type ModelId,
   type Provider,
   type RunSummary,
+  type Verdict,
 } from '../../../shared/src/index.ts';
 
 export interface RunOptions {
@@ -28,8 +31,15 @@ export interface RunOptions {
    * Intended for CI gates — `summary.losses > summary.wins`.
    */
   failOnRegress?: boolean;
-  /** Stream of output lines; defaults to process.stdout. */
+  /**
+   * Emit a single machine-readable JSON object to `writeJson` and suppress
+   * human progress chatter on `write`. Intended for CI / PR-bot consumers.
+   */
+  json?: boolean;
+  /** Stream of human-readable output; defaults to process.stdout. */
   write?: (line: string) => void;
+  /** Stream for the JSON payload when `json` is true; defaults to process.stdout. */
+  writeJson?: (payload: string) => void;
 }
 
 export interface RunResult {
@@ -81,11 +91,70 @@ export function decideExitCode(summary: RunSummary, failOnRegress: boolean): num
   return 0;
 }
 
+export interface JsonCell {
+  caseIndex: number;
+  model: ModelId;
+  latencyMs: number;
+  costUsd?: number;
+  winner?: Verdict;
+  reason?: string;
+  error?: string;
+}
+
+export interface JsonPayload {
+  version: 1;
+  summary: RunSummary;
+  exitCode: number;
+  models: ModelId[];
+  judge: { model: ModelId };
+  totalCells: number;
+  cells: JsonCell[];
+}
+
+export function buildJsonPayload(args: {
+  config: Config;
+  cells: CellResult[];
+  summary: RunSummary;
+  exitCode: number;
+}): JsonPayload {
+  const cells: JsonCell[] = args.cells.map((c) => {
+    const out: JsonCell = {
+      caseIndex: c.caseIndex,
+      model: c.model,
+      latencyMs: c.latencyMs ?? 0,
+    };
+    if (c.costUsd !== undefined) out.costUsd = c.costUsd;
+    if ('error' in c.judge) {
+      out.error = c.judge.error;
+    } else {
+      out.winner = c.judge.winner;
+      out.reason = c.judge.reason;
+    }
+    return out;
+  });
+  return {
+    version: 1,
+    summary: args.summary,
+    exitCode: args.exitCode,
+    models: args.config.models,
+    judge: { model: args.config.judge.model },
+    totalCells: args.cells.length,
+    cells,
+  };
+}
+
 export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const configPath = opts.configPath ?? resolve(cwd, DEFAULT_CONFIG);
   const mock = opts.mock ?? false;
-  const write = opts.write ?? ((line: string) => process.stdout.write(line));
+  const json = opts.json === true;
+  // In --json mode, route human chatter to stderr so stdout stays a clean
+  // JSON stream for downstream tools.
+  const defaultWrite = json
+    ? (line: string) => process.stderr.write(line)
+    : (line: string) => process.stdout.write(line);
+  const write = opts.write ?? defaultWrite;
+  const writeJson = opts.writeJson ?? ((payload: string) => process.stdout.write(payload));
 
   const loaded = loadConfig(configPath);
   const prompts = {
@@ -136,6 +205,11 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   const exitCode = decideExitCode(summary, failOnRegress);
   if (exitCode === 2) {
     write(`\n  REGRESSION: candidate lost ${summary.losses} > won ${summary.wins} — failing per --fail-on-regress.\n`);
+  }
+
+  if (json) {
+    const payload = buildJsonPayload({ config: loaded.config, cells, summary, exitCode });
+    writeJson(JSON.stringify(payload) + '\n');
   }
 
   return {

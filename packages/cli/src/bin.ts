@@ -15,6 +15,7 @@ Usage:
     --allow-langfuse                Accept Langfuse-style JSONL exports
     --report <path>                 Write a self-contained HTML report
     --fail-on-regress               Exit 2 when candidate loses more cells than it wins
+    --json                          Emit machine-readable JSON on stdout (human logs → stderr)
   diffprompt seed --from-langfuse <in.jsonl> [--out data/cases.jsonl]
                                     Convert a Langfuse export into cases + calibration
   diffprompt calibrate [options]    Measure judge vs. human agreement
@@ -60,7 +61,8 @@ async function main(argv: string[]): Promise<number> {
         const allowLangfuse = rest.includes('--allow-langfuse');
         const reportPath = parseFlag(rest, '--report');
         const failOnRegress = rest.includes('--fail-on-regress');
-        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress };
+        const json = rest.includes('--json');
+        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json };
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;
         if (concurrencyRaw !== undefined) {
