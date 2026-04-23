@@ -21,20 +21,45 @@ const DEFAULT_CONFIG = {
   mode: 'compare-prompts',
 };
 
-const BASELINE_PROMPT = `You are a helpful assistant. Answer the user's question concisely.
+const BASELINE_PROMPT = `You are a customer support agent. Read the ticket and reply concisely.
 
-User: {{input}}
+Ticket: {{input}}
 `;
 
-const CANDIDATE_PROMPT = `You are a helpful assistant. Answer the user's question in one sentence, then add a single concrete example.
+const CANDIDATE_PROMPT = `You are a customer support agent. Read the ticket and reply. In your reply:
 
-User: {{input}}
+- Acknowledge the specific issue (name it, don't just say "sorry to hear that").
+- State the concrete next step you're taking or need from the customer.
+- Set a clear expectation about timing.
+
+Ticket: {{input}}
 `;
 
+// Five representative tickets covering billing, account recovery, bugs, and
+// cancellation. Picked for contrast between a vague/dismissive baseline and a
+// specific/action-oriented candidate. See examples/support-tickets.jsonl for
+// the full 50-row launch dataset.
 const EXAMPLE_CASES = [
-  { input: 'What is the capital of France?', expected: 'Paris' },
-  { input: 'Explain TCP handshake briefly.' },
-  { input: 'Rewrite "it is what it is" more assertively.' },
+  {
+    input: 'I was charged twice this month. Can you refund the duplicate?',
+    metadata: { category: 'billing' },
+  },
+  {
+    input: "Can't log in. Password reset email never arrives. Tried 4 times.",
+    metadata: { category: 'account' },
+  },
+  {
+    input: 'Your app crashed three times in a row when I tried to upload a PDF.',
+    metadata: { category: 'bug' },
+  },
+  {
+    input: 'I cancelled my subscription yesterday but was charged again today at midnight.',
+    metadata: { category: 'refund' },
+  },
+  {
+    input: 'Please help me ASAP this is urgent!!!',
+    metadata: { category: 'unclear' },
+  },
 ];
 
 export interface InitOptions {

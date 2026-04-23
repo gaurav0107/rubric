@@ -28,10 +28,11 @@ describe('runInit', () => {
       expect(config.mode).toBe('compare-prompts');
 
       const lines = readFileSync(join(dir, 'data/cases.jsonl'), 'utf8').trim().split('\n');
-      expect(lines.length).toBe(3);
+      expect(lines.length).toBe(5);
       for (const line of lines) {
         const parsed = JSON.parse(line);
         expect(typeof parsed.input).toBe('string');
+        expect(typeof parsed.metadata?.category).toBe('string');
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
