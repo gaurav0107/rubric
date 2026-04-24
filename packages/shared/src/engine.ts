@@ -1,3 +1,4 @@
+import { createEvaluators, runEvaluators, type Evaluator } from './evaluators.ts';
 import type { Judge } from './mock.ts';
 import type { Provider } from './provider.ts';
 import { renderPrompt } from './prompt.ts';
@@ -78,6 +79,7 @@ async function runCell(
   criteria: string,
   mode: 'compare-prompts' | 'compare-models',
   signal: AbortSignal | undefined,
+  evaluators: Evaluator[],
 ): Promise<CellResult> {
   const c = cases[cell.caseIndex];
   if (!c) throw new Error(`cell references missing case index ${cell.caseIndex}`);
@@ -130,6 +132,14 @@ async function runCell(
     const costA = outA.costUsd ?? 0;
     const costB = outB.costUsd ?? 0;
     if (costA || costB) result.costUsd = costA + costB;
+    if (evaluators.length > 0) {
+      const evals = runEvaluators(evaluators, {
+        case: c,
+        outputA: outA.text,
+        outputB: outB.text,
+      });
+      if (evals.length > 0) result.evaluations = evals;
+    }
     return result;
   } catch (err) {
     const result: CellResult = {
@@ -222,9 +232,10 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
         : (() => { throw new Error('engine received a { file } criteria — caller must resolve with resolveCriteria() first'); })();
 
   const plan = planCells(cases, config.models, mode);
+  const evaluators = createEvaluators(config.evaluators);
   let done = 0;
   const cells = await mapWithConcurrency(plan, concurrency, async (cell) => {
-    const result = await runCell(cell, cases, prompts, providers, judge, criteriaString, mode, signal);
+    const result = await runCell(cell, cases, prompts, providers, judge, criteriaString, mode, signal, evaluators);
     done++;
     opts.onCell?.(result, { done, total: plan.length });
     return result;

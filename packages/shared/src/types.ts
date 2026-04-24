@@ -39,6 +39,19 @@ export interface ProviderConfig {
   headers?: Record<string, string>;
 }
 
+/**
+ * Declarative evaluator entry. See `evaluators.ts` for the factory map;
+ * duplicated here as a string literal union to keep the types package
+ * dependency-free and serializable in config JSON. Keep in sync with
+ * `EvaluatorConfig` in evaluators.ts.
+ */
+export type EvaluatorConfigEntry =
+  | { type: 'exact-match'; field?: string; caseSensitive?: boolean; trim?: boolean }
+  | { type: 'contains'; needle: string; caseSensitive?: boolean }
+  | { type: 'regex'; pattern: string; flags?: string }
+  | { type: 'length'; min?: number; max?: number }
+  | { type: 'json-valid' };
+
 export interface Config {
   prompts: { baseline: string; candidate: string };
   dataset: string;
@@ -48,6 +61,8 @@ export interface Config {
   mode?: 'compare-prompts' | 'compare-models';
   /** User-declared providers; added on top of the four built-ins (openai/groq/openrouter/ollama). */
   providers?: ProviderConfig[];
+  /** Additive metrics that run alongside the pairwise judge. Omit or leave empty for today's behavior. */
+  evaluators?: EvaluatorConfigEntry[];
 }
 
 export interface Case {
@@ -77,6 +92,18 @@ export interface JudgeResult {
   reason: string;
 }
 
+/**
+ * A single evaluator result row. Mirrored from `evaluators.ts`' `EvaluatorResult`
+ * so this types module stays dependency-free.
+ */
+export interface EvaluationRow {
+  metric: string;
+  side: 'a' | 'b' | 'both';
+  value: number | string | boolean;
+  pass?: boolean;
+  reason?: string;
+}
+
 export interface CellResult {
   caseIndex: number;
   /** Primary model. In compare-prompts this is the only model in the cell; in compare-models this is the A-side model. */
@@ -88,6 +115,8 @@ export interface CellResult {
   judge: JudgeResult | { error: string };
   costUsd?: number;
   latencyMs?: number;
+  /** Additional evaluator metrics; populated when config.evaluators is non-empty. */
+  evaluations?: EvaluationRow[];
 }
 
 export interface RunSummary {

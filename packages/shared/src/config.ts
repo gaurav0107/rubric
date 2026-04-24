@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import type { Config, Criteria, ModelId, ProviderConfig } from './types.ts';
+import type { Config, Criteria, EvaluatorConfigEntry, ModelId, ProviderConfig } from './types.ts';
 
 const PROVIDER_NAME_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const RESERVED_PROVIDER_NAMES = new Set(['openai', 'groq', 'openrouter', 'ollama']);
@@ -111,6 +111,88 @@ function validateProviders(v: unknown, path?: string): ProviderConfig[] {
   return out;
 }
 
+function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
+  if (!Array.isArray(v)) throw new ConfigError('evaluators must be an array', path);
+  const out: EvaluatorConfigEntry[] = [];
+  for (let i = 0; i < v.length; i++) {
+    const raw = v[i];
+    const fld = `evaluators[${i}]`;
+    if (!isRecord(raw)) throw new ConfigError(`${fld} must be an object`, path);
+    const type = raw.type;
+    if (typeof type !== 'string') throw new ConfigError(`${fld}.type must be a string`, path);
+    switch (type) {
+      case 'exact-match': {
+        const entry: Extract<EvaluatorConfigEntry, { type: 'exact-match' }> = { type };
+        if (raw.field !== undefined) {
+          if (typeof raw.field !== 'string') throw new ConfigError(`${fld}.field must be a string`, path);
+          entry.field = raw.field;
+        }
+        if (raw.caseSensitive !== undefined) {
+          if (typeof raw.caseSensitive !== 'boolean') throw new ConfigError(`${fld}.caseSensitive must be boolean`, path);
+          entry.caseSensitive = raw.caseSensitive;
+        }
+        if (raw.trim !== undefined) {
+          if (typeof raw.trim !== 'boolean') throw new ConfigError(`${fld}.trim must be boolean`, path);
+          entry.trim = raw.trim;
+        }
+        out.push(entry);
+        break;
+      }
+      case 'contains': {
+        if (typeof raw.needle !== 'string' || raw.needle.length === 0) {
+          throw new ConfigError(`${fld}.needle must be a non-empty string`, path);
+        }
+        const entry: Extract<EvaluatorConfigEntry, { type: 'contains' }> = { type, needle: raw.needle };
+        if (raw.caseSensitive !== undefined) {
+          if (typeof raw.caseSensitive !== 'boolean') throw new ConfigError(`${fld}.caseSensitive must be boolean`, path);
+          entry.caseSensitive = raw.caseSensitive;
+        }
+        out.push(entry);
+        break;
+      }
+      case 'regex': {
+        if (typeof raw.pattern !== 'string' || raw.pattern.length === 0) {
+          throw new ConfigError(`${fld}.pattern must be a non-empty string`, path);
+        }
+        const entry: Extract<EvaluatorConfigEntry, { type: 'regex' }> = { type, pattern: raw.pattern };
+        if (raw.flags !== undefined) {
+          if (typeof raw.flags !== 'string') throw new ConfigError(`${fld}.flags must be a string`, path);
+          entry.flags = raw.flags;
+        }
+        out.push(entry);
+        break;
+      }
+      case 'length': {
+        const entry: Extract<EvaluatorConfigEntry, { type: 'length' }> = { type };
+        if (raw.min !== undefined) {
+          if (typeof raw.min !== 'number' || !Number.isFinite(raw.min) || raw.min < 0) {
+            throw new ConfigError(`${fld}.min must be a non-negative number`, path);
+          }
+          entry.min = raw.min;
+        }
+        if (raw.max !== undefined) {
+          if (typeof raw.max !== 'number' || !Number.isFinite(raw.max) || raw.max < 0) {
+            throw new ConfigError(`${fld}.max must be a non-negative number`, path);
+          }
+          entry.max = raw.max;
+        }
+        if (entry.min !== undefined && entry.max !== undefined && entry.min > entry.max) {
+          throw new ConfigError(`${fld}: min (${entry.min}) > max (${entry.max})`, path);
+        }
+        out.push(entry);
+        break;
+      }
+      case 'json-valid': {
+        out.push({ type });
+        break;
+      }
+      default:
+        throw new ConfigError(`${fld}.type "${type}" is not a supported evaluator (exact-match | contains | regex | length | json-valid)`, path);
+    }
+  }
+  return out;
+}
+
 function validateCriteria(v: unknown, path?: string): Criteria {
   if (v === 'default' || v === 'model-comparison' || v === 'structural-json') return v;
   if (isRecord(v) && typeof v.custom === 'string' && v.custom.length > 0) {
@@ -170,6 +252,10 @@ export function validateConfig(raw: unknown, path?: string): Config {
 
   if (raw.providers !== undefined) {
     out.providers = validateProviders(raw.providers, path);
+  }
+
+  if (raw.evaluators !== undefined) {
+    out.evaluators = validateEvaluators(raw.evaluators, path);
   }
 
   return out;
