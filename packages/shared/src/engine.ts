@@ -25,6 +25,21 @@ export interface RunEvalOptions {
   concurrency?: number;
   /** Abort propagation to provider calls. */
   signal?: AbortSignal;
+  /**
+   * Skip cells whose key (see `cellKey`) appears in this set. Used by the
+   * resume path to avoid re-running work that already landed in cells.jsonl.
+   * Cells that match are dropped from both the plan AND the result array;
+   * callers that want them in the final summary must merge externally.
+   */
+  skipCellKeys?: Set<string>;
+}
+
+/**
+ * Stable identity for a planned cell. Callers that want resume semantics use
+ * this to build their skip set from existing CellResults.
+ */
+export function cellKey(c: { caseIndex: number; model: ModelId; modelB?: ModelId }): string {
+  return `${c.caseIndex}::${c.model}::${c.modelB ?? ''}`;
 }
 
 export interface RunEvalResult {
@@ -231,7 +246,9 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
         ? config.judge.criteria.custom
         : (() => { throw new Error('engine received a { file } criteria — caller must resolve with resolveCriteria() first'); })();
 
-  const plan = planCells(cases, config.models, mode);
+  const fullPlan = planCells(cases, config.models, mode);
+  const skip = opts.skipCellKeys;
+  const plan = skip && skip.size > 0 ? fullPlan.filter((c) => !skip.has(cellKey(c))) : fullPlan;
   const evaluators = createEvaluators(config.evaluators);
   let done = 0;
   const cells = await mapWithConcurrency(plan, concurrency, async (cell) => {

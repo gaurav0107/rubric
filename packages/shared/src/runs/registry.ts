@@ -313,6 +313,48 @@ export function toSummaryRow(m: RunManifest): RunSummaryRow {
   return row;
 }
 
+/**
+ * Keys identifying cells that already landed in cells.jsonl. Used by `runs
+ * resume` to build a skip set the engine can filter its plan against.
+ *
+ * Must match `cellKey()` in the engine — duplicated here to avoid a cross-
+ * package import (registry is pure file I/O).
+ */
+export function completedCellKeys(root: string, id: string): Set<string> {
+  const cells = readCells(root, id);
+  const out = new Set<string>();
+  for (const c of cells) {
+    out.add(`${c.caseIndex}::${c.model}::${c.modelB ?? ''}`);
+  }
+  return out;
+}
+
+export interface WaitOptions {
+  /** Polling interval in ms. Default 500. */
+  intervalMs?: number;
+  /** Hard timeout. If exceeded, returns the last-seen manifest with status unchanged. */
+  timeoutMs?: number;
+  /** Called each tick with the latest manifest — handy for progress UI in tests. */
+  onTick?: (m: RunManifest) => void;
+}
+
+/**
+ * Block until the run leaves `running` / `pending` state, or timeout elapses.
+ * Returns the final manifest. Used by `rubric runs wait <id>` and by tests
+ * that spawn the CLI in --detach mode.
+ */
+export async function waitForRun(root: string, id: string, opts: WaitOptions = {}): Promise<RunManifest> {
+  const interval = opts.intervalMs ?? 500;
+  const deadline = opts.timeoutMs !== undefined ? Date.now() + opts.timeoutMs : Infinity;
+  while (true) {
+    const m = readManifest(root, id);
+    opts.onTick?.(m);
+    if (m.status !== 'running' && m.status !== 'pending') return m;
+    if (Date.now() >= deadline) return m;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+}
+
 export function statCellsFile(root: string, id: string): { bytes: number; lines: number } {
   const p = runPaths(root, id).cells;
   if (!existsSync(p)) return { bytes: 0, lines: 0 };

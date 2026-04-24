@@ -10,7 +10,7 @@ import { runProvidersTest } from './commands/providers.ts';
 import { runPull } from './commands/pull.ts';
 import { runQuickstart } from './commands/quickstart.ts';
 import { runRun } from './commands/run.ts';
-import { runRunsDiff, runRunsList, runRunsRerun, runRunsShow, runRunsStatus } from './commands/runs.ts';
+import { runRunsDiff, runRunsList, runRunsRerun, runRunsResume, runRunsShow, runRunsStatus, runRunsWait } from './commands/runs.ts';
 import type { RunLimits } from '../../shared/src/index.ts';
 import { formatPiiWarning, runSeed } from './commands/seed.ts';
 import { runServe } from './commands/serve.ts';
@@ -59,6 +59,7 @@ Usage:
     --max-prompt-chars <n>          Fail if baseline/candidate exceed n characters
     --max-cases <n>                 Fail if the dataset has more than n cases
     --scan-pii                      Warn when case input/expected looks like PII (non-fatal)
+    --detach                        Spawn a worker, print the run id, exit (use \`rubric runs wait <id>\`)
   rubric seed <source-flag> <in.jsonl> [options]
                                     Convert an LLM-observability export into cases + calibration
     --from-langfuse <path>          Langfuse JSONL export (input + output + optional feedback)
@@ -99,6 +100,8 @@ Usage:
     show <id>                       Print a run's manifest + summary
     status <id>                     Print "<status>  <done>/<total>"
     diff <a> <b>                    Print summary delta between two runs
+    wait <id> [--timeout <ms>]      Block until the run finishes (exit 0 complete, 124 timeout, 1 failed)
+    resume <id> [--mock] [--force]  Finish a partial run, skipping cells already in cells.jsonl
     rerun <id> [--mock]             Re-execute a run's config with current prompts/dataset
   rubric history [options]      Compact git-log timeline for the prompt files
     --config <path>                 Config file (default: ./rubric.config.json)
@@ -235,7 +238,8 @@ async function main(argv: string[]): Promise<number> {
         const maxPromptCharsRaw = parseFlag(rest, '--max-prompt-chars');
         const maxCasesRaw = parseFlag(rest, '--max-cases');
         const scanPii = rest.includes('--scan-pii');
-        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json };
+        const detach = rest.includes('--detach');
+        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json, detach };
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;
         if (jsonPath) opts.jsonPath = jsonPath;
@@ -428,13 +432,15 @@ async function main(argv: string[]): Promise<number> {
       try {
         const sub = rest[0];
         if (!sub) {
-          throw new Error('runs requires a subcommand: list | show | status | diff | rerun');
+          throw new Error('runs requires a subcommand: list | show | status | diff | wait | resume | rerun');
         }
         const subArgs = rest.slice(1);
+        const registryRoot = parseFlag(subArgs, '--registry-root');
         switch (sub) {
           case 'list': {
             const limitRaw = parseFlag(subArgs, '--limit');
             const opts: Parameters<typeof runRunsList>[0] = {};
+            if (registryRoot) opts.registryRoot = registryRoot;
             if (limitRaw !== undefined) {
               const n = Number(limitRaw);
               if (!Number.isFinite(n) || n < 1) throw new Error(`--limit must be a positive number, got "${limitRaw}"`);
@@ -446,13 +452,17 @@ async function main(argv: string[]): Promise<number> {
           case 'show': {
             const id = subArgs[0];
             if (!id || id.startsWith('--')) throw new Error('runs show requires a run id');
-            const r = runRunsShow({ id });
+            const opts: Parameters<typeof runRunsShow>[0] = { id };
+            if (registryRoot) opts.registryRoot = registryRoot;
+            const r = runRunsShow(opts);
             return r.exitCode;
           }
           case 'status': {
             const id = subArgs[0];
             if (!id || id.startsWith('--')) throw new Error('runs status requires a run id');
-            const r = runRunsStatus({ id });
+            const opts: Parameters<typeof runRunsStatus>[0] = { id };
+            if (registryRoot) opts.registryRoot = registryRoot;
+            const r = runRunsStatus(opts);
             return r.exitCode;
           }
           case 'diff': {
@@ -461,18 +471,58 @@ async function main(argv: string[]): Promise<number> {
             if (!a || !b || a.startsWith('--') || b.startsWith('--')) {
               throw new Error('runs diff requires two run ids');
             }
-            const r = runRunsDiff({ a, b });
+            const opts: Parameters<typeof runRunsDiff>[0] = { a, b };
+            if (registryRoot) opts.registryRoot = registryRoot;
+            const r = runRunsDiff(opts);
+            return r.exitCode;
+          }
+          case 'wait': {
+            const id = subArgs[0];
+            if (!id || id.startsWith('--')) throw new Error('runs wait requires a run id');
+            const timeoutRaw = parseFlag(subArgs, '--timeout');
+            const intervalRaw = parseFlag(subArgs, '--interval');
+            const opts: Parameters<typeof runRunsWait>[0] = { id };
+            if (registryRoot) opts.registryRoot = registryRoot;
+            if (timeoutRaw !== undefined) {
+              const n = Number(timeoutRaw);
+              if (!Number.isFinite(n) || n < 1) throw new Error(`--timeout must be a positive number of ms, got "${timeoutRaw}"`);
+              opts.timeoutMs = Math.floor(n);
+            }
+            if (intervalRaw !== undefined) {
+              const n = Number(intervalRaw);
+              if (!Number.isFinite(n) || n < 1) throw new Error(`--interval must be a positive number of ms, got "${intervalRaw}"`);
+              opts.intervalMs = Math.floor(n);
+            }
+            const r = await runRunsWait(opts);
+            return r.exitCode;
+          }
+          case 'resume': {
+            const id = subArgs[0];
+            if (!id || id.startsWith('--')) throw new Error('runs resume requires a run id');
+            const mock = subArgs.includes('--mock');
+            const force = subArgs.includes('--force');
+            const concurrencyRaw = parseFlag(subArgs, '--concurrency');
+            const opts: Parameters<typeof runRunsResume>[0] = { id, mock, force };
+            if (registryRoot) opts.registryRoot = registryRoot;
+            if (concurrencyRaw !== undefined) {
+              const n = Number(concurrencyRaw);
+              if (!Number.isFinite(n) || n < 1) throw new Error(`--concurrency must be a positive number, got "${concurrencyRaw}"`);
+              opts.concurrency = Math.floor(n);
+            }
+            const r = await runRunsResume(opts);
             return r.exitCode;
           }
           case 'rerun': {
             const id = subArgs[0];
             if (!id || id.startsWith('--')) throw new Error('runs rerun requires a run id');
             const mock = subArgs.includes('--mock');
-            const r = await runRunsRerun({ id, mock });
+            const opts: Parameters<typeof runRunsRerun>[0] = { id, mock };
+            if (registryRoot) opts.registryRoot = registryRoot;
+            const r = await runRunsRerun(opts);
             return r.exitCode;
           }
           default:
-            throw new Error(`runs: unknown subcommand "${sub}" (expected list | show | status | diff | rerun)`);
+            throw new Error(`runs: unknown subcommand "${sub}" (expected list | show | status | diff | wait | resume | rerun)`);
         }
       } catch (err) {
         process.stderr.write(`rubric runs: ${err instanceof Error ? err.message : String(err)}\n`);

@@ -6,18 +6,39 @@
  *   rubric runs show <id>                — render the stored summary
  *   rubric runs diff <a> <b>             — print summary delta
  *   rubric runs status <id>              — print status + progress
+ *   rubric runs wait <id>                — block until the run finishes
+ *   rubric runs resume <id>              — finish a partial run using cells.jsonl
  *   rubric runs rerun <id>               — re-execute with the same config
- *
- * `wait` and `resume` land in Phase 3 alongside `--detach`.
  */
+import { readFileSync } from 'node:fs';
 import {
+  acquireLock,
+  appendCell,
+  completedCellKeys,
+  createConfiguredProviders,
+  createMockJudge,
+  createMockProvider,
+  createOpenAIJudge,
+  createStructuralJudge,
   defaultRegistryRoot,
   listRuns,
+  loadConfig,
+  parseCasesJsonl,
   readCells,
   readManifest,
+  releaseLock,
+  resolveCriteria,
+  runEval,
   statCellsFile,
   toSummaryRow,
+  updateManifest,
+  waitForRun,
+  type CellResult,
+  type Config,
+  type Judge,
+  type Provider,
   type RunManifest,
+  type RunSummary,
   type RunSummaryRow,
 } from '../../../shared/src/index.ts';
 import { runRun } from './run.ts';
@@ -179,6 +200,175 @@ export async function runRunsRerun(opts: RunsRerunOptions): Promise<{ exitCode: 
   const out: { exitCode: number; newRunId?: string } = { exitCode: result.exitCode };
   if (result.runId) out.newRunId = result.runId;
   return out;
+}
+
+export interface RunsWaitOptions {
+  id: string;
+  registryRoot?: string;
+  intervalMs?: number;
+  timeoutMs?: number;
+  write?: (line: string) => void;
+}
+
+/**
+ * Block until a run leaves running/pending. Exits 0 on complete, 1 on failed,
+ * 124 on timeout (matching `timeout(1)` convention — lets CI scripts tell
+ * "it's still running" apart from "it failed").
+ */
+export async function runRunsWait(opts: RunsWaitOptions): Promise<{ exitCode: number; status: string }> {
+  const root = opts.registryRoot ?? defaultRegistryRoot();
+  const write = opts.write ?? ((l: string) => process.stdout.write(l));
+  const waitOpts: Parameters<typeof waitForRun>[2] = {};
+  if (opts.intervalMs !== undefined) waitOpts.intervalMs = opts.intervalMs;
+  if (opts.timeoutMs !== undefined) waitOpts.timeoutMs = opts.timeoutMs;
+  const final = await waitForRun(root, opts.id, waitOpts);
+  write(`${final.status}\n`);
+  if (final.status === 'complete') return { exitCode: 0, status: final.status };
+  if (final.status === 'running' || final.status === 'pending') {
+    // Timed out.
+    return { exitCode: 124, status: final.status };
+  }
+  return { exitCode: 1, status: final.status };
+}
+
+export interface RunsResumeOptions {
+  id: string;
+  registryRoot?: string;
+  mock?: boolean;
+  concurrency?: number;
+  /** Force takeover even if the lock belongs to a live pid. Useful when a worker is known-wedged. */
+  force?: boolean;
+  write?: (line: string) => void;
+}
+
+function buildProvidersForResume(mock: boolean, config: Config, baseDir: string): Provider[] {
+  if (mock) return [createMockProvider({ acceptAll: true })];
+  return createConfiguredProviders(config.providers, baseDir);
+}
+
+function buildJudgeForResume(mock: boolean, config: Config, providers: Provider[], criteria: string, originalCriteria: Config['judge']['criteria']): Judge {
+  if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
+  if (originalCriteria === 'structural-json') return createStructuralJudge();
+  const judgeProvider = providers.find((p) => p.supports(config.judge.model));
+  if (!judgeProvider) {
+    throw new Error(`no provider accepts judge.model "${config.judge.model}"`);
+  }
+  return createOpenAIJudge({ provider: judgeProvider, model: config.judge.model, criteria });
+}
+
+function summarizeMerged(cells: CellResult[]): RunSummary {
+  let wins = 0, losses = 0, ties = 0, errors = 0;
+  let totalCostUsd = 0, costedCells = 0;
+  let totalLatencyMs = 0, latencyCells = 0;
+  for (const cell of cells) {
+    if ('error' in cell.judge) errors++;
+    else {
+      const w = cell.judge.winner;
+      if (w === 'b') wins++;
+      else if (w === 'a') losses++;
+      else ties++;
+    }
+    if (typeof cell.costUsd === 'number') { totalCostUsd += cell.costUsd; costedCells++; }
+    if (typeof cell.latencyMs === 'number') { totalLatencyMs += cell.latencyMs; latencyCells++; }
+  }
+  const decisive = wins + losses;
+  const summary: RunSummary = { wins, losses, ties, errors, winRate: decisive === 0 ? 0 : wins / decisive };
+  if (costedCells > 0) { summary.totalCostUsd = totalCostUsd; summary.costedCells = costedCells; }
+  if (latencyCells > 0) summary.totalLatencyMs = totalLatencyMs;
+  return summary;
+}
+
+/**
+ * Finish a partially-executed run. Skips every (caseIndex, model[, modelB])
+ * tuple already present in cells.jsonl; appends only the missing ones. The
+ * manifest is finalized with a summary that merges old + new cells.
+ *
+ * Uses the run's configPath to re-read prompts/dataset from disk. If those
+ * files drift between detach and resume, the resumed cells will reflect the
+ * new prompts — we don't try to freeze the workspace, we just record it in
+ * the manifest hashes for provenance.
+ */
+export async function runRunsResume(opts: RunsResumeOptions): Promise<{ exitCode: number; newCells: number; totalCells: number }> {
+  const root = opts.registryRoot ?? defaultRegistryRoot();
+  const write = opts.write ?? ((l: string) => process.stdout.write(l));
+  const manifest = readManifest(root, opts.id);
+  if (!manifest.configPath) {
+    write(`run ${opts.id} has no configPath — cannot resume\n`);
+    return { exitCode: 1, newCells: 0, totalCells: 0 };
+  }
+
+  const lock = acquireLock(root, opts.id);
+  if (!lock.acquired && !opts.force) {
+    write(`run ${opts.id} is locked by pid ${lock.previousPid} (pass --force to take over)\n`);
+    return { exitCode: 1, newCells: 0, totalCells: 0 };
+  }
+
+  try {
+    const loaded = loadConfig(manifest.configPath);
+    const prompts = {
+      baseline: readFileSync(loaded.resolved.baseline, 'utf8'),
+      candidate: readFileSync(loaded.resolved.candidate, 'utf8'),
+    };
+    const datasetText = readFileSync(loaded.resolved.dataset, 'utf8');
+    const cases = parseCasesJsonl(datasetText, { allowLangfuse: false });
+
+    const existing = readCells(root, opts.id);
+    const skip = completedCellKeys(root, opts.id);
+    const plannedTotal = cases.length * loaded.config.models.length;
+    write(`resuming ${opts.id}: ${existing.length}/${plannedTotal} cells already done, ${plannedTotal - existing.length} remaining\n`);
+
+    if (skip.size >= plannedTotal) {
+      const summary = summarizeMerged(existing);
+      updateManifest(root, opts.id, { status: 'complete', finishedAt: new Date().toISOString(), summary });
+      write(`already complete — finalized manifest\n`);
+      return { exitCode: 0, newCells: 0, totalCells: existing.length };
+    }
+
+    updateManifest(root, opts.id, { status: 'running' });
+
+    const mock = opts.mock ?? false;
+    const criteriaText = resolveCriteria(loaded.config.judge.criteria, loaded.baseDir);
+    const resolvedConfig: Config = {
+      ...loaded.config,
+      judge: { ...loaded.config.judge, criteria: { custom: criteriaText } },
+    };
+    const providers = buildProvidersForResume(mock, loaded.config, loaded.baseDir);
+    const judge = buildJudgeForResume(mock, resolvedConfig, providers, criteriaText, loaded.config.judge.criteria);
+
+    const onCell = (cell: CellResult, p: { done: number; total: number }) => {
+      write(`  [${p.done}/${p.total}]\n`);
+      try { appendCell(root, opts.id, cell); }
+      catch (err) { write(`  ⚠ registry append failed: ${err instanceof Error ? err.message : String(err)}\n`); }
+    };
+
+    const runOpts: Parameters<typeof runEval>[0] = {
+      config: resolvedConfig,
+      cases,
+      prompts,
+      providers,
+      judge,
+      onCell,
+      skipCellKeys: skip,
+    };
+    if (opts.concurrency !== undefined) runOpts.concurrency = opts.concurrency;
+
+    let newCells: CellResult[] = [];
+    try {
+      const res = await runEval(runOpts);
+      newCells = res.cells;
+    } catch (err) {
+      updateManifest(root, opts.id, { status: 'failed', finishedAt: new Date().toISOString() });
+      throw err;
+    }
+
+    const merged = [...existing, ...newCells];
+    const summary = summarizeMerged(merged);
+    updateManifest(root, opts.id, { status: 'complete', finishedAt: new Date().toISOString(), summary });
+    write(`resume complete: +${newCells.length} new cell(s), ${merged.length} total\n`);
+    return { exitCode: 0, newCells: newCells.length, totalCells: merged.length };
+  } finally {
+    releaseLock(root, opts.id);
+  }
 }
 
 export function parseCellsForInspect(root: string, id: string): number {
