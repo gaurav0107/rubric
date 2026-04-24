@@ -1,13 +1,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  createGroqProvider,
+  createConfiguredProviders,
   createMockJudge,
   createMockProvider,
-  createOllamaProvider,
   createOpenAIJudge,
-  createOpenAIProvider,
-  createOpenRouterProvider,
   createStructuralJudge,
   loadConfig,
   parseCasesJsonl,
@@ -23,6 +20,7 @@ import {
   type Judge,
   type ModelId,
   type Provider,
+  type ProviderConfig,
   type Rubric,
   type RunLimits,
   type RunSummary,
@@ -75,14 +73,9 @@ export interface RunResult {
 
 const DEFAULT_CONFIG = 'diffprompt.config.json';
 
-function buildProviders(mock: boolean): Provider[] {
+function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefined, baseDir: string): Provider[] {
   if (mock) return [createMockProvider({ acceptAll: true })];
-  return [
-    createOpenAIProvider(),
-    createGroqProvider(),
-    createOpenRouterProvider(),
-    createOllamaProvider(),
-  ];
+  return createConfiguredProviders(userProviders, baseDir);
 }
 
 function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string, originalRubric: Rubric): Judge {
@@ -94,8 +87,10 @@ function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric
 
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
+    const userNames = (config.providers ?? []).map((p) => `${p.name}/`).join(', ');
+    const configured = userNames ? `, plus user-declared: ${userNames}` : '';
     throw new Error(
-      `no provider accepts judge.model "${config.judge.model}". Supported prefixes: openai/, groq/, openrouter/, ollama/.`,
+      `no provider accepts judge.model "${config.judge.model}". Built-in prefixes: openai/, groq/, openrouter/, ollama/${configured}.`,
     );
   }
   return createOpenAIJudge({
@@ -230,7 +225,7 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     ...loaded.config,
     judge: { ...loaded.config.judge, rubric: { custom: rubricText } },
   };
-  const providers = buildProviders(mock);
+  const providers = buildProviders(mock, loaded.config.providers, loaded.baseDir);
   const judge = buildJudge(mock, resolvedConfig, providers, rubricText, loaded.config.judge.rubric);
 
   const onCell = (_cell: unknown, p: { done: number; total: number }) => {

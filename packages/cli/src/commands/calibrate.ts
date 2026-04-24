@@ -1,12 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  createGroqProvider,
+  createConfiguredProviders,
   createMockProvider,
-  createOllamaProvider,
   createOpenAIGrader,
-  createOpenAIProvider,
-  createOpenRouterProvider,
   loadConfig,
   renderCalibrationHtml,
   resolveRubric,
@@ -121,12 +118,7 @@ export async function runCalibrate(opts: CalibrateOptions = {}): Promise<Calibra
 
   const providers: Provider[] = mock
     ? [createMockProvider({ acceptAll: true })]
-    : [
-        createOpenAIProvider(),
-        createGroqProvider(),
-        createOpenRouterProvider(),
-        createOllamaProvider(),
-      ];
+    : createConfiguredProviders(loaded.config.providers, loaded.baseDir);
   const rubric = resolveRubric(loaded.config.judge.rubric, loaded.baseDir);
   const grader = buildGrader(mock, loaded.config.judge.model, providers, rubric);
 

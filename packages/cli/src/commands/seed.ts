@@ -4,6 +4,7 @@ import {
   detectPii,
   mulberry32,
   parseCasesJsonl,
+  parseCsvLogs,
   parseHeliconeLogs,
   parseLangSmithLogs,
   parseOpenAiChatLogs,
@@ -14,7 +15,7 @@ import {
   type PiiFinding,
 } from '../../../shared/src/index.ts';
 
-export type SeedSource = 'langfuse' | 'helicone' | 'langsmith' | 'openai-logs' | 'synthetic';
+export type SeedSource = 'langfuse' | 'helicone' | 'langsmith' | 'openai-logs' | 'synthetic' | 'csv';
 
 export interface SeedOptions {
   /** Path to the source export. For source='synthetic', path to a template JSON. */
@@ -99,6 +100,8 @@ function parseBySource(text: string, source: SeedSource): Case[] {
       return parseOpenAiChatLogs(text);
     case 'synthetic':
       return parseSyntheticTemplate(text);
+    case 'csv':
+      return parseCsvLogs(text);
   }
 }
 

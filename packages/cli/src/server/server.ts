@@ -11,13 +11,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import {
-  createGroqProvider,
+  createConfiguredProviders,
   createMockJudge,
   createMockProvider,
-  createOllamaProvider,
   createOpenAIJudge,
-  createOpenAIProvider,
-  createOpenRouterProvider,
   createStructuralJudge,
   loadConfig,
   parseCasesJsonl,
@@ -29,6 +26,7 @@ import {
   type Config,
   type Judge,
   type Provider,
+  type ProviderConfig,
   type Rubric,
   type SteelmanFailingCase,
   type SteelmanResult,
@@ -64,14 +62,9 @@ function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
   return { configPath: loaded.path, config: loaded.config, prompts, cases, resolved: loaded.resolved, baseDir: loaded.baseDir };
 }
 
-function buildProviders(mock: boolean): Provider[] {
+function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefined, baseDir: string): Provider[] {
   if (mock) return [createMockProvider({ acceptAll: true })];
-  return [
-    createOpenAIProvider(),
-    createGroqProvider(),
-    createOpenRouterProvider(),
-    createOllamaProvider(),
-  ];
+  return createConfiguredProviders(userProviders, baseDir);
 }
 
 function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string, originalRubric: Rubric): Judge {
@@ -204,7 +197,7 @@ export function makeHandlers(opts: ServerOptions): Handlers {
       const ws = loadWorkspace(cwd, configPath);
       const prompt = body.which === 'baseline' ? ws.prompts.baseline : ws.prompts.candidate;
       const mock = body.mock === true || opts.mock === true;
-      const providers = buildProviders(mock);
+      const providers = buildProviders(mock, ws.config.providers, ws.baseDir);
       const provider = providers.find((p) => p.supports(ws.config.judge.model));
       if (!provider) {
         throw new Error(`no provider accepts judge.model "${ws.config.judge.model}" for steelman`);
@@ -221,7 +214,7 @@ export function makeHandlers(opts: ServerOptions): Handlers {
     },
     async runSweep({ mock, mode }) {
       const ws = loadWorkspace(cwd, configPath);
-      const providers = buildProviders(mock);
+      const providers = buildProviders(mock, ws.config.providers, ws.baseDir);
       const rubricText = resolveRubric(ws.config.judge.rubric, ws.baseDir);
       const judge = buildJudge(mock, ws.config, providers, rubricText, ws.config.judge.rubric);
       const base: Config = {

@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import type { Config, ModelId, Rubric } from './types.ts';
+import type { Config, ModelId, ProviderConfig, Rubric } from './types.ts';
+
+const PROVIDER_NAME_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+const RESERVED_PROVIDER_NAMES = new Set(['openai', 'groq', 'openrouter', 'ollama']);
 
 export class ConfigError extends Error {
   constructor(message: string, public readonly path?: string) {
@@ -18,6 +21,94 @@ function validateModelId(v: unknown, field: string, path?: string): ModelId {
     throw new ConfigError(`${field} must be a "provider/model" string, got ${JSON.stringify(v)}`, path);
   }
   return v as ModelId;
+}
+
+function validateProviders(v: unknown, path?: string): ProviderConfig[] {
+  if (!Array.isArray(v)) {
+    throw new ConfigError('providers must be an array', path);
+  }
+  const out: ProviderConfig[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < v.length; i++) {
+    const raw = v[i];
+    const fld = `providers[${i}]`;
+    if (!isRecord(raw)) {
+      throw new ConfigError(`${fld} must be an object`, path);
+    }
+
+    // Security rule: inline `key` is rejected with a loud error. Operators
+    // must use keyEnv or keyFile so tokens never live in config files.
+    if ('key' in raw) {
+      throw new ConfigError(
+        `${fld}.key is not permitted — tokens must come from keyEnv (env var) or keyFile (gitignored path), never inline`,
+        path,
+      );
+    }
+
+    const { name, baseUrl, wireFormat, keyEnv, keyFile, headers } = raw as Record<string, unknown>;
+
+    if (typeof name !== 'string' || !PROVIDER_NAME_RE.test(name)) {
+      throw new ConfigError(
+        `${fld}.name must match /^[a-z0-9][a-z0-9-]{0,31}$/ (lowercase letters/digits/dashes, ≤32 chars)`,
+        path,
+      );
+    }
+    if (RESERVED_PROVIDER_NAMES.has(name)) {
+      throw new ConfigError(
+        `${fld}.name "${name}" collides with a built-in provider — choose a different name`,
+        path,
+      );
+    }
+    if (seen.has(name)) {
+      throw new ConfigError(`${fld}.name "${name}" is declared more than once`, path);
+    }
+    seen.add(name);
+
+    if (typeof baseUrl !== 'string' || baseUrl.length === 0) {
+      throw new ConfigError(`${fld}.baseUrl must be a non-empty URL`, path);
+    }
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      throw new ConfigError(`${fld}.baseUrl must start with http:// or https://`, path);
+    }
+
+    if (wireFormat !== undefined && wireFormat !== 'openai-chat') {
+      throw new ConfigError(
+        `${fld}.wireFormat: only "openai-chat" is supported (got ${JSON.stringify(wireFormat)})`,
+        path,
+      );
+    }
+
+    const hasEnv = typeof keyEnv === 'string' && keyEnv.length > 0;
+    const hasFile = typeof keyFile === 'string' && keyFile.length > 0;
+    if (hasEnv && hasFile) {
+      throw new ConfigError(`${fld}: set exactly one of keyEnv or keyFile, not both`, path);
+    }
+    if (!hasEnv && !hasFile) {
+      throw new ConfigError(`${fld}: one of keyEnv or keyFile is required`, path);
+    }
+
+    const entry: ProviderConfig = { name, baseUrl };
+    if (wireFormat !== undefined) entry.wireFormat = wireFormat as 'openai-chat';
+    if (hasEnv) entry.keyEnv = keyEnv as string;
+    if (hasFile) entry.keyFile = keyFile as string;
+
+    if (headers !== undefined) {
+      if (!isRecord(headers)) {
+        throw new ConfigError(`${fld}.headers must be an object of string → string`, path);
+      }
+      const hdrs: Record<string, string> = {};
+      for (const [k, val] of Object.entries(headers)) {
+        if (typeof val !== 'string') {
+          throw new ConfigError(`${fld}.headers.${k} must be a string`, path);
+        }
+        hdrs[k] = val;
+      }
+      if (Object.keys(hdrs).length > 0) entry.headers = hdrs;
+    }
+
+    out.push(entry);
+  }
+  return out;
 }
 
 function validateRubric(v: unknown, path?: string): Rubric {
@@ -75,6 +166,10 @@ export function validateConfig(raw: unknown, path?: string): Config {
       throw new ConfigError('mode must be "compare-prompts" or "compare-models"', path);
     }
     out.mode = raw.mode;
+  }
+
+  if (raw.providers !== undefined) {
+    out.providers = validateProviders(raw.providers, path);
   }
 
   return out;

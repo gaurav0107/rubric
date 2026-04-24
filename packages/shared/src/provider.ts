@@ -1,6 +1,9 @@
 import { createOpenAI, type OpenAIProvider } from '@ai-sdk/openai';
 import { generateText } from 'ai';
-import type { ModelId } from './types.ts';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { isAbsolute, resolve as resolvePath } from 'node:path';
+import type { ModelId, ProviderConfig } from './types.ts';
 
 export interface GenerateRequest {
   modelId: ModelId;
@@ -84,6 +87,8 @@ export interface OpenAICompatibleOptions {
    * OpenAI-compatible servers (Ollama) that accept unauthenticated calls.
    */
   requiresApiKey?: boolean;
+  /** Extra request headers passed through on every generate() call. */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -98,6 +103,7 @@ export function createOpenAICompatibleProvider(opts: OpenAICompatibleOptions): P
   const clientOptions: Parameters<typeof createOpenAI>[0] = {};
   if (opts.apiKey) clientOptions.apiKey = opts.apiKey;
   if (opts.baseURL) clientOptions.baseURL = opts.baseURL;
+  if (opts.headers && Object.keys(opts.headers).length > 0) clientOptions.headers = opts.headers;
 
   return {
     name: opts.name,
@@ -206,4 +212,131 @@ export function createOllamaProvider(opts: OllamaProviderOptions = {}): Provider
     apiKey: 'ollama',
     requiresApiKey: false,
   });
+}
+
+/** Set of provider prefixes reserved for built-in factories. */
+export const BUILTIN_PROVIDER_PREFIXES = new Set(['openai', 'groq', 'openrouter', 'ollama']);
+
+/**
+ * Convenience: produce the four built-in providers. CLI call sites use this
+ * instead of repeating the list at every provider-registration point.
+ */
+export function createBuiltinProviders(): Provider[] {
+  return [
+    createOpenAIProvider(),
+    createGroqProvider(),
+    createOpenRouterProvider(),
+    createOllamaProvider(),
+  ];
+}
+
+/**
+ * Produce the full live-mode provider list: the four built-ins plus any
+ * user-declared entries from `config.providers`. `baseDir` is the config
+ * file's directory, used to resolve `keyFile` paths.
+ */
+export function createConfiguredProviders(
+  userProviders: ProviderConfig[] | undefined,
+  baseDir: string,
+): Provider[] {
+  const out = createBuiltinProviders();
+  for (const cfg of userProviders ?? []) {
+    out.push(createConfiguredProvider(cfg, baseDir));
+  }
+  return out;
+}
+
+function expandTilde(p: string): string {
+  if (p === '~') return homedir();
+  if (p.startsWith('~/')) return resolvePath(homedir(), p.slice(2));
+  return p;
+}
+
+/**
+ * Read the bearer token for a user-declared provider from its configured
+ * source. Exactly one of `keyEnv` / `keyFile` must be set — the config
+ * validator enforces this, but we re-check defensively.
+ *
+ * `keyFile` paths are resolved relative to `baseDir` (the config file's
+ * directory) unless absolute. `~` expands to $HOME. The file contents are
+ * trimmed so trailing newlines from `echo`/editors don't poison the token.
+ */
+export function resolveProviderKey(cfg: ProviderConfig, baseDir: string): string {
+  if (cfg.keyEnv && cfg.keyFile) {
+    throw new ProviderNotConfiguredError(cfg.name, 'set exactly one of keyEnv or keyFile, not both');
+  }
+  if (cfg.keyEnv) {
+    const v = typeof process !== 'undefined' ? process.env?.[cfg.keyEnv] : undefined;
+    if (!v || v.length === 0) {
+      throw new ProviderNotConfiguredError(cfg.name, `environment variable ${cfg.keyEnv} is not set`);
+    }
+    return v;
+  }
+  if (cfg.keyFile) {
+    const expanded = expandTilde(cfg.keyFile);
+    const abs = isAbsolute(expanded) ? expanded : resolvePath(baseDir, expanded);
+    let raw: string;
+    try {
+      raw = readFileSync(abs, 'utf8');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new ProviderNotConfiguredError(cfg.name, `failed to read keyFile at ${abs}: ${msg}`);
+    }
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) {
+      throw new ProviderNotConfiguredError(cfg.name, `keyFile at ${abs} is empty`);
+    }
+    return trimmed;
+  }
+  throw new ProviderNotConfiguredError(cfg.name, 'missing keyEnv or keyFile');
+}
+
+/**
+ * Build a Provider from a user-declared `ProviderConfig`. Uses the
+ * `openai-chat` wire format under the hood (the only format supported in
+ * v1.1), so corp-proxies, Azure APIM, and other gateways fronting
+ * OpenAI-compatible backends work with zero custom adapter code.
+ *
+ * Key resolution is lazy: the token is read on first `generate()` call, not
+ * at construction time. This avoids crashing `diffprompt serve` or other
+ * read-only commands just because a config declares a provider whose secret
+ * isn't loaded yet.
+ */
+export function createConfiguredProvider(cfg: ProviderConfig, baseDir: string): Provider {
+  let cachedKey: string | null = null;
+  let cached: Provider | null = null;
+
+  const buildInner = (): Provider => {
+    if (cached) return cached;
+    const key = cachedKey ?? resolveProviderKey(cfg, baseDir);
+    cachedKey = key;
+    const inner: OpenAICompatibleOptions = {
+      name: cfg.name,
+      prefix: cfg.name,
+      baseURL: cfg.baseUrl,
+      apiKey: key,
+      keyHint: cfg.keyEnv
+        ? `set environment variable ${cfg.keyEnv}`
+        : cfg.keyFile
+        ? `populate secrets file ${cfg.keyFile}`
+        : `configure keyEnv or keyFile on providers[].${cfg.name}`,
+    };
+    if (cfg.headers && Object.keys(cfg.headers).length > 0) inner.headers = { ...cfg.headers };
+    cached = createOpenAICompatibleProvider(inner);
+    return cached;
+  };
+
+  return {
+    name: cfg.name,
+    supports(modelId: ModelId): boolean {
+      try {
+        return splitModelId(modelId).providerPrefix === cfg.name;
+      } catch {
+        return false;
+      }
+    },
+    generate(req: GenerateRequest) {
+      return buildInner().generate(req);
+    },
+  };
 }

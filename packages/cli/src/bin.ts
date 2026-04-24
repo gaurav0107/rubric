@@ -6,7 +6,9 @@ import { runCalibrate } from './commands/calibrate.ts';
 import { runComment } from './commands/comment.ts';
 import { runHistory } from './commands/history.ts';
 import { runInit } from './commands/init.ts';
+import { runProvidersTest } from './commands/providers.ts';
 import { runPull } from './commands/pull.ts';
+import { runQuickstart } from './commands/quickstart.ts';
 import { runRun } from './commands/run.ts';
 import type { RunLimits } from '../../shared/src/index.ts';
 import { formatPiiWarning, runSeed } from './commands/seed.ts';
@@ -27,7 +29,15 @@ function readCliVersion(): string {
 const USAGE = `diffprompt — pairwise prompt evaluation
 
 Usage:
+  diffprompt quickstart             Zero-config 10-second mock demo (no API keys required)
   diffprompt init [--force]         Scaffold diffprompt.config.json, prompts/, data/
+    --wizard                        Judge-assisted scaffold (requires --describe)
+    --describe <text>               One-sentence description of the task for --wizard
+    --mock                          Use the mock judge for --wizard (no tokens spent)
+  diffprompt providers test <name>  Hello-world smoke-test against a configured provider
+    --config <path>                 Config file (default: ./diffprompt.config.json)
+    --model <id>                    Override the model (default: inferred from config)
+    --prompt <text>                 Override the hello prompt
   diffprompt serve [options]        Launch the three-pane local UI (prompts | cases | live grid)
     --config <path>                 Config file (default: ./diffprompt.config.json)
     --port <n>                      HTTP port (default: 5174)
@@ -55,6 +65,7 @@ Usage:
     --from-langsmith <path>         LangSmith trace JSONL (inputs.{input|messages} + outputs.{output|generations})
     --from-openai-logs <path>       OpenAI chat JSONL (fine-tune shape or request/response pairs)
     --from-synthetic <path>         Synthetic template JSON (literal cases[] or template + variables fan-out)
+    --from-csv <path>               CSV with a header row (requires "input" col; optional "expected"; extras → metadata)
     --out <path>                    Output cases JSONL (default: data/cases.jsonl)
     --calibration-out <path>        Calibration sidecar (default: prompts/_calibration.json.local)
     --sample <n>                    Stratified-sample to n cases (by feedback polarity)
@@ -124,13 +135,59 @@ async function main(argv: string[]): Promise<number> {
   }
 
   switch (cmd) {
+    case 'quickstart': {
+      try {
+        const result = await runQuickstart();
+        return result.exitCode;
+      } catch (err) {
+        process.stderr.write(`diffprompt quickstart: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
+    case 'providers': {
+      try {
+        const sub = rest[0];
+        if (sub !== 'test') {
+          throw new Error(`providers: unknown subcommand "${sub ?? ''}" (expected "test")`);
+        }
+        const target = rest[1];
+        if (!target || target.startsWith('--')) {
+          throw new Error('providers test requires a provider name or "name/model" id');
+        }
+        const configPath = parseFlag(rest, '--config');
+        const model = parseFlag(rest, '--model');
+        const prompt = parseFlag(rest, '--prompt');
+        const opts: Parameters<typeof runProvidersTest>[0] = { target };
+        if (configPath) opts.configPath = configPath;
+        if (model) opts.model = model;
+        if (prompt) opts.prompt = prompt;
+        const result = await runProvidersTest(opts);
+        return result.exitCode;
+      } catch (err) {
+        process.stderr.write(`diffprompt providers: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
     case 'init': {
-      const force = rest.includes('--force') || rest.includes('-f');
-      const result = runInit({ force });
-      for (const path of result.written) process.stdout.write(`  wrote   ${path}\n`);
-      for (const path of result.skipped) process.stdout.write(`  skipped ${path} (exists; pass --force to overwrite)\n`);
-      process.stdout.write(`\nNext: edit prompts/baseline.md and prompts/candidate.md, then run \`diffprompt run\`.\n`);
-      return 0;
+      try {
+        const force = rest.includes('--force') || rest.includes('-f');
+        const wizard = rest.includes('--wizard');
+        const describe = parseFlag(rest, '--describe');
+        const mock = rest.includes('--mock');
+        const initOpts: Parameters<typeof runInit>[0] = { force, wizard, mock };
+        if (describe !== undefined) initOpts.describe = describe;
+        const result = await runInit(initOpts);
+        for (const path of result.written) process.stdout.write(`  wrote   ${path}\n`);
+        for (const path of result.skipped) process.stdout.write(`  skipped ${path} (exists; pass --force to overwrite)\n`);
+        if (result.autogeneratedCases > 0) {
+          process.stdout.write(`\n  ⚠ ${result.autogeneratedCases} autogenerated case(s) — review before trusting the verdict.\n`);
+        }
+        process.stdout.write(`\nNext: edit prompts/baseline.md and prompts/candidate.md, then run \`diffprompt run\`.\n`);
+        return 0;
+      } catch (err) {
+        process.stderr.write(`diffprompt init: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
     }
     case 'serve': {
       try {
@@ -211,12 +268,13 @@ async function main(argv: string[]): Promise<number> {
           ['--from-langsmith', 'langsmith'] as const,
           ['--from-openai-logs', 'openai-logs'] as const,
           ['--from-synthetic', 'synthetic'] as const,
+          ['--from-csv', 'csv'] as const,
         ];
         const found = sources
           .map(([flag, src]) => ({ flag, src, path: parseFlag(rest, flag) }))
           .filter((x) => x.path !== undefined);
         if (found.length === 0) {
-          throw new Error('seed requires one of: --from-langfuse, --from-helicone, --from-langsmith, --from-openai-logs, --from-synthetic');
+          throw new Error('seed requires one of: --from-langfuse, --from-helicone, --from-langsmith, --from-openai-logs, --from-synthetic, --from-csv');
         }
         if (found.length > 1) {
           throw new Error(`seed: pick exactly one source (got ${found.map((f) => f.flag).join(', ')})`);
