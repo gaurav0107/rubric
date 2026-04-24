@@ -10,6 +10,7 @@ import { runProvidersTest } from './commands/providers.ts';
 import { runPull } from './commands/pull.ts';
 import { runQuickstart } from './commands/quickstart.ts';
 import { runRun } from './commands/run.ts';
+import { runRunsDiff, runRunsList, runRunsRerun, runRunsShow, runRunsStatus } from './commands/runs.ts';
 import type { RunLimits } from '../../shared/src/index.ts';
 import { formatPiiWarning, runSeed } from './commands/seed.ts';
 import { runServe } from './commands/serve.ts';
@@ -93,6 +94,12 @@ Usage:
     --target <dir>                  Target directory (default: .)
     --force                         Overwrite existing files
     --no-calibration                Don't restore the calibration sidecar
+  rubric runs <subcommand>      Inspect the local run registry (~/.rubric/runs)
+    list [--limit <n>]              Tabulate recent runs (default: last 20)
+    show <id>                       Print a run's manifest + summary
+    status <id>                     Print "<status>  <done>/<total>"
+    diff <a> <b>                    Print summary delta between two runs
+    rerun <id> [--mock]             Re-execute a run's config with current prompts/dataset
   rubric history [options]      Compact git-log timeline for the prompt files
     --config <path>                 Config file (default: ./rubric.config.json)
     --file <path>                   Track this path instead of config-declared prompts (repeatable)
@@ -414,6 +421,61 @@ async function main(argv: string[]): Promise<number> {
         return 0;
       } catch (err) {
         process.stderr.write(`rubric history: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
+    case 'runs': {
+      try {
+        const sub = rest[0];
+        if (!sub) {
+          throw new Error('runs requires a subcommand: list | show | status | diff | rerun');
+        }
+        const subArgs = rest.slice(1);
+        switch (sub) {
+          case 'list': {
+            const limitRaw = parseFlag(subArgs, '--limit');
+            const opts: Parameters<typeof runRunsList>[0] = {};
+            if (limitRaw !== undefined) {
+              const n = Number(limitRaw);
+              if (!Number.isFinite(n) || n < 1) throw new Error(`--limit must be a positive number, got "${limitRaw}"`);
+              opts.limit = Math.floor(n);
+            }
+            const r = runRunsList(opts);
+            return r.exitCode;
+          }
+          case 'show': {
+            const id = subArgs[0];
+            if (!id || id.startsWith('--')) throw new Error('runs show requires a run id');
+            const r = runRunsShow({ id });
+            return r.exitCode;
+          }
+          case 'status': {
+            const id = subArgs[0];
+            if (!id || id.startsWith('--')) throw new Error('runs status requires a run id');
+            const r = runRunsStatus({ id });
+            return r.exitCode;
+          }
+          case 'diff': {
+            const a = subArgs[0];
+            const b = subArgs[1];
+            if (!a || !b || a.startsWith('--') || b.startsWith('--')) {
+              throw new Error('runs diff requires two run ids');
+            }
+            const r = runRunsDiff({ a, b });
+            return r.exitCode;
+          }
+          case 'rerun': {
+            const id = subArgs[0];
+            if (!id || id.startsWith('--')) throw new Error('runs rerun requires a run id');
+            const mock = subArgs.includes('--mock');
+            const r = await runRunsRerun({ id, mock });
+            return r.exitCode;
+          }
+          default:
+            throw new Error(`runs: unknown subcommand "${sub}" (expected list | show | status | diff | rerun)`);
+        }
+      } catch (err) {
+        process.stderr.write(`rubric runs: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }

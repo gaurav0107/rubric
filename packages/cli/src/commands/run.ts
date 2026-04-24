@@ -1,11 +1,14 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  appendCell,
   createConfiguredProviders,
   createMockJudge,
   createMockProvider,
   createOpenAIJudge,
+  createRun,
   createStructuralJudge,
+  defaultRegistryRoot,
   loadConfig,
   parseCasesJsonl,
   resolveCriteria,
@@ -13,6 +16,7 @@ import {
   renderCostCsv,
   renderReportHtml,
   runEval,
+  updateManifest,
   validateRunInputs,
   type CalibrationReport,
   type CellResult,
@@ -33,6 +37,12 @@ export interface RunOptions {
   mock?: boolean;
   concurrency?: number;
   allowLangfuse?: boolean;
+  /** Disable registry writes (used internally by `runs rerun` to avoid nested bookkeeping, not a user-facing flag). */
+  skipRegistry?: boolean;
+  /** Override registry root (`RUBRIC_HOME` / tests). */
+  registryRoot?: string;
+  /** Free-form note stored in the run manifest. */
+  note?: string;
   /** If set, write an HTML report to this absolute or cwd-relative path. */
   reportPath?: string;
   /**
@@ -69,6 +79,8 @@ export interface RunResult {
   total: number;
   summary: RunSummary;
   exitCode: number;
+  /** Present when the run was recorded in the registry (every live run by default). */
+  runId?: string;
 }
 
 const DEFAULT_CONFIG = 'rubric.config.json';
@@ -228,8 +240,34 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   const providers = buildProviders(mock, loaded.config.providers, loaded.baseDir);
   const judge = buildJudge(mock, resolvedConfig, providers, criteriaText, loaded.config.judge.criteria);
 
-  const onCell = (_cell: unknown, p: { done: number; total: number }) => {
+  const wantRegistry = opts.skipRegistry !== true;
+  const registryRoot = opts.registryRoot ?? defaultRegistryRoot();
+  let runId: string | undefined;
+  if (wantRegistry) {
+    const created = createRun({
+      root: registryRoot,
+      config: loaded.config,
+      configPath: loaded.path,
+      prompts,
+      datasetText,
+      plannedCells: cases.length * loaded.config.models.length,
+      ...(opts.note !== undefined ? { note: opts.note } : {}),
+    });
+    runId = created.id;
+    updateManifest(registryRoot, runId, { status: 'running' });
+    write(`  run id:  ${runId}\n`);
+  }
+
+  const onCell = (cell: CellResult, p: { done: number; total: number }) => {
     write(`  [${p.done}/${p.total}]\n`);
+    if (runId) {
+      try {
+        appendCell(registryRoot, runId, cell);
+      } catch (err) {
+        // Registry write failure must never take down the run. Log and continue.
+        write(`  ⚠ registry append failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    }
   };
 
   const runOpts: Parameters<typeof runEval>[0] = {
@@ -242,7 +280,21 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   };
   if (opts.concurrency !== undefined) runOpts.concurrency = opts.concurrency;
 
-  const { cells, summary } = await runEval(runOpts);
+  let cells: CellResult[] = [];
+  let summary: RunSummary;
+  try {
+    const res = await runEval(runOpts);
+    cells = res.cells;
+    summary = res.summary;
+  } catch (err) {
+    if (runId) {
+      updateManifest(registryRoot, runId, {
+        status: 'failed',
+        finishedAt: new Date().toISOString(),
+      });
+    }
+    throw err;
+  }
 
   write(`\nSummary:\n`);
   write(`  wins:    ${summary.wins}\n`);
@@ -302,9 +354,19 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     write(`\n  badge:   ${absBadge}\n`);
   }
 
-  return {
+  if (runId) {
+    updateManifest(registryRoot, runId, {
+      status: exitCode === 0 ? 'complete' : 'failed',
+      finishedAt: new Date().toISOString(),
+      summary,
+    });
+  }
+
+  const result: RunResult = {
     total: cells.length,
     summary,
     exitCode,
   };
+  if (runId) result.runId = runId;
+  return result;
 }
