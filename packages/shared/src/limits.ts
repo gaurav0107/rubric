@@ -2,7 +2,7 @@ import { detectPii, type PiiFinding } from './pii.ts';
 import type { Case } from './types.ts';
 
 /**
- * Input-size + PII guardrails for `diffprompt run`.
+ * Input-size + PII guardrails for `rubric run`.
  *
  * Local CLI defaults are permissive (undefined caps + soft PII warnings) —
  * the hosted sandbox, when it ships, will pass strict caps matching the v1

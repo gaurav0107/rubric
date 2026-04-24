@@ -71,7 +71,7 @@ export interface RunResult {
   exitCode: number;
 }
 
-const DEFAULT_CONFIG = 'diffprompt.config.json';
+const DEFAULT_CONFIG = 'rubric.config.json';
 
 function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefined, baseDir: string): Provider[] {
   if (mock) return [createMockProvider({ acceptAll: true })];
@@ -120,7 +120,7 @@ function fmtDuration(ms: number): string {
 }
 
 /**
- * Pure exit-code decision for `diffprompt run`.
+ * Pure exit-code decision for `rubric run`.
  *
  * Precedence: regression (2) wins over errors (1). Rationale: if CI is gating
  * on --fail-on-regress, a judge error during a losing run should not be quieter
@@ -214,7 +214,7 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     }
   }
 
-  write(`diffprompt: ${cases.length} case(s) x ${loaded.config.models.length} model(s) = ${cases.length * loaded.config.models.length} cell(s)\n`);
+  write(`rubric: ${cases.length} case(s) x ${loaded.config.models.length} model(s) = ${cases.length * loaded.config.models.length} cell(s)\n`);
   write(`  config:   ${loaded.path}\n`);
   write(`  mode:     ${mock ? 'mock' : 'live'}\n`);
 

@@ -1,8 +1,8 @@
 /**
- * Shields.io-compatible SVG badge renderer for diffprompt.
+ * Shields.io-compatible SVG badge renderer for rubric.
  *
  * A pure function so the CLI, GitHub Action, and future hosted endpoint
- * (diffprompt.dev/badge/...) all produce identical bytes for the same
+ * (rubric.dev/badge/...) all produce identical bytes for the same
  * input. Colors track the three-state calibration story in the PR
  * comment: unverified, calibrated, weak.
  */
@@ -16,7 +16,7 @@ export interface BadgeInput {
   calibration?: CalibrationReport;
   /** Calibrated-but-weak threshold; default 0.8. */
   minAgreement?: number;
-  /** Left-side label text. Default "diffprompt". */
+  /** Left-side label text. Default "rubric". */
   label?: string;
 }
 
@@ -83,7 +83,7 @@ function xmlEscape(s: string): string {
 }
 
 export function renderBadgeSvg(input: BadgeInput): string {
-  const label = xmlEscape(input.label ?? 'diffprompt');
+  const label = xmlEscape(input.label ?? 'rubric');
   const message = xmlEscape(badgeMessage(input));
   const color = colorFor(input);
 

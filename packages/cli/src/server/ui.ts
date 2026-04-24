@@ -1,5 +1,5 @@
 /**
- * Single-file HTML UI for `diffprompt serve`. Zero build step: this is
+ * Single-file HTML UI for `rubric serve`. Zero build step: this is
  * plain HTML + inline CSS + a tiny vanilla-JS controller that talks to
  * /api/workspace, /api/prompts, and /api/run (SSE).
  *
@@ -11,7 +11,7 @@ export const INDEX_HTML = String.raw`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>diffprompt</title>
+<title>rubric</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -298,7 +298,7 @@ export const INDEX_HTML = String.raw`<!doctype html>
 </head>
 <body>
   <header>
-    <h1>diffprompt</h1>
+    <h1>rubric</h1>
     <span class="sub" id="config-path">—</span>
     <span class="spacer"></span>
     <div class="mode-toggle" id="mode-toggle" role="tablist" aria-label="compare mode">

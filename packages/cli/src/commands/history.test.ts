@@ -21,7 +21,7 @@ function scaffold(dir: string): void {
   mkdirSync(join(dir, 'prompts'), { recursive: true });
   mkdirSync(join(dir, 'data'), { recursive: true });
   writeFileSync(
-    join(dir, 'diffprompt.config.json'),
+    join(dir, 'rubric.config.json'),
     JSON.stringify({
       prompts: { baseline: 'prompts/a.md', candidate: 'prompts/b.md' },
       dataset: 'data/cases.jsonl',

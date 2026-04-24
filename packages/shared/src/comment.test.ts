@@ -36,7 +36,7 @@ describe('renderPrComment', () => {
     });
     expect(md).toContain('**PASS**');
     expect(md).toContain('calibration: **unverified**');
-    expect(md).toContain('diffprompt calibrate');
+    expect(md).toContain('rubric calibrate');
     expect(md).not.toContain('Agreement:');
   });
 
@@ -202,7 +202,7 @@ describe('renderPrComment', () => {
       models: ['openai/gpt-4o-mini' as ModelId],
       judge: JUDGE,
     });
-    expect(md.startsWith('# diffprompt — baseline.md vs candidate.md')).toBe(true);
+    expect(md.startsWith('# rubric — baseline.md vs candidate.md')).toBe(true);
   });
 
   test('renders cost line when summary has totalCostUsd', () => {

@@ -26,25 +26,25 @@ function readCliVersion(): string {
   }
 }
 
-const USAGE = `diffprompt — pairwise prompt evaluation
+const USAGE = `rubric — pairwise prompt evaluation
 
 Usage:
-  diffprompt quickstart             Zero-config 10-second mock demo (no API keys required)
-  diffprompt init [--force]         Scaffold diffprompt.config.json, prompts/, data/
+  rubric quickstart             Zero-config 10-second mock demo (no API keys required)
+  rubric init [--force]         Scaffold rubric.config.json, prompts/, data/
     --wizard                        Judge-assisted scaffold (requires --describe)
     --describe <text>               One-sentence description of the task for --wizard
     --mock                          Use the mock judge for --wizard (no tokens spent)
-  diffprompt providers test <name>  Hello-world smoke-test against a configured provider
-    --config <path>                 Config file (default: ./diffprompt.config.json)
+  rubric providers test <name>  Hello-world smoke-test against a configured provider
+    --config <path>                 Config file (default: ./rubric.config.json)
     --model <id>                    Override the model (default: inferred from config)
     --prompt <text>                 Override the hello prompt
-  diffprompt serve [options]        Launch the three-pane local UI (prompts | cases | live grid)
-    --config <path>                 Config file (default: ./diffprompt.config.json)
+  rubric serve [options]        Launch the three-pane local UI (prompts | cases | live grid)
+    --config <path>                 Config file (default: ./rubric.config.json)
     --port <n>                      HTTP port (default: 5174)
     --host <addr>                   Bind address (default: 127.0.0.1)
     --mock                          Start in mock mode by default (toggleable in UI)
-  diffprompt run [options]          Run an evaluation
-    --config <path>                 Config file (default: ./diffprompt.config.json)
+  rubric run [options]          Run an evaluation
+    --config <path>                 Config file (default: ./rubric.config.json)
     --mock                          Use deterministic mock provider + judge
     --concurrency <n>               Override config.concurrency
     --allow-langfuse                Accept Langfuse-style JSONL exports
@@ -58,7 +58,7 @@ Usage:
     --max-prompt-chars <n>          Fail if baseline/candidate exceed n characters
     --max-cases <n>                 Fail if the dataset has more than n cases
     --scan-pii                      Warn when case input/expected looks like PII (non-fatal)
-  diffprompt seed <source-flag> <in.jsonl> [options]
+  rubric seed <source-flag> <in.jsonl> [options]
                                     Convert an LLM-observability export into cases + calibration
     --from-langfuse <path>          Langfuse JSONL export (input + output + optional feedback)
     --from-helicone <path>          Helicone JSONL export (request.body.messages + response.body.choices)
@@ -70,31 +70,31 @@ Usage:
     --calibration-out <path>        Calibration sidecar (default: prompts/_calibration.json.local)
     --sample <n>                    Stratified-sample to n cases (by feedback polarity)
     --seed <n>                      Sampler RNG seed (default: 1)
-  diffprompt calibrate [options]    Measure judge vs. human agreement
-    --config <path>                 Config file (default: ./diffprompt.config.json)
+  rubric calibrate [options]    Measure judge vs. human agreement
+    --config <path>                 Config file (default: ./rubric.config.json)
     --labels <path>                 Labels JSON (default: prompts/_calibration.json.local)
     --report <path>                 HTML report path (default: calibration.html)
     --json-out <path>               Also write the CalibrationReport JSON to this file
     --mock                          Use deterministic mock grader
     --concurrency <n>               Parallel grader calls (default: 4)
-  diffprompt comment --from <run.json> [options]
+  rubric comment --from <run.json> [options]
                                     Render a PR comment from a run JSON payload
     --calibration <path>            Optional CalibrationReport JSON
     --report-url <url>              Link to a hosted HTML report
     --min-agreement <0..1>          Threshold for "weak" calibration banner (default: 0.8)
     --title <text>                  Title suffix (e.g. "baseline.md vs candidate.md")
-  diffprompt share --out <path> [options]
+  rubric share --out <path> [options]
                                     Export workspace as a self-contained bundle.json
-    --config <path>                 Config file (default: ./diffprompt.config.json)
+    --config <path>                 Config file (default: ./rubric.config.json)
     --note <text>                   Attach a human-readable note
     --no-calibration                Skip the _calibration.json.local sidecar
-  diffprompt pull <bundle> [options]
+  rubric pull <bundle> [options]
                                     Import a bundle.json into the current dir
     --target <dir>                  Target directory (default: .)
     --force                         Overwrite existing files
     --no-calibration                Don't restore the calibration sidecar
-  diffprompt history [options]      Compact git-log timeline for the prompt files
-    --config <path>                 Config file (default: ./diffprompt.config.json)
+  rubric history [options]      Compact git-log timeline for the prompt files
+    --config <path>                 Config file (default: ./rubric.config.json)
     --file <path>                   Track this path instead of config-declared prompts (repeatable)
     --limit <n>                     Max commits (default: 100)
     --html <path>                   Also write a self-contained HTML report
@@ -130,7 +130,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (cmd === '--version' || cmd === '-v') {
-    process.stdout.write(`diffprompt ${readCliVersion()}\n`);
+    process.stdout.write(`rubric ${readCliVersion()}\n`);
     return 0;
   }
 
@@ -140,7 +140,7 @@ async function main(argv: string[]): Promise<number> {
         const result = await runQuickstart();
         return result.exitCode;
       } catch (err) {
-        process.stderr.write(`diffprompt quickstart: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric quickstart: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -164,7 +164,7 @@ async function main(argv: string[]): Promise<number> {
         const result = await runProvidersTest(opts);
         return result.exitCode;
       } catch (err) {
-        process.stderr.write(`diffprompt providers: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric providers: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -182,10 +182,10 @@ async function main(argv: string[]): Promise<number> {
         if (result.autogeneratedCases > 0) {
           process.stdout.write(`\n  ⚠ ${result.autogeneratedCases} autogenerated case(s) — review before trusting the verdict.\n`);
         }
-        process.stdout.write(`\nNext: edit prompts/baseline.md and prompts/candidate.md, then run \`diffprompt run\`.\n`);
+        process.stdout.write(`\nNext: edit prompts/baseline.md and prompts/candidate.md, then run \`rubric run\`.\n`);
         return 0;
       } catch (err) {
-        process.stderr.write(`diffprompt init: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric init: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -208,7 +208,7 @@ async function main(argv: string[]): Promise<number> {
         await runServe(opts);
         return 0;
       } catch (err) {
-        process.stderr.write(`diffprompt serve: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric serve: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -256,7 +256,7 @@ async function main(argv: string[]): Promise<number> {
         const result = await runRun(opts);
         return result.exitCode;
       } catch (err) {
-        process.stderr.write(`diffprompt run: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric run: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -310,7 +310,7 @@ async function main(argv: string[]): Promise<number> {
         }
         return 0;
       } catch (err) {
-        process.stderr.write(`diffprompt seed: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric seed: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -336,7 +336,7 @@ async function main(argv: string[]): Promise<number> {
         const result = runComment(opts);
         return result.exitCode;
       } catch (err) {
-        process.stderr.write(`diffprompt comment: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric comment: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -358,7 +358,7 @@ async function main(argv: string[]): Promise<number> {
         process.stdout.write(`)\n`);
         return 0;
       } catch (err) {
-        process.stderr.write(`diffprompt share: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric share: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -391,7 +391,7 @@ async function main(argv: string[]): Promise<number> {
         if (result.note) process.stdout.write(`\n  note: ${result.note}\n`);
         return 0;
       } catch (err) {
-        process.stderr.write(`diffprompt pull: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric pull: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -413,7 +413,7 @@ async function main(argv: string[]): Promise<number> {
         runHistory(opts);
         return 0;
       } catch (err) {
-        process.stderr.write(`diffprompt history: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric history: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
@@ -438,12 +438,12 @@ async function main(argv: string[]): Promise<number> {
         const result = await runCalibrate(opts);
         return result.exitCode;
       } catch (err) {
-        process.stderr.write(`diffprompt calibrate: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(`rubric calibrate: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
     default: {
-      process.stderr.write(`diffprompt: unknown command "${cmd}"\n\n${USAGE}`);
+      process.stderr.write(`rubric: unknown command "${cmd}"\n\n${USAGE}`);
       return 2;
     }
   }

@@ -100,7 +100,7 @@ describe('renderCalibrationHtml', () => {
     const report = await runCalibration(entries, mirrorGrader(), 'default');
     const html = renderCalibrationHtml(report, new Date('2026-01-01T00:00:00Z'));
     expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('diffprompt calibration');
+    expect(html).toContain('rubric calibration');
     expect(html).toContain('100.0%');
     expect(html).toContain('2026-01-01T00:00:00.000Z');
   });

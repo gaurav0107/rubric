@@ -45,7 +45,7 @@ const QUICKSTART_CONFIG: Config = {
 export async function runQuickstart(opts: QuickstartOptions = {}): Promise<QuickstartResult> {
   const write = opts.write ?? ((line: string) => process.stdout.write(line));
 
-  write(`diffprompt quickstart — zero-config mock demo\n`);
+  write(`rubric quickstart — zero-config mock demo\n`);
   write(`  5 cases × 1 model = 5 cells (mock provider + mock judge)\n\n`);
 
   // Deterministic mock: candidate "wins" on billing/account/bug/refund,
@@ -83,10 +83,10 @@ export async function runQuickstart(opts: QuickstartOptions = {}): Promise<Quick
   }
 
   write(`\nNext:\n`);
-  write(`  diffprompt init                    # scaffold a real workspace\n`);
-  write(`  diffprompt init --wizard --describe "your task here"\n`);
-  write(`  diffprompt serve --mock            # live three-pane UI\n`);
-  write(`  diffprompt run                     # spend real tokens\n`);
+  write(`  rubric init                    # scaffold a real workspace\n`);
+  write(`  rubric init --wizard --describe "your task here"\n`);
+  write(`  rubric serve --mock            # live three-pane UI\n`);
+  write(`  rubric run                     # spend real tokens\n`);
 
   return { exitCode: 0 };
 }

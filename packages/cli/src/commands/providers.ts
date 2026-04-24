@@ -67,7 +67,7 @@ function pickModelForProvider(
 
 export async function runProvidersTest(opts: ProvidersTestOptions): Promise<ProvidersTestResult> {
   const cwd = resolve(opts.cwd ?? process.cwd());
-  const configPath = opts.configPath ?? resolve(cwd, 'diffprompt.config.json');
+  const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
   const write = opts.write ?? ((line: string) => process.stdout.write(line));
   const promptText = opts.prompt ?? DEFAULT_PROMPT;
 
@@ -105,7 +105,7 @@ export async function runProvidersTest(opts: ProvidersTestOptions): Promise<Prov
   }
 
   const userCfg = (userProviders ?? []).find((p) => p.name === providerName);
-  write(`diffprompt providers test\n`);
+  write(`rubric providers test\n`);
   write(`  provider: ${providerName}\n`);
   write(`  model:    ${model}\n`);
   if (userCfg) {

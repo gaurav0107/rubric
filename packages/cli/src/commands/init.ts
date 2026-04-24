@@ -7,12 +7,12 @@ import {
   type Provider,
 } from '../../../shared/src/index.ts';
 
-const CONFIG_FILE = 'diffprompt.config.json';
+const CONFIG_FILE = 'rubric.config.json';
 const PROMPTS_DIR = 'prompts';
 const DATA_DIR = 'data';
 
 const DEFAULT_CONFIG = {
-  $schema: 'https://diffprompt.dev/schema/v1.json',
+  $schema: 'https://rubric.dev/schema/v1.json',
   prompts: {
     baseline: 'prompts/baseline.md',
     candidate: 'prompts/candidate.md',

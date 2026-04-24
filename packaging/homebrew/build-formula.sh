@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Produce a live Homebrew Formula from packaging/homebrew/diffprompt.rb.template.
+# Produce a live Homebrew Formula from packaging/homebrew/rubric.rb.template.
 #
 # Usage:
-#   packaging/homebrew/build-formula.sh <version> <artifacts-dir> > Formula/diffprompt.rb
+#   packaging/homebrew/build-formula.sh <version> <artifacts-dir> > Formula/rubric.rb
 #
 # <artifacts-dir> must contain the four unix binaries from the GitHub release:
-#   diffprompt-darwin-arm64
-#   diffprompt-darwin-x64
-#   diffprompt-linux-arm64
-#   diffprompt-linux-x64
+#   rubric-darwin-arm64
+#   rubric-darwin-x64
+#   rubric-linux-arm64
+#   rubric-linux-x64
 #
 # Emits the filled formula on stdout. No dependencies beyond `shasum` and `sed`.
 
@@ -36,17 +36,17 @@ sha() {
   shasum -a 256 "$f" | awk '{print $1}'
 }
 
-DARWIN_ARM64=$(sha diffprompt-darwin-arm64)
-DARWIN_X64=$(sha diffprompt-darwin-x64)
-LINUX_ARM64=$(sha diffprompt-linux-arm64)
-LINUX_X64=$(sha diffprompt-linux-x64)
+DARWIN_ARM64=$(sha rubric-darwin-arm64)
+DARWIN_X64=$(sha rubric-darwin-x64)
+LINUX_ARM64=$(sha rubric-linux-arm64)
+LINUX_X64=$(sha rubric-linux-x64)
 
 HERE="$(cd -- "$(dirname -- "$0")" && pwd)"
-TEMPLATE="$HERE/diffprompt.rb.template"
+TEMPLATE="$HERE/rubric.rb.template"
 
 # Strip the leading `# ` block of setup instructions so the emitted Formula is
-# idiomatic. Everything from `class Diffprompt` onward is what ships in the tap.
-sed -n '/^class Diffprompt/,$p' "$TEMPLATE" \
+# idiomatic. Everything from `class Rubric` onward is what ships in the tap.
+sed -n '/^class Rubric/,$p' "$TEMPLATE" \
   | sed \
     -e "s|__VERSION__|${VERSION}|g" \
     -e "s|__DARWIN_ARM64_SHA__|${DARWIN_ARM64}|g" \

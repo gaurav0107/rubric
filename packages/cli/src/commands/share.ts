@@ -1,8 +1,8 @@
 /**
- * `diffprompt share` — export the workspace as a single self-contained bundle.json.
+ * `rubric share` — export the workspace as a single self-contained bundle.json.
  *
  * Pre-hosted URLs this is the Fork-to-local flow: attach the bundle to an
- * issue/gist, the reviewer `diffprompt pull`s it, and they're running the
+ * issue/gist, the reviewer `rubric pull`s it, and they're running the
  * exact same prompts+dataset+rubric locally. Mirrors the shareable-URL
  * primary flow but with zero backend.
  */
@@ -45,7 +45,7 @@ export interface ShareResult {
 
 export function runShare(opts: ShareOptions): ShareResult {
   const cwd = resolve(opts.cwd ?? process.cwd());
-  const configPath = opts.configPath ?? resolve(cwd, 'diffprompt.config.json');
+  const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
   const loaded = loadConfig(configPath);
 
   const baseline = readFileSync(loaded.resolved.baseline, 'utf8');

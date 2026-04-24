@@ -1,8 +1,8 @@
 {
-  "name": "diffprompt-monorepo",
+  "name": "rubric-monorepo",
   "version": "0.0.0",
   "private": true,
-  "description": "Monorepo root for diffprompt — pairwise prompt evaluation framework",
+  "description": "Monorepo root for rubric — pairwise prompt evaluation framework",
   "license": "MIT",
   "workspaces": [
     "packages/*"

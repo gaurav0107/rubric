@@ -9,9 +9,9 @@ import {
 import type { JsonPayload } from './run.ts';
 
 export interface CommentOptions {
-  /** Absolute or cwd-relative path to a `diffprompt run --json` payload. */
+  /** Absolute or cwd-relative path to a `rubric run --json` payload. */
   fromPath: string;
-  /** Optional CalibrationReport JSON (from `diffprompt calibrate --json`). */
+  /** Optional CalibrationReport JSON (from `rubric calibrate --json`). */
   calibrationPath?: string;
   /** Optional URL to a hosted HTML report, linked from the comment footer. */
   reportUrl?: string;

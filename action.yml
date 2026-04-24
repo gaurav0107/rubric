@@ -1,15 +1,15 @@
-name: 'diffprompt'
+name: 'rubric'
 description: 'Pairwise prompt evaluation on pull requests — posts a calibrated judge verdict as a PR comment.'
-author: 'diffprompt'
+author: 'rubric'
 branding:
   icon: 'git-pull-request'
   color: 'purple'
 
 inputs:
   config:
-    description: 'Path to diffprompt.config.json (relative to repo root).'
+    description: 'Path to rubric.config.json (relative to repo root).'
     required: false
-    default: 'diffprompt.config.json'
+    default: 'rubric.config.json'
   calibration:
     description: 'Path to calibration labels JSON. Leave empty to skip calibration (comment will show "unverified").'
     required: false
@@ -37,7 +37,7 @@ inputs:
   comment-marker:
     description: 'Hidden HTML marker used to upsert the same comment across runs.'
     required: false
-    default: 'diffprompt-bot:pr-comment'
+    default: 'rubric-bot:pr-comment'
 
 runs:
   using: 'composite'
@@ -47,20 +47,20 @@ runs:
       with:
         node-version: '20'
 
-    - name: Install diffprompt
+    - name: Install rubric
       shell: bash
-      run: npm install --global diffprompt
+      run: npm install --global rubric
 
     - name: Run evaluation
       shell: bash
       env:
         OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
       run: |
-        ARGS=( "--config" "${{ inputs.config }}" "--json-out" "${{ runner.temp }}/diffprompt-run.json" )
+        ARGS=( "--config" "${{ inputs.config }}" "--json-out" "${{ runner.temp }}/rubric-run.json" )
         if [ "${{ inputs.fail-on-regress }}" = "true" ]; then
           ARGS+=( "--fail-on-regress" )
         fi
-        diffprompt run "${ARGS[@]}"
+        rubric run "${ARGS[@]}"
 
     - name: Calibrate judge
       if: inputs.calibration != ''
@@ -68,17 +68,17 @@ runs:
       env:
         OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
       run: |
-        diffprompt calibrate \
+        rubric calibrate \
           --config "${{ inputs.config }}" \
           --labels "${{ inputs.calibration }}" \
-          --json-out "${{ runner.temp }}/diffprompt-cal.json"
+          --json-out "${{ runner.temp }}/rubric-cal.json"
 
     - name: Render PR comment
       shell: bash
       run: |
-        ARGS=( "--from" "${{ runner.temp }}/diffprompt-run.json" "--min-agreement" "${{ inputs.min-agreement }}" )
-        if [ -f "${{ runner.temp }}/diffprompt-cal.json" ]; then
-          ARGS+=( "--calibration" "${{ runner.temp }}/diffprompt-cal.json" )
+        ARGS=( "--from" "${{ runner.temp }}/rubric-run.json" "--min-agreement" "${{ inputs.min-agreement }}" )
+        if [ -f "${{ runner.temp }}/rubric-cal.json" ]; then
+          ARGS+=( "--calibration" "${{ runner.temp }}/rubric-cal.json" )
         fi
         if [ -n "${{ inputs.report-url }}" ]; then
           ARGS+=( "--report-url" "${{ inputs.report-url }}" )
@@ -86,13 +86,13 @@ runs:
         if [ -n "${{ inputs.title }}" ]; then
           ARGS+=( "--title" "${{ inputs.title }}" )
         fi
-        diffprompt comment "${ARGS[@]}" > "${{ runner.temp }}/diffprompt-comment.md"
+        rubric comment "${ARGS[@]}" > "${{ runner.temp }}/rubric-comment.md"
 
     - name: Post PR comment
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
-        DIFFPROMPT_COMMENT_MARKER: ${{ inputs.comment-marker }}
+        RUBRIC_COMMENT_MARKER: ${{ inputs.comment-marker }}
       run: |
         npx --yes tsx@4 "${{ github.action_path }}/packages/action/src/bin.ts" \
-          --body "${{ runner.temp }}/diffprompt-comment.md"
+          --body "${{ runner.temp }}/rubric-comment.md"

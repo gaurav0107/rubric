@@ -1,5 +1,5 @@
 /**
- * Zero-dependency Node HTTP server for `diffprompt serve`. Reuses runEval
+ * Zero-dependency Node HTTP server for `rubric serve`. Reuses runEval
  * from packages/shared, so the server is a thin routing layer — all the
  * evaluation logic comes from the same engine the CLI uses.
  *
@@ -169,7 +169,7 @@ function readCalibrationEntries(path: string): CalibrationLabel[] {
 
 export function makeHandlers(opts: ServerOptions): Handlers {
   const cwd = resolve(opts.cwd ?? process.cwd());
-  const configPath = opts.configPath ?? resolve(cwd, 'diffprompt.config.json');
+  const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
 
   return {
     getWorkspace: () => loadWorkspace(cwd, configPath),

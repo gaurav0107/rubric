@@ -69,7 +69,7 @@ describe('upsertDriftIssue', () => {
     expect(calls[1]!.method).toBe('POST');
     const posted = calls[1]!.body as { title: string; body: string; labels?: string[] };
     expect(posted.title).toBe('drift: candidate regressed');
-    expect(posted.body).toContain('<!-- diffprompt-bot:drift-issue -->');
+    expect(posted.body).toContain('<!-- rubric-bot:drift-issue -->');
     expect(posted.labels).toEqual(['drift']);
   });
 
@@ -79,7 +79,7 @@ describe('upsertDriftIssue', () => {
         body: {
           total_count: 1,
           items: [
-            { number: 7, html_url: 'U1', state: 'open', body: '<!-- diffprompt-bot:drift-issue -->\nold' },
+            { number: 7, html_url: 'U1', state: 'open', body: '<!-- rubric-bot:drift-issue -->\nold' },
           ],
         },
       },
@@ -106,7 +106,7 @@ describe('upsertDriftIssue', () => {
         body: {
           total_count: 1,
           items: [
-            { number: 9, html_url: 'U', state: 'closed', body: '<!-- diffprompt-bot:drift-issue -->\nold' },
+            { number: 9, html_url: 'U', state: 'closed', body: '<!-- rubric-bot:drift-issue -->\nold' },
           ],
         },
       },
@@ -134,12 +134,12 @@ describe('upsertDriftIssue', () => {
       token: 't',
       title: 'drift:mobile',
       body: 'body',
-      marker: 'diffprompt-bot:drift-issue:mobile',
+      marker: 'rubric-bot:drift-issue:mobile',
       fetchImpl: impl,
     });
     expect(calls[0]!.url).toContain('drift-issue%3Amobile');
     const posted = calls[1]!.body as { body: string };
-    expect(posted.body).toContain('<!-- diffprompt-bot:drift-issue:mobile -->');
+    expect(posted.body).toContain('<!-- rubric-bot:drift-issue:mobile -->');
   });
 
   test('surfaces GitHub error bodies on failure', async () => {

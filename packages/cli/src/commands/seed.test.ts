@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { runSeed } from './seed.ts';
 
 function scratch(): string {
-  return mkdtempSync(join(tmpdir(), 'diffprompt-seed-'));
+  return mkdtempSync(join(tmpdir(), 'rubric-seed-'));
 }
 
 const LANGFUSE = [

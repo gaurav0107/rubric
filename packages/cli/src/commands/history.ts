@@ -1,5 +1,5 @@
 /**
- * `diffprompt history` — git-log visualization for prompt files.
+ * `rubric history` — git-log visualization for prompt files.
  *
  * Reads `git log -p` for baseline.md and candidate.md (or any files passed via
  * `--file`) and renders either:
@@ -124,7 +124,7 @@ export function loadHistory(opts: HistoryOptions = {}): HistoryResult {
 
   let tracked: string[] = opts.files ?? [];
   if (tracked.length === 0) {
-    const configPath = opts.configPath ?? resolve(cwd, 'diffprompt.config.json');
+    const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
     const loaded = loadConfig(configPath);
     tracked = [loaded.resolved.baseline, loaded.resolved.candidate];
   }
@@ -157,7 +157,7 @@ export function runHistory(opts: RunHistoryOptions = {}): HistoryResult {
   const result = loadHistory(opts);
 
   if (!opts.silent) {
-    write(`diffprompt history: ${result.entries.length} commit(s) touching\n`);
+    write(`rubric history: ${result.entries.length} commit(s) touching\n`);
     for (const f of result.tracked) write(`  - ${f}\n`);
     write('\n');
     for (const e of result.entries) {
@@ -213,13 +213,13 @@ export function renderHistoryHtml(result: HistoryResult): string {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>diffprompt history</title>
+<title>rubric history</title>
 <style>${STYLE}</style>
 </head>
 <body>
 <main>
   <header>
-    <h1>diffprompt history</h1>
+    <h1>rubric history</h1>
     <p class="meta">${result.entries.length} commit(s) across ${result.tracked.length} tracked file(s)</p>
     <ul class="tracked">${trackedList}</ul>
   </header>

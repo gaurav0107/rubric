@@ -83,9 +83,9 @@ describe('validateConfig', () => {
 
 describe('loadConfig', () => {
   test('reads + resolves relative paths from config dir', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'diffprompt-cfg-'));
+    const dir = mkdtempSync(join(tmpdir(), 'rubric-cfg-'));
     try {
-      const configPath = join(dir, 'diffprompt.config.json');
+      const configPath = join(dir, 'rubric.config.json');
       writeFileSync(
         configPath,
         JSON.stringify({
@@ -107,7 +107,7 @@ describe('loadConfig', () => {
   });
 
   test('throws ConfigError on missing file', () => {
-    expect(() => loadConfig('/tmp/this-file-does-not-exist-diffprompt.json')).toThrow(ConfigError);
+    expect(() => loadConfig('/tmp/this-file-does-not-exist-rubric.json')).toThrow(ConfigError);
   });
 });
 
@@ -122,7 +122,7 @@ describe('resolveRubric', () => {
   });
 
   test('loads rubric from a file relative to baseDir', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'diffprompt-rubric-'));
+    const dir = mkdtempSync(join(tmpdir(), 'rubric-rubric-'));
     try {
       writeFileSync(join(dir, 'rubric.md'), '# Team rubric\nJudge harshly but fairly.');
       const text = resolveRubric({ file: 'rubric.md' }, dir);

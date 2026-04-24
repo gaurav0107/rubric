@@ -1,17 +1,17 @@
 {
-  "name": "@diffprompt/action",
+  "name": "@rubric/action",
   "version": "0.0.0",
   "private": true,
-  "description": "GitHub Action — runs diffprompt on pull requests and posts results.",
+  "description": "GitHub Action — runs rubric on pull requests and posts results.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "diffprompt-action": "src/bin.ts"
+    "rubric-action": "src/bin.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@diffprompt/shared": "*"
+    "@rubric/shared": "*"
   }
 }

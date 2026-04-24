@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { runCalibrate } from './calibrate.ts';
 
 function scratch(): string {
-  return mkdtempSync(join(tmpdir(), 'diffprompt-calibrate-'));
+  return mkdtempSync(join(tmpdir(), 'rubric-calibrate-'));
 }
 
 function writeConfig(dir: string): string {
-  const path = join(dir, 'diffprompt.config.json');
+  const path = join(dir, 'rubric.config.json');
   writeFileSync(
     path,
     JSON.stringify({
@@ -56,7 +56,7 @@ describe('runCalibrate', () => {
 
       const html = readFileSync(result.reportPath, 'utf8');
       expect(html).toContain('<!DOCTYPE html>');
-      expect(html).toContain('diffprompt calibration');
+      expect(html).toContain('rubric calibration');
 
       const stdout = lines.join('');
       expect(stdout).toMatch(/Agreement:/);

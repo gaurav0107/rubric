@@ -4,7 +4,7 @@
  * already-rendered PR comment markdown and upserts it via the GitHub REST API.
  *
  * The heavy lifting (run → calibrate → comment) is handled upstream by the
- * `diffprompt` CLI; this binary only cares about posting the result.
+ * `rubric` CLI; this binary only cares about posting the result.
  */
 import { readFileSync } from 'node:fs';
 import { upsertDriftIssue } from './drift-issue.ts';
@@ -56,7 +56,7 @@ export async function main(argv: string[]): Promise<number> {
   const drift = argv.includes('--drift');
   const bodyPath = parseFlag(argv, '--body');
   if (!bodyPath) {
-    process.stderr.write('diffprompt-action: missing --body <path>\n');
+    process.stderr.write('rubric-action: missing --body <path>\n');
     return 2;
   }
 
@@ -66,18 +66,18 @@ export async function main(argv: string[]): Promise<number> {
   const body = readFileSync(bodyPath, 'utf8');
 
   if (drift) {
-    const title = parseFlag(argv, '--title') ?? 'diffprompt: candidate has regressed against baseline';
-    const marker = process.env.DIFFPROMPT_DRIFT_MARKER || 'diffprompt-bot:drift-issue';
+    const title = parseFlag(argv, '--title') ?? 'rubric: candidate has regressed against baseline';
+    const marker = process.env.RUBRIC_DRIFT_MARKER || 'rubric-bot:drift-issue';
     const labelsRaw = parseFlag(argv, '--labels');
     const labels = labelsRaw ? labelsRaw.split(',').map((s) => s.trim()).filter(Boolean) : ['drift'];
 
     const result = await upsertDriftIssue({ repo, token, title, body, marker, labels, apiUrl });
-    process.stdout.write(`diffprompt-action: ${result.action} drift issue #${result.issueNumber} — ${result.url}\n`);
+    process.stdout.write(`rubric-action: ${result.action} drift issue #${result.issueNumber} — ${result.url}\n`);
     return 0;
   }
 
   const eventPath = requireEnv('GITHUB_EVENT_PATH');
-  const marker = process.env.DIFFPROMPT_COMMENT_MARKER || 'diffprompt-bot:pr-comment';
+  const marker = process.env.RUBRIC_COMMENT_MARKER || 'rubric-bot:pr-comment';
   const prNumber = readEventPrNumber(eventPath);
 
   const upsertArgs: Parameters<typeof upsertPrComment>[0] = {
@@ -89,7 +89,7 @@ export async function main(argv: string[]): Promise<number> {
     apiUrl,
   };
   const result = await upsertPrComment(upsertArgs);
-  process.stdout.write(`diffprompt-action: ${result.action} comment ${result.commentId} — ${result.url}\n`);
+  process.stdout.write(`rubric-action: ${result.action} comment ${result.commentId} — ${result.url}\n`);
   return 0;
 }
 
@@ -99,7 +99,7 @@ if (invokedAsScript) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (err) => {
-      process.stderr.write(`diffprompt-action: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(`rubric-action: ${err instanceof Error ? err.message : String(err)}\n`);
       process.exit(1);
     },
   );

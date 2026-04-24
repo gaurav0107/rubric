@@ -98,7 +98,7 @@ function toCase(input: string, output: string, feedback?: Feedback): Case {
  *
  * No feedback channel exists in either shape, so calibration.json will be
  * empty — that's the caller's signal to hand-label before running
- * `diffprompt calibrate`.
+ * `rubric calibrate`.
  */
 export function parseOpenAiChatLogs(text: string): Case[] {
   const out: Case[] = [];

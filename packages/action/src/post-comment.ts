@@ -10,14 +10,14 @@
 export type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 export interface UpsertInput {
-  /** `owner/repo`, e.g. `diffprompt/diffprompt`. */
+  /** `owner/repo`, e.g. `rubric/rubric`. */
   repo: string;
   prNumber: number;
   /** GITHUB_TOKEN or a PAT with `pull-requests: write` on the target repo. */
   token: string;
   /** The rendered Markdown body (without the marker). */
   body: string;
-  /** Hidden marker used to find+replace our own comment. Default: `diffprompt-bot:pr-comment`. */
+  /** Hidden marker used to find+replace our own comment. Default: `rubric-bot:pr-comment`. */
   marker?: string;
   /** Override the GitHub API base URL (for GHES). Default: `https://api.github.com`. */
   apiUrl?: string;
@@ -31,7 +31,7 @@ export interface UpsertResult {
   url: string;
 }
 
-const DEFAULT_MARKER = 'diffprompt-bot:pr-comment';
+const DEFAULT_MARKER = 'rubric-bot:pr-comment';
 const DEFAULT_API_URL = 'https://api.github.com';
 
 function markerTag(marker: string): string {

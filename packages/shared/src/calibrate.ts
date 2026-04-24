@@ -125,7 +125,7 @@ export function renderCalibrationHtml(report: CalibrationReport, generatedAt: Da
 
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><title>diffprompt calibration</title>
+<head><meta charset="utf-8"><title>rubric calibration</title>
 <style>
   body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; margin: 24px; color: #1a1a1a; background: #fafaf8; }
   h1 { font-size: 20px; }
@@ -143,7 +143,7 @@ export function renderCalibrationHtml(report: CalibrationReport, generatedAt: Da
   .col-label, .col-judge { width: 90px; }
 </style></head>
 <body>
-<h1>diffprompt calibration</h1>
+<h1>rubric calibration</h1>
 <p class="meta">${escapeHtml(generatedAt.toISOString())}</p>
 <div class="summary">
   <div class="stat"><span class="n">${report.total}</span><span class="l">entries</span></div>

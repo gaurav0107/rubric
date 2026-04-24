@@ -12,7 +12,7 @@ export interface RenderReportInput {
 
 export function renderReportHtml(input: RenderReportInput): string {
   const when = input.generatedAt ?? new Date();
-  const title = input.title ?? 'diffprompt report';
+  const title = input.title ?? 'rubric report';
   const { config, cases, cells, summary } = input;
 
   const header = renderHeader(title, config, summary, when);

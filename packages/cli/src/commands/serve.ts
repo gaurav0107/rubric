@@ -41,7 +41,7 @@ export async function runServe(opts: ServeOptions = {}): Promise<ServeResult> {
   });
 
   const url = `http://${host}:${port}`;
-  write(`diffprompt serve: ${url}\n`);
+  write(`rubric serve: ${url}\n`);
   write(`  cwd:      ${cwd}\n`);
   if (opts.mock) write(`  mode:     mock\n`);
   write(`  press Ctrl-C to stop.\n`);

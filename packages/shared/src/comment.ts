@@ -89,7 +89,7 @@ function calibrationSection(
     return [
       `### Judge: \`${judgeModel}\` · calibration: **unverified**`,
       '',
-      '> This judge has not been calibrated against human labels. Run `diffprompt calibrate` to measure agreement before trusting this verdict.',
+      '> This judge has not been calibrated against human labels. Run `rubric calibrate` to measure agreement before trusting this verdict.',
     ].join('\n');
   }
   const decisive = calibration.agreements + calibration.disagreements;
@@ -152,7 +152,7 @@ export function renderPrComment(input: PrCommentInput): string {
   const verdict = classifyVerdict(input.summary);
   const minAgreement = input.minAgreement ?? 0.8;
 
-  const header = input.title ? `# diffprompt — ${input.title}` : '# diffprompt';
+  const header = input.title ? `# rubric — ${input.title}` : '# rubric';
   const parts: string[] = [
     header,
     '',
@@ -177,7 +177,7 @@ export function renderPrComment(input: PrCommentInput): string {
     parts.push('', `[Full report](${input.reportUrl})`);
   }
 
-  parts.push('', '<sub>Posted by [diffprompt](https://diffprompt.dev).</sub>');
+  parts.push('', '<sub>Posted by [rubric](https://rubric.dev).</sub>');
 
   return parts.join('\n') + '\n';
 }

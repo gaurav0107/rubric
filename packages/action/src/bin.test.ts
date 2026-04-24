@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { main } from './bin.ts';
 
 function scratch(): string {
-  return mkdtempSync(join(tmpdir(), 'diffprompt-action-'));
+  return mkdtempSync(join(tmpdir(), 'rubric-action-'));
 }
 
 function withEnv<T>(vars: Record<string, string>, fn: () => T): T {

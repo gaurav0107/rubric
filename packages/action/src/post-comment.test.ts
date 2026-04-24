@@ -69,7 +69,7 @@ describe('findExistingComment', () => {
       repo: 'o/r',
       prNumber: 42,
       token: 't',
-      marker: 'diffprompt-bot:pr-comment',
+      marker: 'rubric-bot:pr-comment',
       apiUrl: 'https://api.github.com',
       fetchImpl: impl,
     });
@@ -84,7 +84,7 @@ describe('findExistingComment', () => {
       {
         body: [
           { id: 1, body: 'unrelated', html_url: 'x' },
-          { id: 2, body: '<!-- diffprompt-bot:pr-comment -->\nhi', html_url: 'y' },
+          { id: 2, body: '<!-- rubric-bot:pr-comment -->\nhi', html_url: 'y' },
         ],
       },
     ]);
@@ -92,7 +92,7 @@ describe('findExistingComment', () => {
       repo: 'o/r',
       prNumber: 42,
       token: 't',
-      marker: 'diffprompt-bot:pr-comment',
+      marker: 'rubric-bot:pr-comment',
       apiUrl: 'https://api.github.com',
       fetchImpl: impl,
     });
@@ -106,7 +106,7 @@ describe('findExistingComment', () => {
         repo: 'o/r',
         prNumber: 42,
         token: 't',
-        marker: 'diffprompt-bot:pr-comment',
+        marker: 'rubric-bot:pr-comment',
         apiUrl: 'https://api.github.com',
         fetchImpl: impl,
       }),
@@ -118,7 +118,7 @@ describe('upsertPrComment', () => {
   test('creates a new comment when no existing marker is found', async () => {
     const { impl, calls } = stubFetch([
       { body: [] },
-      { body: { id: 100, body: '<!-- diffprompt-bot:pr-comment -->\nfresh', html_url: 'URL' } },
+      { body: { id: 100, body: '<!-- rubric-bot:pr-comment -->\nfresh', html_url: 'URL' } },
     ]);
     const res = await upsertPrComment({
       repo: 'o/r',
@@ -132,14 +132,14 @@ describe('upsertPrComment', () => {
     expect(res.url).toBe('URL');
     expect(calls[1]!.method).toBe('POST');
     const posted = calls[1]!.body as { body: string };
-    expect(posted.body).toContain('<!-- diffprompt-bot:pr-comment -->');
+    expect(posted.body).toContain('<!-- rubric-bot:pr-comment -->');
     expect(posted.body).toContain('fresh');
   });
 
   test('updates the existing comment in-place', async () => {
     const { impl, calls } = stubFetch([
-      { body: [{ id: 99, body: '<!-- diffprompt-bot:pr-comment -->\nold', html_url: 'U1' }] },
-      { body: { id: 99, body: '<!-- diffprompt-bot:pr-comment -->\nnew', html_url: 'U2' } },
+      { body: [{ id: 99, body: '<!-- rubric-bot:pr-comment -->\nold', html_url: 'U1' }] },
+      { body: { id: 99, body: '<!-- rubric-bot:pr-comment -->\nnew', html_url: 'U2' } },
     ]);
     const res = await upsertPrComment({
       repo: 'o/r',
@@ -158,7 +158,7 @@ describe('upsertPrComment', () => {
 
   test('honours custom marker for multiple bot variants', async () => {
     const { impl, calls } = stubFetch([
-      { body: [{ id: 1, body: '<!-- diffprompt-bot:pr-comment -->\nold default', html_url: 'x' }] },
+      { body: [{ id: 1, body: '<!-- rubric-bot:pr-comment -->\nold default', html_url: 'x' }] },
       { body: { id: 200, body: 'new', html_url: 'Y' } },
     ]);
     const res = await upsertPrComment({
@@ -166,13 +166,13 @@ describe('upsertPrComment', () => {
       prNumber: 7,
       token: 'tok',
       body: 'hi',
-      marker: 'diffprompt-bot:nightly',
+      marker: 'rubric-bot:nightly',
       fetchImpl: impl,
     });
     expect(res.action).toBe('created'); // default marker doesn't match `nightly`
     expect(calls[1]!.method).toBe('POST');
     const posted = calls[1]!.body as { body: string };
-    expect(posted.body).toContain('<!-- diffprompt-bot:nightly -->');
+    expect(posted.body).toContain('<!-- rubric-bot:nightly -->');
   });
 
   test('surfaces GitHub error bodies on failure', async () => {

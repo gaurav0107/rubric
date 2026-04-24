@@ -1,4 +1,4 @@
-# diffprompt — user guide
+# rubric — user guide
 
 A task-oriented walkthrough of the CLI and the three-pane `serve` UI. If
 you want the one-pager pitch, read [`README.md`](../README.md). This
@@ -26,31 +26,31 @@ document assumes you've already got the repo cloned and `bun` or
 
 ## Install
 
-Until diffprompt is published to npm, run it from the repo:
+Until rubric is published to npm, run it from the repo:
 
 ```bash
-git clone https://github.com/diffprompt/diffprompt
-cd diffprompt
-# Option 1 — link as a global `diffprompt`
+git clone https://github.com/rubric/rubric
+cd rubric
+# Option 1 — link as a global `rubric`
 npm link --workspace=packages/cli
 # Option 2 — run directly via tsx (no install needed)
-alias diffprompt='tsx packages/cli/src/bin.ts'
+alias rubric='tsx packages/cli/src/bin.ts'
 # Option 3 — single-file binary
-cd packages/cli && bun run build:binary && ./dist/diffprompt --help
+cd packages/cli && bun run build:binary && ./dist/rubric --help
 ```
 
 Verify:
 
 ```bash
-diffprompt --version     # diffprompt 0.0.0
-diffprompt --help
+rubric --version     # rubric 0.0.0
+rubric --help
 ```
 
 ---
 
 ## Core concept (60 seconds)
 
-diffprompt compares two prompts (or two models) across a dataset using an
+rubric compares two prompts (or two models) across a dataset using an
 LLM judge, then rolls the per-case verdicts into a win/loss/tie summary
 you can gate CI on. One *cell* = one (case × model × A-side × B-side)
 evaluation. A *run* is every cell evaluated end-to-end, concurrently.
@@ -64,7 +64,7 @@ dataset (JSONL)  →  for each case:
                     summary: wins / losses / ties / errors / win-rate
 ```
 
-Because the judge is just another LLM, diffprompt also ships a
+Because the judge is just another LLM, rubric also ships a
 **calibration** step: label 10–50 pairs by hand and measure the judge's
 agreement with you before trusting it to gate merges.
 
@@ -75,14 +75,14 @@ agreement with you before trusting it to gate merges.
 Two zero-friction entry points before you commit to writing a real
 config.
 
-**`diffprompt quickstart`** runs a full end-to-end grid against a
+**`rubric quickstart`** runs a full end-to-end grid against a
 hard-coded demo dataset using a deterministic mock provider and mock
 judge. No API keys, no files written, ~10 seconds. It's the fastest way
 to see what the output shape looks like.
 
 ```bash
-diffprompt quickstart
-# diffprompt quickstart — zero-config mock demo
+rubric quickstart
+# rubric quickstart — zero-config mock demo
 #   5 cases × 1 model = 5 cells (mock provider + mock judge)
 #   ...
 # Summary:
@@ -90,7 +90,7 @@ diffprompt quickstart
 #   winRate: 100.0% (of decisive 4)
 ```
 
-**`diffprompt init --wizard --describe "<task>"`** scaffolds a real
+**`rubric init --wizard --describe "<task>"`** scaffolds a real
 workspace *and* asks the judge model to draft `baseline.md`,
 `candidate.md`, and 10 input cases from a one-sentence task
 description. Every auto-generated case is tagged with
@@ -98,11 +98,11 @@ description. Every auto-generated case is tagged with
 until the cases have been vetted.
 
 ```bash
-diffprompt init --wizard \
+rubric init --wizard \
   --describe "triage incoming customer support tickets by category and urgency"
 # requires OPENAI_API_KEY — or pass --mock for a templated scaffold.
 
-diffprompt init --wizard --mock \
+rubric init --wizard --mock \
   --describe "triage incoming customer support tickets"
 # deterministic templates, no LLM call, useful for seeding before you
 # wire a real key.
@@ -121,8 +121,8 @@ stub provider + judge so you can see the UI light up end-to-end.
 
 ```bash
 mkdir my-prompts && cd my-prompts
-diffprompt init                      # scaffolds config + prompts/ + data/
-diffprompt serve --mock              # → http://127.0.0.1:5174
+rubric init                      # scaffolds config + prompts/ + data/
+rubric serve --mock              # → http://127.0.0.1:5174
 ```
 
 What you get:
@@ -162,40 +162,40 @@ real:
 
 ```bash
 export OPENAI_API_KEY=sk-...
-diffprompt serve
+rubric serve
 ```
 
 ---
 
 ## Workflow B — gate a pull request
 
-This is the ship-critical flow. Wire `diffprompt run --fail-on-regress`
+This is the ship-critical flow. Wire `rubric run --fail-on-regress`
 into CI and attach the outputs to the PR:
 
 ```bash
-diffprompt run \
-  --config diffprompt.config.json \
+rubric run \
+  --config rubric.config.json \
   --fail-on-regress \
-  --json-out diffprompt-run.json \
-  --report  diffprompt-report.html \
-  --badge-out diffprompt.svg \
-  --calibration diffprompt-cal.json        # optional, colors the badge
+  --json-out rubric-run.json \
+  --report  rubric-report.html \
+  --badge-out rubric.svg \
+  --calibration rubric-cal.json        # optional, colors the badge
 ```
 
-- `diffprompt-run.json` — structured v1 run payload. Feed to
-  `diffprompt comment` to render the PR comment.
-- `diffprompt-report.html` — self-contained per-cell HTML report. Good
+- `rubric-run.json` — structured v1 run payload. Feed to
+  `rubric comment` to render the PR comment.
+- `rubric-report.html` — self-contained per-cell HTML report. Good
   CI artifact.
-- `diffprompt.svg` — Shields-style badge. Commit it to the repo and
+- `rubric.svg` — Shields-style badge. Commit it to the repo and
   reference from the README.
 
 Render + post the PR comment:
 
 ```bash
-diffprompt comment \
-  --from diffprompt-run.json \
-  --calibration diffprompt-cal.json \
-  --report-url https://ci.example.com/.../diffprompt-report.html \
+rubric comment \
+  --from rubric-run.json \
+  --calibration rubric-cal.json \
+  --report-url https://ci.example.com/.../rubric-report.html \
   --title "baseline.md vs candidate.md"      > comment.md
 ```
 
@@ -205,17 +205,17 @@ a hidden HTML marker instead of stacking.
 Or use the composite Action (wraps all of the above):
 
 ```yaml
-# .github/workflows/diffprompt.yml
+# .github/workflows/rubric.yml
 on:
   pull_request:
-    paths: ['prompts/**', 'data/**', 'diffprompt.config.json']
+    paths: ['prompts/**', 'data/**', 'rubric.config.json']
 jobs:
   eval:
     runs-on: ubuntu-latest
     permissions: { pull-requests: write, contents: read }
     steps:
       - uses: actions/checkout@v4
-      - uses: diffprompt/diffprompt@v1
+      - uses: rubric/rubric@v1
         with:
           calibration: prompts/_calibration.json.local
           fail-on-regress: true
@@ -233,22 +233,22 @@ the downstream `run` / `calibrate` flow is identical.
 
 ```bash
 # Langfuse
-diffprompt seed --from-langfuse langfuse-export.jsonl
+rubric seed --from-langfuse langfuse-export.jsonl
 
 # Helicone
-diffprompt seed --from-helicone helicone-export.jsonl
+rubric seed --from-helicone helicone-export.jsonl
 
 # LangSmith
-diffprompt seed --from-langsmith langsmith-traces.jsonl
+rubric seed --from-langsmith langsmith-traces.jsonl
 
 # OpenAI fine-tune / chat logs
-diffprompt seed --from-openai-logs chat-logs.jsonl
+rubric seed --from-openai-logs chat-logs.jsonl
 
 # Synthetic — template + variables cartesian fan-out, no LLM
-diffprompt seed --from-synthetic template.json
+rubric seed --from-synthetic template.json
 
 # CSV — spreadsheet exports (Google Sheets, Excel, Notion, ...)
-diffprompt seed --from-csv tickets.csv
+rubric seed --from-csv tickets.csv
 ```
 
 The CSV adapter expects a header row with at minimum an `input`
@@ -313,13 +313,13 @@ gracefully if agreement is weak.
 $EDITOR prompts/_calibration.json.local
 
 # 2. Run calibration — judge each labeled pair, measure agreement.
-diffprompt calibrate \
+rubric calibrate \
   --labels    prompts/_calibration.json.local \
-  --json-out  diffprompt-cal.json \
+  --json-out  rubric-cal.json \
   --report    calibration.html
 
 # 3. Pass the result to `comment` (colors the badge).
-diffprompt comment --from run.json --calibration diffprompt-cal.json
+rubric comment --from run.json --calibration rubric-cal.json
 ```
 
 Badge + comment states, tuned via `--min-agreement` (default `0.8`):
@@ -330,7 +330,7 @@ Badge + comment states, tuned via `--min-agreement` (default `0.8`):
 | calibrated    | agreement ≥ `--min-agreement`      | green  |
 | weak          | agreement < `--min-agreement`      | yellow |
 
-In-UI labeling: `diffprompt serve` shows `+ good` / `− bad` buttons on
+In-UI labeling: `rubric serve` shows `+ good` / `− bad` buttons on
 each cell's output side so you can accumulate calibration entries
 without leaving the browser.
 
@@ -346,10 +346,10 @@ Drop [`examples/drift-detector.yml`](../examples/drift-detector.yml) into
 `.github/workflows/` and flip the cron to suit your release cadence.
 The workflow:
 
-1. Runs `diffprompt run --fail-on-regress`.
+1. Runs `rubric run --fail-on-regress`.
 2. If exit code = 2, renders the standard calibration-aware comment
    body.
-3. Upserts a single GitHub issue per `DIFFPROMPT_DRIFT_MARKER`. Same
+3. Upserts a single GitHub issue per `RUBRIC_DRIFT_MARKER`. Same
    marker across runs = same issue. Closed issues get reopened on a
    fresh regression. No duplicate backlog noise.
 
@@ -359,11 +359,11 @@ Framed as best-effort, not an SLA.
 
 ## The config file
 
-`diffprompt.config.json` — committed to the repo, diff'd on PRs.
+`rubric.config.json` — committed to the repo, diff'd on PRs.
 
 ```json
 {
-  "$schema": "https://diffprompt.dev/schema/v1.json",
+  "$schema": "https://rubric.dev/schema/v1.json",
   "prompts": {
     "baseline":  "prompts/baseline.md",
     "candidate": "prompts/candidate.md"
@@ -448,11 +448,11 @@ run generation on local Ollama, judge with Groq.
 
 A lot of companies front OpenAI (or an in-house router) with an internal
 gateway that wants a custom bearer token and one or two extra headers.
-Declare a named provider in `diffprompt.config.json` and the same
+Declare a named provider in `rubric.config.json` and the same
 `<name>/<model>` routing you already use for the built-ins just works.
 
 ```jsonc
-// diffprompt.config.json
+// rubric.config.json
 {
   "prompts": { "baseline": "prompts/baseline.md", "candidate": "prompts/candidate.md" },
   "dataset": "data/cases.jsonl",
@@ -463,7 +463,7 @@ Declare a named provider in `diffprompt.config.json` and the same
       "name":     "corp-proxy",
       "baseUrl":  "https://gateway.example.internal/v1/proxy/openai/v1",
       "keyEnv":   "CORP_PROXY_TOKEN",
-      "headers":  { "x-client-app": "diffprompt" }
+      "headers":  { "x-client-app": "rubric" }
     }
   ]
 }
@@ -513,7 +513,7 @@ Rules the config validator enforces:
     {
       "name":    "corp-proxy",
       "baseUrl": "https://generative-ai-proxy.rcp.us-east-1.data.corp.exp-aws.net/v1/proxy/openai/v1",
-      "keyEnv":  "DIFFPROMPT_CORP_PROXY_KEY",
+      "keyEnv":  "RUBRIC_CORP_PROXY_KEY",
       "headers": { "x-client-app": "generative-ai-proxy" }
     }
   ],
@@ -525,13 +525,13 @@ Rules the config validator enforces:
 Smoke-test before burning a full run:
 
 ```bash
-export DIFFPROMPT_CORP_PROXY_KEY="$(op read 'op://Private/corp-proxy/token')"
-diffprompt providers test corp-proxy
-# diffprompt providers test
+export RUBRIC_CORP_PROXY_KEY="$(op read 'op://Private/corp-proxy/token')"
+rubric providers test corp-proxy
+# rubric providers test
 #   provider: corp-proxy
 #   model:    gpt-5.1
 #   baseUrl:  https://generative-ai-proxy.rcp.us-east-1.data.corp.exp-aws.net/v1/proxy/openai/v1
-#   auth:     env DIFFPROMPT_CORP_PROXY_KEY
+#   auth:     env RUBRIC_CORP_PROXY_KEY
 #   headers:  {"x-client-app":"generative-ai-proxy"}
 #   prompt:   "Reply in one short sentence: what is 2 + 2?"
 #
@@ -548,7 +548,7 @@ diagnostic output.
 
 ## Exit codes and CI gating
 
-`diffprompt run` exit codes:
+`rubric run` exit codes:
 
 | Code | Meaning                                                      |
 |------|--------------------------------------------------------------|
@@ -563,7 +563,7 @@ Omit it for "report but don't block" trial runs.
 
 ## Cost & safety caps
 
-`diffprompt run` enforces these on the CLI side so bad datasets can't
+`rubric run` enforces these on the CLI side so bad datasets can't
 spend surprise money:
 
 - `--max-prompt-chars N` — fail if `baseline.md` or `candidate.md`
@@ -576,7 +576,7 @@ spend surprise money:
 
 Hosted-sandbox-level caps (per-IP rate limits, $/day ceiling, upstream
 moderation) are not yet wired; those belong to the future
-`diffprompt.dev` surface.
+`rubric.dev` surface.
 
 ---
 
@@ -585,14 +585,14 @@ moderation) are not yet wired; those belong to the future
 ### "I want a quick sanity-check without spending tokens."
 
 ```bash
-diffprompt serve --mock                         # interactive
-diffprompt run   --mock --report report.html    # headless
+rubric serve --mock                         # interactive
+rubric run   --mock --report report.html    # headless
 ```
 
 ### "I want to compare gpt-4o-mini vs claude-3.5-sonnet at a fixed prompt."
 
 ```json
-// diffprompt.config.json
+// rubric.config.json
 {
   "prompts":  { "baseline": "prompts/shared.md", "candidate": "prompts/shared.md" },
   "dataset":  "data/cases.jsonl",
@@ -615,10 +615,10 @@ stripped.
 ### "I want to share this workspace with a teammate."
 
 ```bash
-diffprompt share --out bundle.json --note "first cut at refund-handler prompt"
+rubric share --out bundle.json --note "first cut at refund-handler prompt"
 # send bundle.json to teammate
 # teammate:
-diffprompt pull bundle.json --target ./their-copy
+rubric pull bundle.json --target ./their-copy
 ```
 
 `pull` restores config, prompts, dataset, and optionally the calibration
@@ -627,7 +627,7 @@ sidecar (`--no-calibration` to skip).
 ### "I want a git-log view of who changed the prompt when."
 
 ```bash
-diffprompt history --limit 50 --html prompt-history.html
+rubric history --limit 50 --html prompt-history.html
 ```
 
 Default tracks `prompts.baseline` and `prompts.candidate` from the
@@ -659,7 +659,7 @@ judge's API key to actually call the LLM.
 
 **Drift workflow opens a new issue every run**
 Check that `GITHUB_TOKEN` has `issues: write` and that the marker
-(`DIFFPROMPT_DRIFT_MARKER`) is stable across runs. The upsert uses the
+(`RUBRIC_DRIFT_MARKER`) is stable across runs. The upsert uses the
 GitHub Search API to find existing issues by marker; if search indexing
 lags, the first run after the issue closes may create a duplicate.
 

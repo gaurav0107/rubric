@@ -23,7 +23,7 @@ export interface CalibrateOptions {
   labelsPath?: string;
   /** Report path (relative to cwd). Default: calibration.html. */
   reportPath?: string;
-  /** When set, also write the CalibrationReport as JSON to this path for `diffprompt comment` to consume. */
+  /** When set, also write the CalibrationReport as JSON to this path for `rubric comment` to consume. */
   jsonPath?: string;
   mock?: boolean;
   concurrency?: number;
@@ -106,7 +106,7 @@ function buildGrader(
 
 export async function runCalibrate(opts: CalibrateOptions = {}): Promise<CalibrateResult> {
   const cwd = resolve(opts.cwd ?? process.cwd());
-  const configPath = opts.configPath ?? resolve(cwd, 'diffprompt.config.json');
+  const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
   const labelsPath = resolve(cwd, opts.labelsPath ?? 'prompts/_calibration.json.local');
   const reportPath = resolve(cwd, opts.reportPath ?? 'calibration.html');
   const mock = opts.mock ?? false;
@@ -122,7 +122,7 @@ export async function runCalibrate(opts: CalibrateOptions = {}): Promise<Calibra
   const rubric = resolveRubric(loaded.config.judge.rubric, loaded.baseDir);
   const grader = buildGrader(mock, loaded.config.judge.model, providers, rubric);
 
-  write(`diffprompt calibrate: ${entries.length} label(s)\n`);
+  write(`rubric calibrate: ${entries.length} label(s)\n`);
   write(`  labels:   ${labelsPath}\n`);
   write(`  judge:    ${loaded.config.judge.model} (${mock ? 'mock' : 'live'})\n`);
 

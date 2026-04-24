@@ -298,7 +298,7 @@ export function resolveProviderKey(cfg: ProviderConfig, baseDir: string): string
  * OpenAI-compatible backends work with zero custom adapter code.
  *
  * Key resolution is lazy: the token is read on first `generate()` call, not
- * at construction time. This avoids crashing `diffprompt serve` or other
+ * at construction time. This avoids crashing `rubric serve` or other
  * read-only commands just because a config declares a provider whose secret
  * isn't loaded yet.
  */

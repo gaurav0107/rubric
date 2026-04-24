@@ -16,23 +16,23 @@ jobs:
           - target: linux-x64
             runs-on: ubuntu-latest
             bun-target: bun-linux-x64
-            suffix: diffprompt-linux-x64
+            suffix: rubric-linux-x64
           - target: linux-arm64
             runs-on: ubuntu-latest
             bun-target: bun-linux-arm64
-            suffix: diffprompt-linux-arm64
+            suffix: rubric-linux-arm64
           - target: darwin-x64
             runs-on: macos-latest
             bun-target: bun-darwin-x64
-            suffix: diffprompt-darwin-x64
+            suffix: rubric-darwin-x64
           - target: darwin-arm64
             runs-on: macos-latest
             bun-target: bun-darwin-arm64
-            suffix: diffprompt-darwin-arm64
+            suffix: rubric-darwin-arm64
           - target: windows-x64
             runs-on: windows-latest
             bun-target: bun-windows-x64
-            suffix: diffprompt-windows-x64.exe
+            suffix: rubric-windows-x64.exe
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@v4

@@ -1,7 +1,7 @@
 /**
- * `diffprompt pull` — import a bundle.json written by `share` into a target dir.
+ * `rubric pull` — import a bundle.json written by `share` into a target dir.
  *
- * Scaffolds diffprompt.config.json + prompts/ + data/ from the bundle's
+ * Scaffolds rubric.config.json + prompts/ + data/ from the bundle's
  * inline contents. Refuses to overwrite existing files unless --force.
  * Optionally restores the calibration sidecar.
  */
@@ -84,7 +84,7 @@ export function runPull(opts: PullOptions): PullResult {
   const bundle = parseBundle(parsed);
 
   // Resolve target paths from the bundle's config (trust validator already checked them).
-  const configPath = join(targetDir, 'diffprompt.config.json');
+  const configPath = join(targetDir, 'rubric.config.json');
   const baselinePath = join(targetDir, bundle.config.prompts.baseline);
   const candidatePath = join(targetDir, bundle.config.prompts.candidate);
   const datasetPath = join(targetDir, bundle.config.dataset);

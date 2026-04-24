@@ -2,7 +2,7 @@
  * Upsert a GitHub issue used to surface drift-detection regressions.
  *
  * Drift detection is framed as best-effort — the scheduled workflow runs
- * `diffprompt run --fail-on-regress` against a frozen baseline dataset and,
+ * `rubric run --fail-on-regress` against a frozen baseline dataset and,
  * when it regresses, opens (or updates) a single issue per `marker`. Reusing
  * the same marker across scheduled runs keeps the tracker to one row per
  * repo per drift type, so the backlog never fills up with duplicates.
@@ -31,7 +31,7 @@ export interface UpsertDriftIssueResult {
   url: string;
 }
 
-const DEFAULT_MARKER = 'diffprompt-bot:drift-issue';
+const DEFAULT_MARKER = 'rubric-bot:drift-issue';
 const DEFAULT_API_URL = 'https://api.github.com';
 
 function markerTag(marker: string): string {

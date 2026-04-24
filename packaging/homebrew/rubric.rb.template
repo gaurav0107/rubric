@@ -1,4 +1,4 @@
-# Homebrew formula template for diffprompt.
+# Homebrew formula template for rubric.
 #
 # The `release` GitHub workflow produces five single-file binaries per tag
 # push: darwin-{x64,arm64}, linux-{x64,arm64}, windows-x64. The Homebrew
@@ -8,61 +8,61 @@
 # How to publish after a `vX.Y.Z` release:
 #
 #   1. Download the four unix binaries from the GitHub release page:
-#        diffprompt-darwin-arm64
-#        diffprompt-darwin-x64
-#        diffprompt-linux-arm64
-#        diffprompt-linux-x64
+#        rubric-darwin-arm64
+#        rubric-darwin-x64
+#        rubric-linux-arm64
+#        rubric-linux-x64
 #
 #   2. Compute sha256 for each:
-#        shasum -a 256 diffprompt-*
+#        shasum -a 256 rubric-*
 #
 #   3. Substitute version + each sha256 into the six `__...__` placeholders
-#      below and drop the result at `Formula/diffprompt.rb` in a companion
-#      tap repo (`homebrew-diffprompt`, conventionally).
+#      below and drop the result at `Formula/rubric.rb` in a companion
+#      tap repo (`homebrew-rubric`, conventionally).
 #
-#      Users then `brew tap diffprompt/diffprompt && brew install diffprompt`.
+#      Users then `brew tap rubric/rubric && brew install rubric`.
 #
 # Keeping this as a `.rb.template` in-repo rather than a live Formula means
 # the main repo is not blocked on a first release to commit the scaffold —
 # and future releases can automate the substitution via a small workflow.
 
-class Diffprompt < Formula
+class Rubric < Formula
   desc "Pairwise prompt evaluation for pull requests"
-  homepage "https://diffprompt.dev"
+  homepage "https://rubric.dev"
   version "__VERSION__"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-darwin-arm64"
+      url "https://github.com/rubric/rubric/releases/download/v#{version}/rubric-darwin-arm64"
       sha256 "__DARWIN_ARM64_SHA__"
     end
     on_intel do
-      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-darwin-x64"
+      url "https://github.com/rubric/rubric/releases/download/v#{version}/rubric-darwin-x64"
       sha256 "__DARWIN_X64_SHA__"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-linux-arm64"
+      url "https://github.com/rubric/rubric/releases/download/v#{version}/rubric-linux-arm64"
       sha256 "__LINUX_ARM64_SHA__"
     end
     on_intel do
-      url "https://github.com/diffprompt/diffprompt/releases/download/v#{version}/diffprompt-linux-x64"
+      url "https://github.com/rubric/rubric/releases/download/v#{version}/rubric-linux-x64"
       sha256 "__LINUX_X64_SHA__"
     end
   end
 
   def install
-    # bun --compile emits a platform-specific filename; rename to `diffprompt`
+    # bun --compile emits a platform-specific filename; rename to `rubric`
     # so the shim on PATH matches the CLI name users expect.
-    binary = Dir["diffprompt-*"].first
+    binary = Dir["rubric-*"].first
     chmod 0755, binary
-    bin.install binary => "diffprompt"
+    bin.install binary => "rubric"
   end
 
   test do
-    assert_match "diffprompt #{version}", shell_output("#{bin}/diffprompt --version")
+    assert_match "rubric #{version}", shell_output("#{bin}/rubric --version")
   end
 end

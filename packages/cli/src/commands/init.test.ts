@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { runInit } from './init.ts';
 
 function scratch(): string {
-  return mkdtempSync(join(tmpdir(), 'diffprompt-init-'));
+  return mkdtempSync(join(tmpdir(), 'rubric-init-'));
 }
 
 describe('runInit', () => {
@@ -16,13 +16,13 @@ describe('runInit', () => {
 
       expect(result.skipped).toEqual([]);
       expect(result.written.map((p) => p.replace(dir + '/', ''))).toEqual([
-        'diffprompt.config.json',
+        'rubric.config.json',
         'prompts/baseline.md',
         'prompts/candidate.md',
         'data/cases.jsonl',
       ]);
 
-      const config = JSON.parse(readFileSync(join(dir, 'diffprompt.config.json'), 'utf8'));
+      const config = JSON.parse(readFileSync(join(dir, 'rubric.config.json'), 'utf8'));
       expect(config.prompts.baseline).toBe('prompts/baseline.md');
       expect(config.dataset).toBe('data/cases.jsonl');
       expect(config.mode).toBe('compare-prompts');

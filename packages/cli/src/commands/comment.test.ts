@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { runComment } from './comment.ts';
 
 function scratch(): string {
-  return mkdtempSync(join(tmpdir(), 'diffprompt-comment-'));
+  return mkdtempSync(join(tmpdir(), 'rubric-comment-'));
 }
 
 const VALID_RUN = {

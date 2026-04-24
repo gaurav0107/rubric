@@ -46,7 +46,7 @@ describe('renderReportHtml', () => {
       generatedAt: new Date('2026-04-23T12:00:00Z'),
     });
     expect(html.startsWith('<!DOCTYPE html>')).toBe(true);
-    expect(html).toContain('<title>diffprompt report</title>');
+    expect(html).toContain('<title>rubric report</title>');
     expect(html).toContain('2026-04-23T12:00:00');
   });
 
