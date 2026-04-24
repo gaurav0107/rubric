@@ -1,0 +1,514 @@
+# diffprompt — user guide
+
+A task-oriented walkthrough of the CLI and the three-pane `serve` UI. If
+you want the one-pager pitch, read [`README.md`](../README.md). This
+document assumes you've already got the repo cloned and `bun` or
+`tsx`/`node` on PATH.
+
+- [Install](#install)
+- [Core concept (60 seconds)](#core-concept-60-seconds)
+- [Workflow A — iterate locally with `serve`](#workflow-a--iterate-locally-with-serve)
+- [Workflow B — gate a pull request](#workflow-b--gate-a-pull-request)
+- [Workflow C — seed a dataset from production](#workflow-c--seed-a-dataset-from-production)
+- [Workflow D — calibrate the judge](#workflow-d--calibrate-the-judge)
+- [Workflow E — scheduled drift detection](#workflow-e--scheduled-drift-detection)
+- [The config file](#the-config-file)
+- [Rubrics](#rubrics)
+- [Comparison modes](#comparison-modes)
+- [Providers](#providers)
+- [Exit codes and CI gating](#exit-codes-and-ci-gating)
+- [Cost & safety caps](#cost--safety-caps)
+- [Common recipes](#common-recipes)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Install
+
+Until diffprompt is published to npm, run it from the repo:
+
+```bash
+git clone https://github.com/diffprompt/diffprompt
+cd diffprompt
+# Option 1 — link as a global `diffprompt`
+npm link --workspace=packages/cli
+# Option 2 — run directly via tsx (no install needed)
+alias diffprompt='tsx packages/cli/src/bin.ts'
+# Option 3 — single-file binary
+cd packages/cli && bun run build:binary && ./dist/diffprompt --help
+```
+
+Verify:
+
+```bash
+diffprompt --version     # diffprompt 0.0.0
+diffprompt --help
+```
+
+---
+
+## Core concept (60 seconds)
+
+diffprompt compares two prompts (or two models) across a dataset using an
+LLM judge, then rolls the per-case verdicts into a win/loss/tie summary
+you can gate CI on. One *cell* = one (case × model × A-side × B-side)
+evaluation. A *run* is every cell evaluated end-to-end, concurrently.
+
+```
+dataset (JSONL)  →  for each case:
+                      generate A = baseline(case)
+                      generate B = candidate(case)
+                      judge(A, B, case)   → "a" | "b" | "tie"
+                    ─────────────────────────────
+                    summary: wins / losses / ties / errors / win-rate
+```
+
+Because the judge is just another LLM, diffprompt also ships a
+**calibration** step: label 10–50 pairs by hand and measure the judge's
+agreement with you before trusting it to gate merges.
+
+---
+
+## Workflow A — iterate locally with `serve`
+
+The fastest feedback loop. Zero API keys — `--mock` uses a deterministic
+stub provider + judge so you can see the UI light up end-to-end.
+
+```bash
+mkdir my-prompts && cd my-prompts
+diffprompt init                      # scaffolds config + prompts/ + data/
+diffprompt serve --mock              # → http://127.0.0.1:5174
+```
+
+What you get:
+
+- **Left pane — Prompts.** Tabs for `baseline` and `candidate`. Edit
+  inline, ⌘S to save. A dot indicator tells you if the editor is clean
+  or dirty.
+- **Middle pane — Cases.** Read-only list of the dataset, one row per
+  case.
+- **Right pane — Results.** Summary bar (wins / losses / ties / errors
+  / win-rate / total cost / wall-sum) and a grid with one row per cell.
+  Click a row to expand: verdict banner with the judge's reason, both
+  outputs side-by-side, ±label buttons for calibration.
+
+Header controls:
+
+- **vary `prompts | models`** — the comparison-mode toggle. See
+  [Comparison modes](#comparison-modes).
+- **mock mode** — switch between the deterministic mock provider and
+  your live providers. Leave it on for UI spelunking; turn it off when
+  you want to spend tokens.
+- **▶ Run** — kicks off a sweep via SSE so the grid fills cell-by-cell.
+
+Two in-UI LLM helpers (both reuse the configured judge model, so mock
+mode surfaces a parse error on purpose):
+
+- **✨ Steelman** (prompts-pane footer) — rewrites the currently open
+  prompt with tighter constraints and clearer format guidance. One
+  click applies the revision into the editor.
+- **✨ Steelman the losing prompt** (per-cell verdict banner, on decided
+  cells only) — rewrites the losing prompt *anchored on that specific
+  failing case*. Great for "why did this one fail?" drilldown without
+  re-running the sweep.
+
+Turn mock mode off and set the relevant API-key env var to run for
+real:
+
+```bash
+export OPENAI_API_KEY=sk-...
+diffprompt serve
+```
+
+---
+
+## Workflow B — gate a pull request
+
+This is the ship-critical flow. Wire `diffprompt run --fail-on-regress`
+into CI and attach the outputs to the PR:
+
+```bash
+diffprompt run \
+  --config diffprompt.config.json \
+  --fail-on-regress \
+  --json-out diffprompt-run.json \
+  --report  diffprompt-report.html \
+  --badge-out diffprompt.svg \
+  --calibration diffprompt-cal.json        # optional, colors the badge
+```
+
+- `diffprompt-run.json` — structured v1 run payload. Feed to
+  `diffprompt comment` to render the PR comment.
+- `diffprompt-report.html` — self-contained per-cell HTML report. Good
+  CI artifact.
+- `diffprompt.svg` — Shields-style badge. Commit it to the repo and
+  reference from the README.
+
+Render + post the PR comment:
+
+```bash
+diffprompt comment \
+  --from diffprompt-run.json \
+  --calibration diffprompt-cal.json \
+  --report-url https://ci.example.com/.../diffprompt-report.html \
+  --title "baseline.md vs candidate.md"      > comment.md
+```
+
+Comments are idempotent — subsequent runs update the same comment via
+a hidden HTML marker instead of stacking.
+
+Or use the composite Action (wraps all of the above):
+
+```yaml
+# .github/workflows/diffprompt.yml
+on:
+  pull_request:
+    paths: ['prompts/**', 'data/**', 'diffprompt.config.json']
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    permissions: { pull-requests: write, contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: diffprompt/diffprompt@v1
+        with:
+          calibration: prompts/_calibration.json.local
+          fail-on-regress: true
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+---
+
+## Workflow C — seed a dataset from production
+
+Don't hand-write the dataset — import it from whatever log/trace system
+you already run. All adapters normalize to the same `Case[]` shape, so
+the downstream `run` / `calibrate` flow is identical.
+
+```bash
+# Langfuse
+diffprompt seed --from-langfuse langfuse-export.jsonl
+
+# Helicone
+diffprompt seed --from-helicone helicone-export.jsonl
+
+# LangSmith
+diffprompt seed --from-langsmith langsmith-traces.jsonl
+
+# OpenAI fine-tune / chat logs
+diffprompt seed --from-openai-logs chat-logs.jsonl
+
+# Synthetic — template + variables cartesian fan-out, no LLM
+diffprompt seed --from-synthetic template.json
+```
+
+Useful flags on every source:
+
+- `--out <path>` — output JSONL (default `data/cases.jsonl`).
+- `--calibration-out <path>` — where to drop the calibration skeleton
+  (default `prompts/_calibration.json.local`). Langfuse, Helicone, and
+  LangSmith adapters surface `feedback` polarity into this file; other
+  sources leave it empty for you to hand-label.
+- `--sample N --seed M` — stratified-sample down to N cases by feedback
+  polarity, deterministic via `M` (default 1).
+
+Synthetic templates accept two shapes:
+
+```json
+// Literal cases
+{ "cases": [
+  { "input": "refund my order", "expected": "..." },
+  { "input": "reset my password" }
+] }
+```
+
+```json
+// Template + variables — cartesian fan-out via {{name}} placeholders
+{
+  "template": {
+    "input": "classify the sentiment of \"{{sentence}}\"",
+    "expected": "{{sentiment}}"
+  },
+  "variables": {
+    "sentence":  ["i love this", "i hate this", "meh"],
+    "sentiment": ["positive",     "negative",   "neutral"]
+  }
+}
+```
+
+The synthetic adapter is deterministic — no LLM call — so starter
+datasets are reproducible.
+
+PII heuristic: the seed command runs a regex sweep over imported cases
+and prints warnings to stderr for anything that looks like an email,
+phone, IP, SSN, or credit-card fragment. Review before publishing.
+
+---
+
+## Workflow D — calibrate the judge
+
+The judge's verdict is only as trustworthy as its agreement with you.
+Calibration is a one-time (per prompt change) exercise: hand-label a
+sample of pairs, run `calibrate`, and the PR comment + badge degrade
+gracefully if agreement is weak.
+
+```bash
+# 1. Seed a calibration skeleton (same file seed adapters write into).
+#    Each entry is: { input, output, polarity: "positive"|"negative", reason? }
+$EDITOR prompts/_calibration.json.local
+
+# 2. Run calibration — judge each labeled pair, measure agreement.
+diffprompt calibrate \
+  --labels    prompts/_calibration.json.local \
+  --json-out  diffprompt-cal.json \
+  --report    calibration.html
+
+# 3. Pass the result to `comment` (colors the badge).
+diffprompt comment --from run.json --calibration diffprompt-cal.json
+```
+
+Badge + comment states, tuned via `--min-agreement` (default `0.8`):
+
+| State         | Condition                          | Badge  |
+|---------------|------------------------------------|--------|
+| unverified    | no `--calibration` provided        | grey   |
+| calibrated    | agreement ≥ `--min-agreement`      | green  |
+| weak          | agreement < `--min-agreement`      | yellow |
+
+In-UI labeling: `diffprompt serve` shows `+ good` / `− bad` buttons on
+each cell's output side so you can accumulate calibration entries
+without leaving the browser.
+
+---
+
+## Workflow E — scheduled drift detection
+
+Production models move under your feet. Drift detection is the cheap
+early-warning system: cron the existing eval against a frozen baseline
++ dataset, open a GitHub issue when the candidate starts regressing.
+
+Drop [`examples/drift-detector.yml`](../examples/drift-detector.yml) into
+`.github/workflows/` and flip the cron to suit your release cadence.
+The workflow:
+
+1. Runs `diffprompt run --fail-on-regress`.
+2. If exit code = 2, renders the standard calibration-aware comment
+   body.
+3. Upserts a single GitHub issue per `DIFFPROMPT_DRIFT_MARKER`. Same
+   marker across runs = same issue. Closed issues get reopened on a
+   fresh regression. No duplicate backlog noise.
+
+Framed as best-effort, not an SLA.
+
+---
+
+## The config file
+
+`diffprompt.config.json` — committed to the repo, diff'd on PRs.
+
+```json
+{
+  "$schema": "https://diffprompt.dev/schema/v1.json",
+  "prompts": {
+    "baseline":  "prompts/baseline.md",
+    "candidate": "prompts/candidate.md"
+  },
+  "dataset":  "data/cases.jsonl",
+  "models":   ["openai/gpt-4o-mini"],
+  "judge":    { "model": "openai/gpt-4o", "rubric": "default" },
+  "concurrency": 4,
+  "mode":     "compare-prompts"
+}
+```
+
+Field notes:
+
+- `prompts.baseline` / `prompts.candidate` — filesystem paths relative
+  to the config file's directory.
+- `models` — array. Each model id is `provider/model`. In
+  compare-prompts every model gets its own cell; in compare-models
+  the first two entries are the A/B pair.
+- `judge.model` — usually a stronger model than what you're grading.
+- `judge.rubric` — see next section.
+- `concurrency` — parallel cells. 4 is a sane default; raise it if your
+  provider's rate limits allow.
+- `mode` — `"compare-prompts"` (default) or `"compare-models"`.
+
+---
+
+## Rubrics
+
+`judge.rubric` accepts:
+
+| Value                           | What it does                                                                                                                |
+|---------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `"default"`                     | Pairwise LLM judge with a general "more correct, concise, on-task" rubric.                                                  |
+| `"model-comparison"`            | Pairwise LLM judge biased toward correctness + specificity. Pair with `mode: "compare-models"`.                             |
+| `"structural-json"`             | **Deterministic, no LLM call.** Parses A and B as JSON and picks the side that deep-equals `case.expected`.                 |
+| `{ "custom": "prose rubric…" }` | Inline custom rubric text fed to the LLM judge.                                                                             |
+| `{ "file": "rubric.md" }`       | Team preset — load the rubric text from a file, path relative to config's directory.                                        |
+
+The `structural-json` rubric is perfect for tool-call / structured-output
+evals: it's free, reproducible, and fails loud when the parser can't
+extract JSON from one side.
+
+---
+
+## Comparison modes
+
+### `compare-prompts` (default)
+
+For every case × every model, run `baseline.md` on the A side and
+`candidate.md` on the B side. Picks the better *prompt*. Use this when
+you're iterating on prompt text.
+
+### `compare-models`
+
+One cell per case: run `baseline.md` on `models[0]` (A side) vs
+`models[1]` (B side). Picks the better *model* at a fixed prompt. Use
+this when you're debating a model swap.
+
+The `serve` UI has a segmented control in the header so you can switch
+without editing the config file.
+
+---
+
+## Providers
+
+Model ids are `provider/model` strings. Live mode auto-detects the
+provider from the prefix:
+
+| Prefix         | Provider         | Env var               | Notes                                                               |
+|----------------|------------------|-----------------------|---------------------------------------------------------------------|
+| `openai/`      | OpenAI           | `OPENAI_API_KEY`      | e.g. `openai/gpt-4o-mini`                                           |
+| `groq/`        | Groq             | `GROQ_API_KEY`        | OpenAI-compatible at `api.groq.com/openai/v1`                       |
+| `openrouter/`  | OpenRouter       | `OPENROUTER_API_KEY`  | Nested ids OK, e.g. `openrouter/anthropic/claude-3.5-sonnet`         |
+| `ollama/`      | Ollama (local)   | *none*                | Expects `localhost:11434`; no API key needed                         |
+
+Judge and generation models follow the same rules and can mix — e.g.
+run generation on local Ollama, judge with Groq.
+
+---
+
+## Exit codes and CI gating
+
+`diffprompt run` exit codes:
+
+| Code | Meaning                                                      |
+|------|--------------------------------------------------------------|
+| 0    | Pass.                                                        |
+| 1    | Judge errored on at least one cell (fail-loud).              |
+| 2    | Candidate regressed — only emitted with `--fail-on-regress`. |
+
+Use `--fail-on-regress` in CI to turn a judged loss into a red build.
+Omit it for "report but don't block" trial runs.
+
+---
+
+## Cost & safety caps
+
+`diffprompt run` enforces these on the CLI side so bad datasets can't
+spend surprise money:
+
+- `--max-prompt-chars N` — fail if `baseline.md` or `candidate.md`
+  exceed N characters.
+- `--max-cases N` — fail if the dataset has more than N rows.
+- `--scan-pii` — warn (non-fatal) on case input/expected that looks
+  like PII. Good smoke check before posting the dataset publicly.
+- `--cost-csv <path>` — write per-cell `costUsd` + `latencyMs` as CSV
+  for spreadsheet analysis.
+
+Hosted-sandbox-level caps (per-IP rate limits, $/day ceiling, upstream
+moderation) are not yet wired; those belong to the future
+`diffprompt.dev` surface.
+
+---
+
+## Common recipes
+
+### "I want a quick sanity-check without spending tokens."
+
+```bash
+diffprompt serve --mock                         # interactive
+diffprompt run   --mock --report report.html    # headless
+```
+
+### "I want to compare gpt-4o-mini vs claude-3.5-sonnet at a fixed prompt."
+
+```json
+// diffprompt.config.json
+{
+  "prompts":  { "baseline": "prompts/shared.md", "candidate": "prompts/shared.md" },
+  "dataset":  "data/cases.jsonl",
+  "models":   ["openai/gpt-4o-mini", "openrouter/anthropic/claude-3.5-sonnet"],
+  "judge":    { "model": "openai/gpt-4o", "rubric": "model-comparison" },
+  "mode":     "compare-models"
+}
+```
+
+### "My eval produces JSON — grade it without an LLM."
+
+```json
+"judge": { "model": "openai/gpt-4o", "rubric": "structural-json" }
+```
+
+Each case needs `expected` set to the canonical JSON string. Deep-equal
+with key-order tolerance; `` ```json `` code fences on either side are
+stripped.
+
+### "I want to share this workspace with a teammate."
+
+```bash
+diffprompt share --out bundle.json --note "first cut at refund-handler prompt"
+# send bundle.json to teammate
+# teammate:
+diffprompt pull bundle.json --target ./their-copy
+```
+
+`pull` restores config, prompts, dataset, and optionally the calibration
+sidecar (`--no-calibration` to skip).
+
+### "I want a git-log view of who changed the prompt when."
+
+```bash
+diffprompt history --limit 50 --html prompt-history.html
+```
+
+Default tracks `prompts.baseline` and `prompts.candidate` from the
+config; pass `--file <path>` one or more times to add extras.
+
+---
+
+## Troubleshooting
+
+**`no provider accepts judge.model "..."`**
+The prefix on `judge.model` doesn't match any configured provider.
+Check spelling and that the matching env var is set.
+
+**`structural-json` judge always picks tie**
+One or both sides failed to parse as JSON, or `case.expected` is
+missing. The grader ties when it can't tell.
+
+**`calibrate` reports weak agreement (yellow badge)**
+Either your prompts are too close for the judge to pick cleanly, or
+the judge model isn't strong enough. Try a stronger `judge.model`, or
+rewrite `judge.rubric` to spell out what "better" means for your
+domain. You can also hand-label more entries and re-run — calibration
+agreement is noisy with < 20 labels.
+
+**Serve UI says "steelman failed: ..." in mock mode**
+Expected. The default mock provider echoes the prompt, which doesn't
+parse as a steelman JSON response — flip mock mode off and set the
+judge's API key to actually call the LLM.
+
+**Drift workflow opens a new issue every run**
+Check that `GITHUB_TOKEN` has `issues: write` and that the marker
+(`DIFFPROMPT_DRIFT_MARKER`) is stable across runs. The upsert uses the
+GitHub Search API to find existing issues by marker; if search indexing
+lags, the first run after the issue closes may create a duplicate.
+
+**Typecheck emits a pile of `TS5097` errors**
+Pre-existing noise: the codebase uses `.ts` extension imports (bun-
+native) which tsc's default resolver rejects. Filter them out:
+`bun run typecheck 2>&1 | grep -v TS5097`.
