@@ -48,13 +48,13 @@ describe('createOpenAIJudge', () => {
     const judge = createOpenAIJudge({
       provider: stubProvider('{"winner":"b","reason":"ok"}'),
       model: 'openai/gpt-4o' as ModelId,
-      rubric: 'default',
+      criteria: 'default',
     });
     const result = await judge.judge({
       caseInput: 'q',
       outputA: 'a',
       outputB: 'b',
-      rubric: 'default',
+      criteria: 'default',
     });
     expect(result).toEqual({ winner: 'b', reason: 'ok' });
   });
@@ -63,10 +63,10 @@ describe('createOpenAIJudge', () => {
     const judge = createOpenAIJudge({
       provider: stubProvider('lol what'),
       model: 'openai/gpt-4o' as ModelId,
-      rubric: 'default',
+      criteria: 'default',
     });
     await expect(
-      judge.judge({ caseInput: 'q', outputA: 'a', outputB: 'b', rubric: 'default' }),
+      judge.judge({ caseInput: 'q', outputA: 'a', outputB: 'b', criteria: 'default' }),
     ).rejects.toBeInstanceOf(JudgeParseError);
   });
 });

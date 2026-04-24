@@ -26,7 +26,7 @@ function scaffold(dir: string): void {
       prompts: { baseline: 'prompts/a.md', candidate: 'prompts/b.md' },
       dataset: 'data/cases.jsonl',
       models: ['openai/gpt-4o-mini'],
-      judge: { model: 'openai/gpt-4o', rubric: 'default' },
+      judge: { model: 'openai/gpt-4o', criteria: 'default' },
     }),
   );
   writeFileSync(join(dir, 'prompts/a.md'), 'baseline v1\n');

@@ -1,6 +1,6 @@
 export type ModelId = `${string}/${string}`;
 
-export type Rubric =
+export type Criteria =
   | 'default'
   | 'model-comparison'
   /** Deterministic structural judge — parses outputs as JSON and compares to `expected`; no LLM call. */
@@ -43,7 +43,7 @@ export interface Config {
   prompts: { baseline: string; candidate: string };
   dataset: string;
   models: ModelId[];
-  judge: { model: ModelId; rubric: Rubric };
+  judge: { model: ModelId; criteria: Criteria };
   concurrency?: number;
   mode?: 'compare-prompts' | 'compare-models';
   /** User-declared providers; added on top of the four built-ins (openai/groq/openrouter/ollama). */

@@ -38,9 +38,9 @@ ${body}
 function renderHeader(title: string, config: Config, summary: RunSummary, when: Date): string {
   const decisive = summary.wins + summary.losses;
   const winRatePct = decisive === 0 ? '—' : `${(summary.winRate * 100).toFixed(1)}%`;
-  const rubric = typeof config.judge.rubric === 'string'
-    ? config.judge.rubric
-    : 'file' in config.judge.rubric ? `file:${config.judge.rubric.file}` : 'custom';
+  const criteria = typeof config.judge.criteria === 'string'
+    ? config.judge.criteria
+    : 'file' in config.judge.criteria ? `file:${config.judge.criteria.file}` : 'custom';
 
   const extraStats: string[] = [];
   if (summary.totalCostUsd !== undefined) {
@@ -53,7 +53,7 @@ function renderHeader(title: string, config: Config, summary: RunSummary, when: 
 <header>
   <h1>${escape(title)}</h1>
   <p class="meta">
-    ${escape(when.toISOString())} · ${escape(config.mode ?? 'compare-prompts')} · judge: ${escape(config.judge.model)} (${escape(rubric)})
+    ${escape(when.toISOString())} · ${escape(config.mode ?? 'compare-prompts')} · judge: ${escape(config.judge.model)} (${escape(criteria)})
   </p>
   <div class="summary">
     <div class="stat stat-win"><span class="n">${summary.wins}</span><span class="l">wins</span></div>

@@ -75,7 +75,7 @@ async function runCell(
   prompts: { baseline: string; candidate: string },
   providers: Provider[],
   judge: Judge,
-  rubric: string,
+  criteria: string,
   mode: 'compare-prompts' | 'compare-models',
   signal: AbortSignal | undefined,
 ): Promise<CellResult> {
@@ -112,7 +112,7 @@ async function runCell(
         ...(c.expected !== undefined ? { expected: c.expected } : {}),
         outputA: outA.text,
         outputB: outB.text,
-        rubric,
+        criteria,
       });
     } catch (err) {
       verdict = { error: err instanceof Error ? err.message : String(err) };
@@ -214,17 +214,17 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
   }
   const concurrency = opts.concurrency ?? config.concurrency ?? 4;
   const mode = config.mode ?? 'compare-prompts';
-  const rubricString =
-    typeof config.judge.rubric === 'string'
-      ? config.judge.rubric
-      : 'custom' in config.judge.rubric
-        ? config.judge.rubric.custom
-        : (() => { throw new Error('engine received a { file } rubric — caller must resolve with resolveRubric() first'); })();
+  const criteriaString =
+    typeof config.judge.criteria === 'string'
+      ? config.judge.criteria
+      : 'custom' in config.judge.criteria
+        ? config.judge.criteria.custom
+        : (() => { throw new Error('engine received a { file } criteria — caller must resolve with resolveCriteria() first'); })();
 
   const plan = planCells(cases, config.models, mode);
   let done = 0;
   const cells = await mapWithConcurrency(plan, concurrency, async (cell) => {
-    const result = await runCell(cell, cases, prompts, providers, judge, rubricString, mode, signal);
+    const result = await runCell(cell, cases, prompts, providers, judge, criteriaString, mode, signal);
     done++;
     opts.onCell?.(result, { done, total: plan.length });
     return result;

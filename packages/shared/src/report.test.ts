@@ -6,7 +6,7 @@ const config: Config = {
   prompts: { baseline: 'a.md', candidate: 'b.md' },
   dataset: 'd.jsonl',
   models: ['mock/m1' as ModelId],
-  judge: { model: 'mock/judge' as ModelId, rubric: 'default' },
+  judge: { model: 'mock/judge' as ModelId, criteria: 'default' },
   mode: 'compare-prompts',
 };
 

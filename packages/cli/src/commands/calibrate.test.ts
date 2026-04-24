@@ -16,7 +16,7 @@ function writeConfig(dir: string): string {
       prompts: { baseline: 'prompts/baseline.md', candidate: 'prompts/candidate.md' },
       dataset: 'data/cases.jsonl',
       models: ['mock/m1'],
-      judge: { model: 'mock/judge', rubric: 'default' },
+      judge: { model: 'mock/judge', criteria: 'default' },
     }),
   );
   return path;

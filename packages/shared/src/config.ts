@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import type { Config, ModelId, ProviderConfig, Rubric } from './types.ts';
+import type { Config, Criteria, ModelId, ProviderConfig } from './types.ts';
 
 const PROVIDER_NAME_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const RESERVED_PROVIDER_NAMES = new Set(['openai', 'groq', 'openrouter', 'ollama']);
@@ -111,7 +111,7 @@ function validateProviders(v: unknown, path?: string): ProviderConfig[] {
   return out;
 }
 
-function validateRubric(v: unknown, path?: string): Rubric {
+function validateCriteria(v: unknown, path?: string): Criteria {
   if (v === 'default' || v === 'model-comparison' || v === 'structural-json') return v;
   if (isRecord(v) && typeof v.custom === 'string' && v.custom.length > 0) {
     return { custom: v.custom };
@@ -120,7 +120,7 @@ function validateRubric(v: unknown, path?: string): Rubric {
     return { file: v.file };
   }
   throw new ConfigError(
-    'judge.rubric must be "default", "model-comparison", "structural-json", { custom: string }, or { file: string }',
+    'judge.criteria must be "default", "model-comparison", "structural-json", { custom: string }, or { file: string }',
     path,
   );
 }
@@ -145,13 +145,13 @@ export function validateConfig(raw: unknown, path?: string): Config {
   const judge = raw.judge;
   if (!isRecord(judge)) throw new ConfigError('judge must be an object', path);
   const judgeModel = validateModelId(judge.model, 'judge.model', path);
-  const rubric = validateRubric(judge.rubric, path);
+  const criteria = validateCriteria(judge.criteria, path);
 
   const out: Config = {
     prompts: { baseline: prompts.baseline, candidate: prompts.candidate },
     dataset: raw.dataset,
     models,
-    judge: { model: judgeModel, rubric },
+    judge: { model: judgeModel, criteria },
   };
 
   if (raw.concurrency !== undefined) {
@@ -176,21 +176,21 @@ export function validateConfig(raw: unknown, path?: string): Config {
 }
 
 /**
- * Flatten a Rubric into the plain-text form the judge/grader consumes.
+ * Flatten Criteria into the plain-text rubric the judge/grader consumes.
  *
- * - string rubrics ("default" | "model-comparison") pass through verbatim;
+ * - string values ("default" | "model-comparison") pass through verbatim;
  *   the judge implementation resolves them against its built-in rubric map.
  * - { custom } inlines the rubric text.
  * - { file } loads the rubric text from `path` (resolved against baseDir).
  *
- * Callers that previously did `typeof rubric === 'string' ? rubric :
- * rubric.custom` should switch to this helper so shared-rubric-file configs
+ * Callers that previously did `typeof criteria === 'string' ? criteria :
+ * criteria.custom` should switch to this helper so shared-rubric-file configs
  * work transparently.
  */
-export function resolveRubric(rubric: Rubric, baseDir: string): string {
-  if (typeof rubric === 'string') return rubric;
-  if ('custom' in rubric) return rubric.custom;
-  const filePath = isAbsolute(rubric.file) ? rubric.file : resolve(baseDir, rubric.file);
+export function resolveCriteria(criteria: Criteria, baseDir: string): string {
+  if (typeof criteria === 'string') return criteria;
+  if ('custom' in criteria) return criteria.custom;
+  const filePath = isAbsolute(criteria.file) ? criteria.file : resolve(baseDir, criteria.file);
   try {
     return readFileSync(filePath, 'utf8');
   } catch (err) {

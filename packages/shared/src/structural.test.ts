@@ -8,7 +8,7 @@ describe('structuralVerdict', () => {
       expected: '{"tool":"search","query":"cats"}',
       outputA: '{"tool":"search","query":"cats"}',
       outputB: '{"tool":"search","query":"dogs"}',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('a');
   });
@@ -19,7 +19,7 @@ describe('structuralVerdict', () => {
       expected: '[1,2,3]',
       outputA: '[3,2,1]',
       outputB: '[1,2,3]',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('b');
   });
@@ -30,7 +30,7 @@ describe('structuralVerdict', () => {
       expected: '{"a":1}',
       outputA: '{"a":1}',
       outputB: ' {"a": 1}\n',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('tie');
     expect(v.reason).toMatch(/both/i);
@@ -42,7 +42,7 @@ describe('structuralVerdict', () => {
       expected: '{"ok":true}',
       outputA: '```json\n{"ok":true}\n```',
       outputB: 'nope not json',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('a');
   });
@@ -53,7 +53,7 @@ describe('structuralVerdict', () => {
       expected: '{"a":1,"b":2}',
       outputA: '{"b":2,"a":1}',
       outputB: '{"a":1}',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('a');
   });
@@ -63,7 +63,7 @@ describe('structuralVerdict', () => {
       caseInput: 'x',
       outputA: '{"valid":true}',
       outputB: 'hey I am prose',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('a');
   });
@@ -73,7 +73,7 @@ describe('structuralVerdict', () => {
       caseInput: 'x',
       outputA: 'nope',
       outputB: 'also nope',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('tie');
   });
@@ -84,7 +84,7 @@ describe('structuralVerdict', () => {
       expected: '{"gold":1}',
       outputA: '{"gold":2}',
       outputB: '{"silver":1}',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('tie');
   });
@@ -103,7 +103,7 @@ describe('createStructuralJudge', () => {
       expected: '{"a":1}',
       outputA: '{"a":1}',
       outputB: '{"a":2}',
-      rubric: 'structural-json',
+      criteria: 'structural-json',
     });
     expect(v.winner).toBe('a');
   });

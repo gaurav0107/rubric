@@ -6,7 +6,7 @@ export type GraderPolarity = 'positive' | 'negative';
 export interface GraderRequest {
   input: string;
   output: string;
-  rubric: string;
+  criteria: string;
 }
 
 export interface GraderResult {
@@ -30,8 +30,8 @@ const DEFAULT_GRADER_RUBRIC = `Grade a single model output against its input. \
 Answer "positive" if the output correctly and helpfully addresses the input, \
 "negative" otherwise. Be decisive — small style preferences are still positive.`;
 
-function graderSystem(rubric: string): string {
-  const body = rubric === 'default' ? DEFAULT_GRADER_RUBRIC : rubric;
+function graderSystem(criteria: string): string {
+  const body = criteria === 'default' ? DEFAULT_GRADER_RUBRIC : criteria;
   return [
     'You are a rigorous single-output grader.',
     body,
@@ -81,7 +81,7 @@ export function parseGraderResponse(raw: string): GraderResult {
 export interface OpenAIGraderOptions {
   provider: Provider;
   model: ModelId;
-  rubric: string;
+  criteria: string;
   temperature?: number;
 }
 
@@ -91,7 +91,7 @@ export function createOpenAIGrader(opts: OpenAIGraderOptions): Grader {
     async grade(req: GraderRequest): Promise<GraderResult> {
       const res = await opts.provider.generate({
         modelId: opts.model,
-        system: graderSystem(opts.rubric),
+        system: graderSystem(opts.criteria),
         prompt: graderUser(req),
         temperature: opts.temperature ?? 0,
       });

@@ -48,7 +48,7 @@ function cfg(models: ModelId[]): Config {
     prompts: { baseline: 'b', candidate: 'c' },
     dataset: 'd',
     models,
-    judge: { model: 'openai/gpt-4o' as ModelId, rubric: 'default' },
+    judge: { model: 'openai/gpt-4o' as ModelId, criteria: 'default' },
   };
 }
 

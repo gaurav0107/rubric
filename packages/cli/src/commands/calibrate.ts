@@ -6,7 +6,7 @@ import {
   createOpenAIGrader,
   loadConfig,
   renderCalibrationHtml,
-  resolveRubric,
+  resolveCriteria,
   runCalibration,
   type CalibrationEntry,
   type CalibrationReport,
@@ -80,7 +80,7 @@ function buildGrader(
   mock: boolean,
   judgeModel: string,
   providers: Provider[],
-  rubric: string,
+  criteria: string,
 ): Grader {
   if (mock) {
     return {
@@ -89,7 +89,7 @@ function buildGrader(
         // Echoes the human label by treating output ending in "!" as positive
         // for a toy-but-deterministic signal in tests/demos.
         const polarity: GraderPolarity = req.output.endsWith('!') ? 'positive' : 'negative';
-        return { polarity, reason: `mock grader (rubric: ${rubric})` };
+        return { polarity, reason: `mock grader (criteria: ${criteria})` };
       },
     };
   }
@@ -100,7 +100,7 @@ function buildGrader(
   return createOpenAIGrader({
     provider,
     model: judgeModel as never,
-    rubric,
+    criteria,
   });
 }
 
@@ -119,14 +119,14 @@ export async function runCalibrate(opts: CalibrateOptions = {}): Promise<Calibra
   const providers: Provider[] = mock
     ? [createMockProvider({ acceptAll: true })]
     : createConfiguredProviders(loaded.config.providers, loaded.baseDir);
-  const rubric = resolveRubric(loaded.config.judge.rubric, loaded.baseDir);
-  const grader = buildGrader(mock, loaded.config.judge.model, providers, rubric);
+  const criteria = resolveCriteria(loaded.config.judge.criteria, loaded.baseDir);
+  const grader = buildGrader(mock, loaded.config.judge.model, providers, criteria);
 
   write(`rubric calibrate: ${entries.length} label(s)\n`);
   write(`  labels:   ${labelsPath}\n`);
   write(`  judge:    ${loaded.config.judge.model} (${mock ? 'mock' : 'live'})\n`);
 
-  const report = await runCalibration(entries, grader, rubric, concurrency);
+  const report = await runCalibration(entries, grader, criteria, concurrency);
 
   const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
   write(`\nAgreement: ${pct(report.agreement)} (${report.agreements}/${report.agreements + report.disagreements})\n`);

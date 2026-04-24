@@ -51,9 +51,9 @@ describe('createOpenAIGrader', () => {
     const grader = createOpenAIGrader({
       provider: stubProvider('{"polarity":"positive","reason":"matches"}'),
       model: 'openai/gpt-4o' as ModelId,
-      rubric: 'default',
+      criteria: 'default',
     });
-    const result = await grader.grade({ input: 'q', output: 'a', rubric: 'default' });
+    const result = await grader.grade({ input: 'q', output: 'a', criteria: 'default' });
     expect(result).toEqual({ polarity: 'positive', reason: 'matches' });
   });
 
@@ -61,10 +61,10 @@ describe('createOpenAIGrader', () => {
     const grader = createOpenAIGrader({
       provider: stubProvider('lol what'),
       model: 'openai/gpt-4o' as ModelId,
-      rubric: 'default',
+      criteria: 'default',
     });
     await expect(
-      grader.grade({ input: 'q', output: 'a', rubric: 'default' }),
+      grader.grade({ input: 'q', output: 'a', criteria: 'default' }),
     ).rejects.toBeInstanceOf(GraderParseError);
   });
 });

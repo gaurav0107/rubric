@@ -8,7 +8,7 @@ import {
   createStructuralJudge,
   loadConfig,
   parseCasesJsonl,
-  resolveRubric,
+  resolveCriteria,
   renderBadgeSvg,
   renderCostCsv,
   renderReportHtml,
@@ -17,11 +17,11 @@ import {
   type CalibrationReport,
   type CellResult,
   type Config,
+  type Criteria,
   type Judge,
   type ModelId,
   type Provider,
   type ProviderConfig,
-  type Rubric,
   type RunLimits,
   type RunSummary,
   type Verdict,
@@ -78,12 +78,12 @@ function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefin
   return createConfiguredProviders(userProviders, baseDir);
 }
 
-function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string, originalRubric: Rubric): Judge {
+function buildJudge(mock: boolean, config: Config, providers: Provider[], criteria: string, originalCriteria: Criteria): Judge {
   if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
 
-  // Structural rubric skips the LLM and judges outputs deterministically
+  // Structural criteria skip the LLM and judge outputs deterministically
   // against `expected` — useful for tool-call / structured-output evals.
-  if (originalRubric === 'structural-json') return createStructuralJudge();
+  if (originalCriteria === 'structural-json') return createStructuralJudge();
 
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
@@ -96,7 +96,7 @@ function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric
   return createOpenAIJudge({
     provider: judgeProvider,
     model: config.judge.model,
-    rubric,
+    criteria,
   });
 }
 
@@ -218,15 +218,15 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   write(`  config:   ${loaded.path}\n`);
   write(`  mode:     ${mock ? 'mock' : 'live'}\n`);
 
-  // Flatten { file: path } rubrics to text before the engine sees them; the
+  // Flatten { file: path } criteria to text before the engine sees them; the
   // engine is cwd-free and can't resolve file paths itself.
-  const rubricText = resolveRubric(loaded.config.judge.rubric, loaded.baseDir);
+  const criteriaText = resolveCriteria(loaded.config.judge.criteria, loaded.baseDir);
   const resolvedConfig: Config = {
     ...loaded.config,
-    judge: { ...loaded.config.judge, rubric: { custom: rubricText } },
+    judge: { ...loaded.config.judge, criteria: { custom: criteriaText } },
   };
   const providers = buildProviders(mock, loaded.config.providers, loaded.baseDir);
-  const judge = buildJudge(mock, resolvedConfig, providers, rubricText, loaded.config.judge.rubric);
+  const judge = buildJudge(mock, resolvedConfig, providers, criteriaText, loaded.config.judge.criteria);
 
   const onCell = (_cell: unknown, p: { done: number; total: number }) => {
     write(`  [${p.done}/${p.total}]\n`);

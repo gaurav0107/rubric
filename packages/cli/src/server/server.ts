@@ -18,16 +18,16 @@ import {
   createStructuralJudge,
   loadConfig,
   parseCasesJsonl,
-  resolveRubric,
+  resolveCriteria,
   runEval,
   runSteelman,
   type Case,
   type CellResult,
   type Config,
+  type Criteria,
   type Judge,
   type Provider,
   type ProviderConfig,
-  type Rubric,
   type SteelmanFailingCase,
   type SteelmanResult,
 } from '../../../shared/src/index.ts';
@@ -67,14 +67,14 @@ function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefin
   return createConfiguredProviders(userProviders, baseDir);
 }
 
-function buildJudge(mock: boolean, config: Config, providers: Provider[], rubric: string, originalRubric: Rubric): Judge {
+function buildJudge(mock: boolean, config: Config, providers: Provider[], criteria: string, originalCriteria: Criteria): Judge {
   if (mock) return createMockJudge({ verdict: 'tie', reason: 'mock judge' });
-  if (originalRubric === 'structural-json') return createStructuralJudge();
+  if (originalCriteria === 'structural-json') return createStructuralJudge();
   const judgeProvider = providers.find((p) => p.supports(config.judge.model));
   if (!judgeProvider) {
     throw new Error(`no provider accepts judge.model "${config.judge.model}"`);
   }
-  return createOpenAIJudge({ provider: judgeProvider, model: config.judge.model, rubric });
+  return createOpenAIJudge({ provider: judgeProvider, model: config.judge.model, criteria });
 }
 
 async function readBody(req: IncomingMessage, maxBytes = 1_000_000): Promise<string> {
@@ -215,11 +215,11 @@ export function makeHandlers(opts: ServerOptions): Handlers {
     async runSweep({ mock, mode }) {
       const ws = loadWorkspace(cwd, configPath);
       const providers = buildProviders(mock, ws.config.providers, ws.baseDir);
-      const rubricText = resolveRubric(ws.config.judge.rubric, ws.baseDir);
-      const judge = buildJudge(mock, ws.config, providers, rubricText, ws.config.judge.rubric);
+      const criteriaText = resolveCriteria(ws.config.judge.criteria, ws.baseDir);
+      const judge = buildJudge(mock, ws.config, providers, criteriaText, ws.config.judge.criteria);
       const base: Config = {
         ...ws.config,
-        judge: { ...ws.config.judge, rubric: { custom: rubricText } },
+        judge: { ...ws.config.judge, criteria: { custom: criteriaText } },
       };
       const configForRun: Config = mode ? { ...base, mode } : base;
 

@@ -92,7 +92,7 @@ export default defineConfig({
   prompts: { baseline: './prompts/v1.md', candidate: './prompts/v2.md' },
   dataset: './cases.jsonl',
   models: ['openai/gpt-5.4', 'anthropic/claude-4.7', 'google/gemini-2.5'],
-  judge: { model: 'anthropic/claude-4.7-haiku', rubric: 'default' },
+  judge: { model: 'anthropic/claude-4.7-haiku', criteria: 'default' },
   concurrency: 4,
 });
 ```

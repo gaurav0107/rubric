@@ -370,7 +370,7 @@ Framed as best-effort, not an SLA.
   },
   "dataset":  "data/cases.jsonl",
   "models":   ["openai/gpt-4o-mini"],
-  "judge":    { "model": "openai/gpt-4o", "rubric": "default" },
+  "judge":    { "model": "openai/gpt-4o", "criteria": "default" },
   "concurrency": 4,
   "mode":     "compare-prompts"
 }
@@ -457,7 +457,7 @@ Declare a named provider in `rubric.config.json` and the same
   "prompts": { "baseline": "prompts/baseline.md", "candidate": "prompts/candidate.md" },
   "dataset": "data/cases.jsonl",
   "models":  ["corp-proxy/gpt-5.1"],
-  "judge":   { "model": "corp-proxy/gpt-5.1", "rubric": "default" },
+  "judge":   { "model": "corp-proxy/gpt-5.1", "criteria": "default" },
   "providers": [
     {
       "name":     "corp-proxy",
@@ -518,7 +518,7 @@ Rules the config validator enforces:
     }
   ],
   "models": ["corp-proxy/gpt-5.1"],
-  "judge":  { "model": "corp-proxy/gpt-5.1", "rubric": "default" }
+  "judge":  { "model": "corp-proxy/gpt-5.1", "criteria": "default" }
 }
 ```
 
@@ -597,7 +597,7 @@ rubric run   --mock --report report.html    # headless
   "prompts":  { "baseline": "prompts/shared.md", "candidate": "prompts/shared.md" },
   "dataset":  "data/cases.jsonl",
   "models":   ["openai/gpt-4o-mini", "openrouter/anthropic/claude-3.5-sonnet"],
-  "judge":    { "model": "openai/gpt-4o", "rubric": "model-comparison" },
+  "judge":    { "model": "openai/gpt-4o", "criteria": "model-comparison" },
   "mode":     "compare-models"
 }
 ```
@@ -605,7 +605,7 @@ rubric run   --mock --report report.html    # headless
 ### "My eval produces JSON — grade it without an LLM."
 
 ```json
-"judge": { "model": "openai/gpt-4o", "rubric": "structural-json" }
+"judge": { "model": "openai/gpt-4o", "criteria": "structural-json" }
 ```
 
 Each case needs `expected` set to the canonical JSON string. Deep-equal

@@ -58,7 +58,7 @@ export interface JudgeRequest {
   expected?: string;
   outputA: string;
   outputB: string;
-  rubric: string;
+  criteria: string;
 }
 
 export interface Judge {

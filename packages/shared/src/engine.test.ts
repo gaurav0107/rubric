@@ -10,7 +10,7 @@ function makeConfig(models: ModelId[], concurrency = 2): Config {
     prompts: { baseline: 'ignored', candidate: 'ignored' },
     dataset: 'ignored',
     models,
-    judge: { model: 'mock/judge' as ModelId, rubric: 'default' },
+    judge: { model: 'mock/judge' as ModelId, criteria: 'default' },
     concurrency,
   };
 }

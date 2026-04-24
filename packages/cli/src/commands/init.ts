@@ -21,7 +21,7 @@ const DEFAULT_CONFIG = {
   models: ['openai/gpt-4o-mini'],
   judge: {
     model: 'openai/gpt-4o',
-    rubric: 'default',
+    criteria: 'default',
   },
   concurrency: 4,
   mode: 'compare-prompts',

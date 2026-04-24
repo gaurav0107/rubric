@@ -34,7 +34,7 @@ export interface CalibrationReport {
 export async function runCalibration(
   entries: CalibrationEntry[],
   grader: Grader,
-  rubric: string,
+  criteria: string,
   concurrency = 4,
 ): Promise<CalibrationReport> {
   const results = new Array<CalibrationEntryResult>(entries.length);
@@ -46,7 +46,7 @@ export async function runCalibration(
       if (i >= entries.length) return;
       const entry = entries[i] as CalibrationEntry;
       try {
-        const g = await grader.grade({ input: entry.input, output: entry.output, rubric });
+        const g = await grader.grade({ input: entry.input, output: entry.output, criteria });
         const res: CalibrationEntryResult = {
           entry,
           judgePolarity: g.polarity,

@@ -19,10 +19,10 @@ by different models for the same prompt. Pick the output that would be more usef
 to a technical user: correct, specific, free of padding. If neither dominates, \
 return "tie".`;
 
-function systemPrompt(rubric: string): string {
-  const body = rubric === 'default' ? DEFAULT_RUBRIC
-    : rubric === 'model-comparison' ? MODEL_COMPARISON_RUBRIC
-    : rubric;
+function systemPrompt(criteria: string): string {
+  const body = criteria === 'default' ? DEFAULT_RUBRIC
+    : criteria === 'model-comparison' ? MODEL_COMPARISON_RUBRIC
+    : criteria;
 
   return [
     'You are a rigorous pairwise output grader.',
@@ -80,7 +80,7 @@ export interface OpenAIJudgeOptions {
   provider: Provider;
   model: ModelId;
   /** The rubric string. Short tokens are replaced with canned rubrics. */
-  rubric: string;
+  criteria: string;
   temperature?: number;
 }
 
@@ -90,7 +90,7 @@ export function createOpenAIJudge(opts: OpenAIJudgeOptions): Judge {
     async judge(req: JudgeRequest): Promise<JudgeResult> {
       const res = await opts.provider.generate({
         modelId: opts.model,
-        system: systemPrompt(opts.rubric),
+        system: systemPrompt(opts.criteria),
         prompt: userPrompt(req),
         ...(opts.temperature !== undefined ? { temperature: opts.temperature } : { temperature: 0 }),
       });

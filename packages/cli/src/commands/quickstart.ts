@@ -37,7 +37,7 @@ const QUICKSTART_CONFIG: Config = {
   prompts: { baseline: 'baseline.md', candidate: 'candidate.md' },
   dataset: 'cases.jsonl',
   models: ['mock/demo'],
-  judge: { model: 'mock/judge', rubric: 'default' },
+  judge: { model: 'mock/judge', criteria: 'default' },
   concurrency: 4,
   mode: 'compare-prompts',
 };
