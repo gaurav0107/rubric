@@ -20,3 +20,4 @@ export * from './structural.ts';
 export * from './steelman.ts';
 export * from './evaluators.ts';
 export * from './runs/registry.ts';
+export * from './finetune/index.ts';

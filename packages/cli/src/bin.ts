@@ -4,6 +4,16 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { runCalibrate } from './commands/calibrate.ts';
 import { runComment } from './commands/comment.ts';
+import {
+  runFinetuneCancel,
+  runFinetuneEval,
+  runFinetuneInit,
+  runFinetuneLaunch,
+  runFinetuneList,
+  runFinetunePrepare,
+  runFinetuneStatus,
+  runFinetuneWait,
+} from './commands/finetune.ts';
 import { runHistory } from './commands/history.ts';
 import { runInit } from './commands/init.ts';
 import { runProvidersTest } from './commands/providers.ts';
@@ -108,6 +118,15 @@ Usage:
     --file <path>                   Track this path instead of config-declared prompts (repeatable)
     --limit <n>                     Max commits (default: 100)
     --html <path>                   Also write a self-contained HTML report
+  rubric finetune <subcommand>  Orchestrate OpenAI SFT jobs (finetunes.json + ~/.rubric/finetunes)
+    init [--force]                  Scaffold finetunes.json with one example job
+    list                            Table of known jobs + provider status
+    prepare <name>                  Write SFT JSONL from cases + prompt template
+    launch <name>                   Upload training file + create fine-tune job
+    status <name>                   Refresh state from the provider (exits 0 if succeeded)
+    wait <name> [--timeout <ms>]    Poll until terminal (exit 0 succeeded, 124 timeout, 1 failed)
+    cancel <name>                   Cancel a queued/running job
+    eval <name>                     Emit a rubric.config.json wired to the trained model id
 
 See TODOS.md at the repo root for the v1 launch gate.
 `;
@@ -526,6 +545,115 @@ async function main(argv: string[]): Promise<number> {
         }
       } catch (err) {
         process.stderr.write(`rubric runs: ${err instanceof Error ? err.message : String(err)}\n`);
+        return 1;
+      }
+    }
+    case 'finetune': {
+      try {
+        const sub = rest[0];
+        if (!sub) {
+          throw new Error('finetune requires a subcommand: init | list | prepare | launch | status | wait | cancel | eval');
+        }
+        const subArgs = rest.slice(1);
+        const configPath = parseFlag(subArgs, '--config');
+        const finetuneRoot = parseFlag(subArgs, '--finetune-root');
+        switch (sub) {
+          case 'init': {
+            const force = subArgs.includes('--force');
+            const opts: Parameters<typeof runFinetuneInit>[0] = { force };
+            if (configPath) opts.configPath = configPath;
+            const r = runFinetuneInit(opts);
+            return r.exitCode;
+          }
+          case 'list': {
+            const opts: Parameters<typeof runFinetuneList>[0] = {};
+            if (configPath) opts.configPath = configPath;
+            if (finetuneRoot) opts.finetuneRoot = finetuneRoot;
+            const r = runFinetuneList(opts);
+            return r.exitCode;
+          }
+          case 'prepare': {
+            const name = subArgs[0];
+            if (!name || name.startsWith('--')) throw new Error('finetune prepare requires a job name');
+            const outDir = parseFlag(subArgs, '--out-dir');
+            const opts: Parameters<typeof runFinetunePrepare>[0] = { name };
+            if (configPath) opts.configPath = configPath;
+            if (finetuneRoot) opts.finetuneRoot = finetuneRoot;
+            if (outDir) opts.outDir = outDir;
+            const r = runFinetunePrepare(opts);
+            return r.exitCode;
+          }
+          case 'launch': {
+            const name = subArgs[0];
+            if (!name || name.startsWith('--')) throw new Error('finetune launch requires a job name');
+            const apiKey = parseFlag(subArgs, '--api-key');
+            const opts: Parameters<typeof runFinetuneLaunch>[0] = { name };
+            if (configPath) opts.configPath = configPath;
+            if (finetuneRoot) opts.finetuneRoot = finetuneRoot;
+            if (apiKey) opts.apiKey = apiKey;
+            const r = await runFinetuneLaunch(opts);
+            return r.exitCode;
+          }
+          case 'status': {
+            const name = subArgs[0];
+            if (!name || name.startsWith('--')) throw new Error('finetune status requires a job name');
+            const apiKey = parseFlag(subArgs, '--api-key');
+            const opts: Parameters<typeof runFinetuneStatus>[0] = { name };
+            if (finetuneRoot) opts.finetuneRoot = finetuneRoot;
+            if (apiKey) opts.apiKey = apiKey;
+            const r = await runFinetuneStatus(opts);
+            return r.exitCode;
+          }
+          case 'wait': {
+            const name = subArgs[0];
+            if (!name || name.startsWith('--')) throw new Error('finetune wait requires a job name');
+            const timeoutRaw = parseFlag(subArgs, '--timeout');
+            const intervalRaw = parseFlag(subArgs, '--interval');
+            const apiKey = parseFlag(subArgs, '--api-key');
+            const opts: Parameters<typeof runFinetuneWait>[0] = { name };
+            if (finetuneRoot) opts.finetuneRoot = finetuneRoot;
+            if (apiKey) opts.apiKey = apiKey;
+            if (timeoutRaw !== undefined) {
+              const n = Number(timeoutRaw);
+              if (!Number.isFinite(n) || n < 1) throw new Error(`--timeout must be a positive number of ms, got "${timeoutRaw}"`);
+              opts.timeoutMs = Math.floor(n);
+            }
+            if (intervalRaw !== undefined) {
+              const n = Number(intervalRaw);
+              if (!Number.isFinite(n) || n < 1) throw new Error(`--interval must be a positive number of ms, got "${intervalRaw}"`);
+              opts.intervalMs = Math.floor(n);
+            }
+            const r = await runFinetuneWait(opts);
+            return r.exitCode;
+          }
+          case 'cancel': {
+            const name = subArgs[0];
+            if (!name || name.startsWith('--')) throw new Error('finetune cancel requires a job name');
+            const apiKey = parseFlag(subArgs, '--api-key');
+            const opts: Parameters<typeof runFinetuneCancel>[0] = { name };
+            if (finetuneRoot) opts.finetuneRoot = finetuneRoot;
+            if (apiKey) opts.apiKey = apiKey;
+            const r = await runFinetuneCancel(opts);
+            return r.exitCode;
+          }
+          case 'eval': {
+            const name = subArgs[0];
+            if (!name || name.startsWith('--')) throw new Error('finetune eval requires a job name');
+            const rubricConfigPath = parseFlag(subArgs, '--rubric-config');
+            const outPath = parseFlag(subArgs, '--out');
+            const opts: Parameters<typeof runFinetuneEval>[0] = { name };
+            if (configPath) opts.configPath = configPath;
+            if (finetuneRoot) opts.finetuneRoot = finetuneRoot;
+            if (rubricConfigPath) opts.rubricConfigPath = rubricConfigPath;
+            if (outPath) opts.outPath = outPath;
+            const r = runFinetuneEval(opts);
+            return r.exitCode;
+          }
+          default:
+            throw new Error(`finetune: unknown subcommand "${sub}" (expected init | list | prepare | launch | status | wait | cancel | eval)`);
+        }
+      } catch (err) {
+        process.stderr.write(`rubric finetune: ${err instanceof Error ? err.message : String(err)}\n`);
         return 1;
       }
     }
