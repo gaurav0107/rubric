@@ -76,11 +76,36 @@ Carried over from the 2026-04-21 two-layer plan. Unchanged in design, paused in 
 
 ---
 
-## v1.2 Polish (after Phase 2 restart or first external user signal)
+## v1.2 Eval + Async + Finetune (shipped 2026-04-24)
+
+Operator directive 2026-04-24: beat LangSmith on three axes — eval
+system depth, async execution ergonomics, and multiple concurrent
+fine-tuning jobs. All three shipped in one increment.
+
+- [x] **Evaluator catalog.** Non-LLM metrics (`exact-match`, `contains`, `regex`, `length`, `json-valid`) run alongside the pairwise judge. Pure per-cell, mock-safe, additive — they do not replace the judge. Config block: `evaluators: EvaluatorConfig[]`. Results land on `CellResult.evaluations` and roll into the summary.
+- [x] **Local run registry.** `~/.rubric/runs/<id>/{manifest.json, cells.jsonl, log, lock}` — every `rubric run` is now registry-backed. New commands: `rubric runs list|show|status|diff|rerun`. Pid-based locks prevent concurrent writers on the same id.
+- [x] **`rubric run --detach`.** Spawns a worker via `spawn({ detached: true }).unref()`, prints the run id, returns immediately. Parent holds no sockets. Forwards `--mock` and `--concurrency` to the child.
+- [x] **`rubric runs wait <id>`.** Polls the manifest until terminal status or timeout. Exit 0 complete, 124 timeout, 1 failed.
+- [x] **`rubric runs resume <id> [--force]`.** Builds a skip-set from `cells.jsonl`, filters the plan, runs only the missing cells. Pre-existing cells preserved byte-for-byte. `--force` takes over a stale lock for known-wedged workers.
+- [x] **Fine-tune orchestration.** `rubric finetune <init|list|prepare|launch|status|wait|cancel|eval>` — eight synchronous subcommands, one provider call each. State cached at `~/.rubric/finetunes/<name>/state.json`. `eval` emits a derived `rubric.config.json` that swaps in the trained model id.
+- [x] **OpenAI SFT adapter.** Fetch-based `FinetuneClient` interface, injectable for tests. No `openai` SDK dependency. Shipped with 40 new tests (24 shared + 16 CLI) covering the full prepare → launch → wait → eval flow via a fake client.
+
+Deferred to v1.3:
+
+- [ ] **`rubric run --format json|compact`** for CI scripting.
+- [ ] **`--verbose` secret redaction on `run`** — header values matching `/auth|token|key|secret/i` render as `***` in sweep output.
+- [ ] **Evaluator gating.** `evaluators[].failOn` threshold so CI can block on a metric drop, not just judge verdicts.
+- [ ] **Fine-tune provider parity.** Together/Anyscale adapter with the same `FinetuneClient` interface (OpenAI is the only provider today).
+
+---
+
+## v1.3 Polish (after first external user signal)
 
 - [ ] Failure clustering in `serve` UI — group losing cases by judge-reason pattern.
 - [ ] Hand-audit launch dataset from 10 → 50 samples.
 - [ ] Calibrate remix-rate threshold based on first-week data (blocks on Remix).
+- [ ] `rubric runs` UI in `serve` — browse past runs, diff two visually, resume a crashed one without dropping to the CLI.
+- [ ] Per-evaluator summary row in the HTML report and PR-bot comment.
 
 ---
 

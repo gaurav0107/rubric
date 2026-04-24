@@ -95,7 +95,9 @@ Drop `examples/drift-detector.yml` into `.github/workflows/` to run the eval on 
 | `rubric init [--force] [--wizard --describe <text>] [--mock]` | Scaffold config, `prompts/`, `data/cases.jsonl`. `--wizard` asks the judge model (or a mock template) to draft prompts + 10 cases from a one-sentence description. |
 | `rubric providers test <name>` | Hello-world smoke-test against a configured provider. Redacts auth headers. |
 | `rubric serve [--mock] [--port] [--host]` | Three-pane local UI: prompts · cases · live grid. Toggle vary-prompts ↔ vary-models; in-UI calibration labeling. |
-| `rubric run [--mock] [--fail-on-regress] [--json-out] [--report] [--badge-out] [--calibration] [--cost-csv]` | Run the eval. |
+| `rubric run [--mock] [--fail-on-regress] [--json-out] [--report] [--badge-out] [--calibration] [--cost-csv] [--detach]` | Run the eval. `--detach` spawns a worker, prints the run id, returns. |
+| `rubric runs <list\|show\|status\|diff\|wait\|resume\|rerun>` | Local run registry (`~/.rubric/runs`). Resume crashed runs without re-judging done cells; wait on detached workers. See [`docs/guide.md`](docs/guide.md#workflow-f--long-runs-resume-and---detach). |
+| `rubric finetune <init\|list\|prepare\|launch\|status\|wait\|cancel\|eval>` | Orchestrate OpenAI SFT jobs. One provider call per step — polling lives at the shell. `eval` emits a derived `rubric.config.json` wired to the trained model id. |
 | `rubric seed --from-{langfuse,helicone,langsmith,openai-logs,synthetic,csv} <export>` | Convert an LLM-observability export, CSV, or synthetic template into `data/cases.jsonl` + a calibration skeleton. |
 | `rubric calibrate [--mock] [--labels] [--json-out] [--report]` | Measure judge vs. human agreement. |
 | `rubric comment --from <run.json> [--calibration] [--report-url] [--title]` | Render a Markdown PR comment (stdout) from a run payload. |

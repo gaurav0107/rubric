@@ -13,8 +13,11 @@ document assumes you've already got the repo cloned and `bun` or
 - [Workflow C — seed a dataset from production](#workflow-c--seed-a-dataset-from-production)
 - [Workflow D — calibrate the judge](#workflow-d--calibrate-the-judge)
 - [Workflow E — scheduled drift detection](#workflow-e--scheduled-drift-detection)
+- [Workflow F — long runs, resume, and `--detach`](#workflow-f--long-runs-resume-and---detach)
+- [Workflow G — fine-tune, evaluate, ship](#workflow-g--fine-tune-evaluate-ship)
 - [The config file](#the-config-file)
 - [Rubrics](#rubrics)
+- [Evaluators (non-LLM metrics)](#evaluators-non-llm-metrics)
 - [Comparison modes](#comparison-modes)
 - [Providers](#providers)
 - [Exit codes and CI gating](#exit-codes-and-ci-gating)
@@ -357,6 +360,123 @@ Framed as best-effort, not an SLA.
 
 ---
 
+## Workflow F — long runs, resume, and `--detach`
+
+Every `rubric run` writes to a local run registry at `~/.rubric/runs/<id>/`
+(manifest + append-only `cells.jsonl`). That registry is the backbone of
+async execution: you can detach, resume after a crash, and inspect past
+runs without re-executing anything.
+
+**Start a long run in the background:**
+
+```bash
+ID=$(rubric run --detach | awk '/^run/{print $2}')
+rubric runs wait "$ID" --timeout 600000    # exits 0/124/1
+rubric runs show "$ID"                     # manifest + summary
+```
+
+`--detach` forks a worker with `spawn({ detached: true }).unref()`, prints
+the run id, and returns. The parent holds no sockets. You can close the
+terminal.
+
+**Resume a crashed or interrupted run:**
+
+```bash
+rubric runs resume "$ID" --mock            # finishes missing cells only
+rubric runs resume "$ID" --force           # take over a stale lock
+```
+
+Resume reads `cells.jsonl`, builds the skip-set, and runs only the cells
+that never landed. Pre-existing cells are preserved byte-for-byte — we
+never re-judge work you already paid for.
+
+**Inspect the registry:**
+
+```bash
+rubric runs list                           # last 20 runs, newest first
+rubric runs status <id>                    # "<status>  <done>/<total>"
+rubric runs diff <a> <b>                   # summary delta between two runs
+rubric runs rerun <id>                     # re-execute with current prompts
+```
+
+Override the root with `--registry-root <dir>` on any subcommand if you
+want a per-project registry instead of the per-user default.
+
+---
+
+## Workflow G — fine-tune, evaluate, ship
+
+rubric's fine-tune orchestration is eight small synchronous subcommands.
+Each one makes at most one provider call, updates local state, and
+returns. Polling lives at the shell level, not inside the CLI — that way
+every step is diffable, replayable, and safe to wrap in whatever
+automation you already have.
+
+**One-time scaffold:**
+
+```bash
+rubric finetune init                       # writes finetunes.json
+```
+
+Edit the generated file — point `trainData` at your cases JSONL and
+`promptTemplate` at the prompt you want to bake into the weights:
+
+```json
+{
+  "version": 1,
+  "jobs": [
+    {
+      "name":           "greeter",
+      "base":           "openai/gpt-4o-mini",
+      "trainData":      "data/cases.jsonl",
+      "promptTemplate": "prompts/candidate.md",
+      "hyper":          { "nEpochs": 3 }
+    }
+  ]
+}
+```
+
+Cases need `input` + `expected`. Cases without `expected` are skipped
+(and counted) by `prepare`. If your prompt template opens with a
+`---\n…\n---` frontmatter block, its content becomes the `system`
+message in the generated chat JSONL; everything below becomes the
+`user` turn.
+
+**Drive the job through its lifecycle:**
+
+```bash
+export OPENAI_API_KEY=sk-…
+rubric finetune prepare greeter            # → finetunes/greeter/train.jsonl
+rubric finetune launch  greeter            # upload + createJob
+rubric finetune wait    greeter            # block until terminal
+rubric finetune eval    greeter            # → finetunes/greeter/rubric.config.json
+rubric run --config finetunes/greeter/rubric.config.json
+```
+
+`list`, `status`, and `cancel` do what you'd guess. State lives in
+`~/.rubric/finetunes/<name>/state.json` and survives across shell
+sessions.
+
+`finetune eval` emits a derived `rubric.config.json` that swaps the
+first model entry for the trained id (e.g.
+`openai/ft:gpt-4o-mini:acme::abc`). We emit the config rather than
+auto-running `rubric run` so the wiring sits under version control and
+shows up in review diffs.
+
+Trained OpenAI ids pass through the built-in `openai/` provider
+unchanged — there's no extra provider block to add.
+
+**Exit codes are script-friendly:**
+
+| Command                  | 0              | 1                          | 124      |
+|--------------------------|----------------|----------------------------|----------|
+| `finetune launch`        | job created    | unprepared / already-launched | —       |
+| `finetune status`        | non-failed     | failed / no state          | —        |
+| `finetune wait`          | succeeded      | failed                     | timeout  |
+| `finetune eval`          | config written | job hasn't succeeded       | —        |
+
+---
+
 ## The config file
 
 `rubric.config.json` — committed to the repo, diff'd on PRs.
@@ -406,6 +526,45 @@ Field notes:
 The `structural-json` rubric is perfect for tool-call / structured-output
 evals: it's free, reproducible, and fails loud when the parser can't
 extract JSON from one side.
+
+---
+
+## Evaluators (non-LLM metrics)
+
+Evaluators run *alongside* the pairwise judge on every cell. They're
+deterministic, free, and useful for the checks that don't need model
+opinion — exact match, required substrings, JSON validity, length
+bands. Results land on `CellResult.evaluations` and roll up into the
+summary as per-metric win rates.
+
+Opt in by adding an `evaluators` block to `rubric.config.json`:
+
+```json
+{
+  "evaluators": [
+    { "type": "exact-match" },
+    { "type": "contains", "needle": "SELECT" },
+    { "type": "regex", "pattern": "^ERROR:", "flags": "m" },
+    { "type": "length", "min": 1, "max": 500 },
+    { "type": "json-valid" }
+  ]
+}
+```
+
+Catalog:
+
+| `type`         | What it measures                                                                                                       |
+|----------------|------------------------------------------------------------------------------------------------------------------------|
+| `exact-match`  | Whether the output equals `case.expected` (or `metadata.<field>` via `"field": "metadata.gold"`). `trim` + `caseSensitive` knobs. |
+| `contains`     | Whether the output contains the literal `needle`.                                                                      |
+| `regex`        | Whether the output matches the pattern. `flags` follow JS `RegExp` (`gim…`).                                          |
+| `length`       | Emits `length.a` / `length.b` always, and `length_in_band.a/.b` when `min` or `max` is set.                           |
+| `json-valid`   | Whether the output parses as JSON. Accepts ` ```json … ``` ` code fences.                                             |
+
+Every evaluator emits a `.a` and `.b` metric so the per-side rollup
+lines up with the judge's A/B framing. You can stack them: evaluators
+do not conflict with the pairwise judge — they're additive signal, not
+a replacement.
 
 ---
 
