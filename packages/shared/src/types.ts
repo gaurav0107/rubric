@@ -45,12 +45,18 @@ export interface ProviderConfig {
  * dependency-free and serializable in config JSON. Keep in sync with
  * `EvaluatorConfig` in evaluators.ts.
  */
+/**
+ * Every evaluator accepts an optional `failOn: number` threshold.
+ * Semantics: candidate (B-side) pass rate for this evaluator's primary metric
+ * must be ≥ threshold. A breach causes `rubric run` to exit 2 (same exit code
+ * as `--fail-on-regress`). Evaluators without `failOn` are report-only.
+ */
 export type EvaluatorConfigEntry =
-  | { type: 'exact-match'; field?: string; caseSensitive?: boolean; trim?: boolean }
-  | { type: 'contains'; needle: string; caseSensitive?: boolean }
-  | { type: 'regex'; pattern: string; flags?: string }
-  | { type: 'length'; min?: number; max?: number }
-  | { type: 'json-valid' };
+  | { type: 'exact-match'; field?: string; caseSensitive?: boolean; trim?: boolean; failOn?: number }
+  | { type: 'contains'; needle: string; caseSensitive?: boolean; failOn?: number }
+  | { type: 'regex'; pattern: string; flags?: string; failOn?: number }
+  | { type: 'length'; min?: number; max?: number; failOn?: number }
+  | { type: 'json-valid'; failOn?: number };
 
 export interface Config {
   prompts: { baseline: string; candidate: string };

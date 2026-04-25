@@ -111,6 +111,15 @@ function validateProviders(v: unknown, path?: string): ProviderConfig[] {
   return out;
 }
 
+function parseFailOn(raw: Record<string, unknown>, fld: string, path?: string): number | undefined {
+  if (raw.failOn === undefined) return undefined;
+  const n = raw.failOn;
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 1) {
+    throw new ConfigError(`${fld}.failOn must be a number between 0 and 1`, path);
+  }
+  return n;
+}
+
 function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
   if (!Array.isArray(v)) throw new ConfigError('evaluators must be an array', path);
   const out: EvaluatorConfigEntry[] = [];
@@ -120,6 +129,7 @@ function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
     if (!isRecord(raw)) throw new ConfigError(`${fld} must be an object`, path);
     const type = raw.type;
     if (typeof type !== 'string') throw new ConfigError(`${fld}.type must be a string`, path);
+    const failOn = parseFailOn(raw, fld, path);
     switch (type) {
       case 'exact-match': {
         const entry: Extract<EvaluatorConfigEntry, { type: 'exact-match' }> = { type };
@@ -135,6 +145,7 @@ function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
           if (typeof raw.trim !== 'boolean') throw new ConfigError(`${fld}.trim must be boolean`, path);
           entry.trim = raw.trim;
         }
+        if (failOn !== undefined) entry.failOn = failOn;
         out.push(entry);
         break;
       }
@@ -147,6 +158,7 @@ function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
           if (typeof raw.caseSensitive !== 'boolean') throw new ConfigError(`${fld}.caseSensitive must be boolean`, path);
           entry.caseSensitive = raw.caseSensitive;
         }
+        if (failOn !== undefined) entry.failOn = failOn;
         out.push(entry);
         break;
       }
@@ -159,6 +171,7 @@ function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
           if (typeof raw.flags !== 'string') throw new ConfigError(`${fld}.flags must be a string`, path);
           entry.flags = raw.flags;
         }
+        if (failOn !== undefined) entry.failOn = failOn;
         out.push(entry);
         break;
       }
@@ -179,11 +192,14 @@ function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
         if (entry.min !== undefined && entry.max !== undefined && entry.min > entry.max) {
           throw new ConfigError(`${fld}: min (${entry.min}) > max (${entry.max})`, path);
         }
+        if (failOn !== undefined) entry.failOn = failOn;
         out.push(entry);
         break;
       }
       case 'json-valid': {
-        out.push({ type });
+        const entry: Extract<EvaluatorConfigEntry, { type: 'json-valid' }> = { type };
+        if (failOn !== undefined) entry.failOn = failOn;
+        out.push(entry);
         break;
       }
       default:

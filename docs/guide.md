@@ -566,6 +566,45 @@ lines up with the judge's A/B framing. You can stack them: evaluators
 do not conflict with the pairwise judge — they're additive signal, not
 a replacement.
 
+### Gating CI on evaluator pass rate (`failOn`)
+
+Every evaluator accepts an optional `failOn: 0..1` threshold. When
+set, the candidate (B-side) pass rate for that evaluator's primary
+metric must meet or exceed the threshold, or `rubric run` exits 2 —
+the same exit code as `--fail-on-regress`. Evaluators without `failOn`
+are report-only.
+
+```json
+{
+  "evaluators": [
+    { "type": "json-valid",   "failOn": 1.0  },
+    { "type": "exact-match",  "failOn": 0.9  },
+    { "type": "length", "min": 1, "max": 500, "failOn": 0.95 }
+  ]
+}
+```
+
+The primary metric for each type is always the candidate side — that's
+what CI cares about (the *new* prompt crossing a quality bar):
+
+| `type`         | Gated metric         |
+|----------------|----------------------|
+| `exact-match`  | `exact_match.b`      |
+| `contains`     | `contains.b`         |
+| `regex`        | `regex.b`            |
+| `length`       | `length_in_band.b`   |
+| `json-valid`   | `json_valid.b`       |
+
+Exit-code precedence when multiple signals fire:
+
+1. `2` — regression (when `--fail-on-regress` and candidate lost more
+   cells than it won), **or** any `failOn` breach.
+2. `1` — judge errors with no regression or breach.
+3. `0` — clean run.
+
+A metric with no contributing rows (everything skipped or errored)
+cannot breach a gate — the evaluator was never asked the question.
+
 ---
 
 ## Comparison modes

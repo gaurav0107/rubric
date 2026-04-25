@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  checkEvaluatorGates,
   createEvaluator,
   createEvaluators,
   EvaluatorConfigError,
+  primaryMetric,
   runEvaluators,
   summarizeEvaluations,
   type EvaluatorResult,
@@ -163,5 +165,54 @@ describe('summarizeEvaluations', () => {
     expect(skipCount).toBe(1);
     expect(errorCount).toBe(1);
     expect(metrics[0]!.count).toBe(1);
+  });
+});
+
+describe('primaryMetric', () => {
+  it('maps every evaluator type to its B-side pass metric', () => {
+    expect(primaryMetric('exact-match')).toBe('exact_match.b');
+    expect(primaryMetric('contains')).toBe('contains.b');
+    expect(primaryMetric('regex')).toBe('regex.b');
+    expect(primaryMetric('length')).toBe('length_in_band.b');
+    expect(primaryMetric('json-valid')).toBe('json_valid.b');
+  });
+});
+
+describe('checkEvaluatorGates', () => {
+  it('flags a breach when candidate pass rate falls below failOn', () => {
+    const cells = [
+      { evaluations: [{ metric: 'exact_match.b', side: 'b', value: 1, pass: true } as EvaluatorResult] },
+      { evaluations: [{ metric: 'exact_match.b', side: 'b', value: 0, pass: false } as EvaluatorResult] },
+      { evaluations: [{ metric: 'exact_match.b', side: 'b', value: 0, pass: false } as EvaluatorResult] },
+    ];
+    const summary = summarizeEvaluations(cells);
+    const breaches = checkEvaluatorGates([{ type: 'exact-match', failOn: 0.9 }], summary);
+    expect(breaches.length).toBe(1);
+    expect(breaches[0]!.metric).toBe('exact_match.b');
+    expect(breaches[0]!.actual).toBeCloseTo(1 / 3, 5);
+    expect(breaches[0]!.threshold).toBe(0.9);
+    expect(breaches[0]!.sample).toBe(3);
+  });
+
+  it('does not breach when pass rate meets the threshold exactly', () => {
+    const cells = [
+      { evaluations: [{ metric: 'contains.b', side: 'b', value: 1, pass: true } as EvaluatorResult] },
+      { evaluations: [{ metric: 'contains.b', side: 'b', value: 1, pass: true } as EvaluatorResult] },
+    ];
+    const summary = summarizeEvaluations(cells);
+    expect(checkEvaluatorGates([{ type: 'contains', needle: 'x', failOn: 1 }], summary)).toEqual([]);
+  });
+
+  it('ignores entries without failOn', () => {
+    const cells = [
+      { evaluations: [{ metric: 'json_valid.b', side: 'b', value: 0, pass: false } as EvaluatorResult] },
+    ];
+    const summary = summarizeEvaluations(cells);
+    expect(checkEvaluatorGates([{ type: 'json-valid' }], summary)).toEqual([]);
+  });
+
+  it('does not breach when the metric has no contributing rows', () => {
+    const summary = summarizeEvaluations([]);
+    expect(checkEvaluatorGates([{ type: 'exact-match', failOn: 0.5 }], summary)).toEqual([]);
   });
 });

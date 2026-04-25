@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   appendCell,
+  checkEvaluatorGates,
   completedCellKeys,
   createConfiguredProviders,
   createMockJudge,
@@ -19,13 +20,16 @@ import {
   renderCostCsv,
   renderReportHtml,
   runEval,
+  summarizeEvaluations,
   updateManifest,
   validateRunInputs,
   type CalibrationReport,
   type CellResult,
   type Config,
   type Criteria,
+  type EvaluatorGateBreach,
   type Judge,
+  type MetricSummary,
   type ModelId,
   type Provider,
   type ProviderConfig,
@@ -191,12 +195,17 @@ function fmtDuration(ms: number): string {
 /**
  * Pure exit-code decision for `rubric run`.
  *
- * Precedence: regression (2) wins over errors (1). Rationale: if CI is gating
- * on --fail-on-regress, a judge error during a losing run should not be quieter
- * than a clean loss — surface the regression first.
+ * Precedence: regression / evaluator breach (2) wins over errors (1).
+ * Rationale: if CI is gating, a judge error during a losing run should not
+ * be quieter than a clean loss — surface the gate breach first.
  */
-export function decideExitCode(summary: RunSummary, failOnRegress: boolean): number {
+export function decideExitCode(
+  summary: RunSummary,
+  failOnRegress: boolean,
+  gateBreaches: EvaluatorGateBreach[] = [],
+): number {
   if (failOnRegress && summary.losses > summary.wins) return 2;
+  if (gateBreaches.length > 0) return 2;
   if (summary.errors > 0) return 1;
   return 0;
 }
@@ -219,6 +228,8 @@ export interface JsonPayload {
   judge: { model: ModelId };
   totalCells: number;
   cells: JsonCell[];
+  metrics?: MetricSummary[];
+  gateBreaches?: EvaluatorGateBreach[];
 }
 
 export function buildJsonPayload(args: {
@@ -226,6 +237,8 @@ export function buildJsonPayload(args: {
   cells: CellResult[];
   summary: RunSummary;
   exitCode: number;
+  metrics?: MetricSummary[];
+  gateBreaches?: EvaluatorGateBreach[];
 }): JsonPayload {
   const cells: JsonCell[] = args.cells.map((c) => {
     const out: JsonCell = {
@@ -242,7 +255,7 @@ export function buildJsonPayload(args: {
     }
     return out;
   });
-  return {
+  const payload: JsonPayload = {
     version: 1,
     summary: args.summary,
     exitCode: args.exitCode,
@@ -251,6 +264,9 @@ export function buildJsonPayload(args: {
     totalCells: args.cells.length,
     cells,
   };
+  if (args.metrics && args.metrics.length > 0) payload.metrics = args.metrics;
+  if (args.gateBreaches && args.gateBreaches.length > 0) payload.gateBreaches = args.gateBreaches;
+  return payload;
 }
 
 export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
@@ -390,6 +406,20 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     write(`  time:    ${fmtDuration(summary.totalLatencyMs)} wall-sum\n`);
   }
 
+  const metricSummary = summarizeEvaluations(cells);
+  const gateBreaches = checkEvaluatorGates(loaded.config.evaluators, metricSummary);
+  if (metricSummary.metrics.length > 0) {
+    write(`\nMetrics:\n`);
+    for (const m of metricSummary.metrics) {
+      const rate = m.passRate !== undefined ? fmtPct(m.passRate) : '—';
+      const mean = m.mean !== undefined ? ` (mean ${m.mean.toFixed(1)})` : '';
+      write(`  ${m.metric.padEnd(22)} ${rate}${mean}  [${m.passCount}/${m.count}]\n`);
+    }
+    if (metricSummary.skipCount > 0 || metricSummary.errorCount > 0) {
+      write(`  (${metricSummary.skipCount} skipped, ${metricSummary.errorCount} errored)\n`);
+    }
+  }
+
   if (opts.reportPath) {
     const absReport = resolve(cwd, opts.reportPath);
     const html = renderReportHtml({ config: loaded.config, cases, cells, summary });
@@ -398,14 +428,24 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   }
 
   const failOnRegress = opts.failOnRegress === true;
-  const exitCode = decideExitCode(summary, failOnRegress);
-  if (exitCode === 2) {
+  const exitCode = decideExitCode(summary, failOnRegress, gateBreaches);
+  if (failOnRegress && summary.losses > summary.wins) {
     write(`\n  REGRESSION: candidate lost ${summary.losses} > won ${summary.wins} — failing per --fail-on-regress.\n`);
+  }
+  for (const b of gateBreaches) {
+    write(`  GATE: ${b.metric} = ${fmtPct(b.actual)} < ${fmtPct(b.threshold)} (failOn) — sample ${b.sample}\n`);
   }
 
   const wantJson = json || opts.jsonPath !== undefined;
   if (wantJson) {
-    const payload = buildJsonPayload({ config: loaded.config, cells, summary, exitCode });
+    const payload = buildJsonPayload({
+      config: loaded.config,
+      cells,
+      summary,
+      exitCode,
+      metrics: metricSummary.metrics,
+      gateBreaches,
+    });
     const serialized = JSON.stringify(payload) + '\n';
     if (json) writeJson(serialized);
     if (opts.jsonPath) {

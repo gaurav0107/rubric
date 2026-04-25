@@ -17,12 +17,17 @@
  */
 import type { Case } from './types.ts';
 
+/**
+ * `failOn: 0..1` — if set, the engine compares this evaluator's B-side pass
+ * rate against the threshold and the CLI exits 2 on breach (same exit as
+ * `--fail-on-regress`). Evaluators without `failOn` are report-only.
+ */
 export type EvaluatorConfig =
-  | { type: 'exact-match'; field?: 'expected' | string; caseSensitive?: boolean; trim?: boolean }
-  | { type: 'contains'; needle: string; caseSensitive?: boolean }
-  | { type: 'regex'; pattern: string; flags?: string }
-  | { type: 'length'; min?: number; max?: number }
-  | { type: 'json-valid' };
+  | { type: 'exact-match'; field?: 'expected' | string; caseSensitive?: boolean; trim?: boolean; failOn?: number }
+  | { type: 'contains'; needle: string; caseSensitive?: boolean; failOn?: number }
+  | { type: 'regex'; pattern: string; flags?: string; failOn?: number }
+  | { type: 'length'; min?: number; max?: number; failOn?: number }
+  | { type: 'json-valid'; failOn?: number };
 
 export interface EvaluatorContext {
   case: Case;
@@ -327,4 +332,57 @@ export function summarizeEvaluations(cells: { evaluations?: EvaluatorResult[] }[
   }
   metrics.sort((a, b) => a.metric.localeCompare(b.metric));
   return { metrics, skipCount, errorCount };
+}
+
+/**
+ * Primary pass-rate metric for a given evaluator type — the one `failOn`
+ * gates against. Always the candidate (B-side) pass rate, because that's
+ * what CI cares about: the *new* prompt crossing a quality bar.
+ */
+export function primaryMetric(type: EvaluatorConfig['type']): string {
+  switch (type) {
+    case 'exact-match': return 'exact_match.b';
+    case 'contains':    return 'contains.b';
+    case 'regex':       return 'regex.b';
+    case 'length':      return 'length_in_band.b';
+    case 'json-valid':  return 'json_valid.b';
+  }
+}
+
+export interface EvaluatorGateBreach {
+  type: EvaluatorConfig['type'];
+  metric: string;
+  threshold: number;
+  actual: number;
+  /** Non-skip, non-error row count — the denominator. */
+  sample: number;
+}
+
+/**
+ * Evaluate every configured `failOn` threshold against the metric summary.
+ * A metric with no contributing rows (everything skipped / errored) yields
+ * no breach — it cannot fail a gate it was never asked about.
+ */
+export function checkEvaluatorGates(
+  cfgs: EvaluatorConfig[] | undefined,
+  summary: { metrics: MetricSummary[] },
+): EvaluatorGateBreach[] {
+  const breaches: EvaluatorGateBreach[] = [];
+  if (!cfgs) return breaches;
+  for (const cfg of cfgs) {
+    if (cfg.failOn === undefined) continue;
+    const metric = primaryMetric(cfg.type);
+    const row = summary.metrics.find((m) => m.metric === metric);
+    if (!row || row.passRate === undefined || row.count === 0) continue;
+    if (row.passRate < cfg.failOn) {
+      breaches.push({
+        type: cfg.type,
+        metric,
+        threshold: cfg.failOn,
+        actual: row.passRate,
+        sample: row.count,
+      });
+    }
+  }
+  return breaches;
 }
