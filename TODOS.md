@@ -92,20 +92,25 @@ fine-tuning jobs. All three shipped in one increment.
 
 Deferred to v1.3:
 
-- [ ] **`rubric run --format json|compact`** for CI scripting.
+- [x] **`rubric run --format json|compact`** for CI scripting. (shipped 2026-04-25)
 - [ ] **`--verbose` secret redaction on `run`** — header values matching `/auth|token|key|secret/i` render as `***` in sweep output.
-- [ ] **Evaluator gating.** `evaluators[].failOn` threshold so CI can block on a metric drop, not just judge verdicts.
+- [x] **Evaluator gating.** `evaluators[].failOn` threshold so CI can block on a metric drop, not just judge verdicts. (shipped 2026-04-25)
 - [ ] **Fine-tune provider parity.** Together/Anyscale adapter with the same `FinetuneClient` interface (OpenAI is the only provider today).
 
 ---
 
 ## v1.3 Polish (after first external user signal)
 
+- [x] **Evaluator gating.** `failOn` on every evaluator → exit 2 on candidate pass-rate breach (shipped 2026-04-25).
+- [x] **`rubric run --format compact`** → stable `key=value` one-liner for shell pipelines (shipped 2026-04-25).
+- [x] **End-to-end demo replay script.** `scripts/demo.sh` drives init → run → compact/json → registry → detach all in mock mode (shipped 2026-04-25). Safe to asciinema/terminalizer for README.
 - [ ] Failure clustering in `serve` UI — group losing cases by judge-reason pattern.
 - [ ] Hand-audit launch dataset from 10 → 50 samples.
 - [ ] Calibrate remix-rate threshold based on first-week data (blocks on Remix).
 - [ ] `rubric runs` UI in `serve` — browse past runs, diff two visually, resume a crashed one without dropping to the CLI.
 - [ ] Per-evaluator summary row in the HTML report and PR-bot comment.
+- [ ] Fine-tune provider parity (Together/Anyscale adapter).
+- [ ] `--verbose` secret redaction on `run`.
 
 ---
 
