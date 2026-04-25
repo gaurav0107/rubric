@@ -605,6 +605,27 @@ Exit-code precedence when multiple signals fire:
 A metric with no contributing rows (everything skipped or errored)
 cannot breach a gate — the evaluator was never asked the question.
 
+### Output formats
+
+`rubric run --format <mode>` picks the stdout format. Human progress
+logs always go to stderr in non-human modes so stdout stays parseable.
+
+| `--format`  | stdout                                                                                 | Use                                             |
+|-------------|----------------------------------------------------------------------------------------|-------------------------------------------------|
+| `human`     | Multi-line progress + summary block (default).                                         | Interactive use.                                |
+| `json`      | One structured JSON object. Same shape as `--json-out` file. (Alias: `--json`.)        | Bots, machine consumers, `rubric comment`.      |
+| `compact`   | One stable `key=value` line — `exit=… wins=… losses=… winRate=… [gate=…]`.             | CI logs, shell pipelines, grep/awk consumers.   |
+
+Compact format example (candidate failed an evaluator gate):
+
+```text
+exit=2 run=r-20260425-abc123 wins=12 losses=3 ties=0 errors=0 winRate=0.8000 costUsd=0.024100 latencyMs=18214 gate=exact_match.b:0.8000<0.9
+```
+
+Field order is part of the contract — downstream consumers can rely on
+it. `costUsd` / `latencyMs` appear only when the run captured them
+(absent on mock runs); `gate=` entries appear only on breach.
+
 ---
 
 ## Comparison modes

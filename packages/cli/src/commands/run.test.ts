@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { buildJsonPayload, decideExitCode } from './run.ts';
-import type { CellResult, Config, ModelId, RunSummary } from '../../../shared/src/index.ts';
+import { buildCompactLine, buildJsonPayload, decideExitCode } from './run.ts';
+import type { CellResult, Config, EvaluatorGateBreach, ModelId, RunSummary } from '../../../shared/src/index.ts';
 
 function sum(p: Partial<RunSummary>): RunSummary {
   return {
@@ -113,5 +113,52 @@ describe('buildJsonPayload', () => {
     });
     const roundtrip = JSON.parse(JSON.stringify(payload));
     expect(roundtrip).toEqual(payload);
+  });
+});
+
+describe('buildCompactLine', () => {
+  test('emits exit + summary counts + winRate on a stable one-liner', () => {
+    const line = buildCompactLine({
+      summary: { wins: 3, losses: 1, ties: 0, errors: 0, winRate: 0.75 },
+      exitCode: 0,
+    });
+    expect(line).toBe('exit=0 wins=3 losses=1 ties=0 errors=0 winRate=0.7500');
+  });
+
+  test('includes run id and cost/time when captured', () => {
+    const line = buildCompactLine({
+      runId: 'r-abc',
+      summary: {
+        wins: 2, losses: 1, ties: 1, errors: 0, winRate: 2 / 3,
+        totalCostUsd: 0.012345, totalLatencyMs: 1234.4,
+      },
+      exitCode: 0,
+    });
+    expect(line).toContain('run=r-abc');
+    expect(line).toContain('costUsd=0.012345');
+    expect(line).toContain('latencyMs=1234');
+    expect(line.startsWith('exit=0 run=r-abc')).toBe(true);
+  });
+
+  test('appends one gate entry per breach', () => {
+    const gateBreaches: EvaluatorGateBreach[] = [
+      { type: 'exact-match', metric: 'exact_match.b', threshold: 0.9, actual: 0.333, sample: 3 },
+      { type: 'json-valid', metric: 'json_valid.b', threshold: 1, actual: 0.5, sample: 2 },
+    ];
+    const line = buildCompactLine({
+      summary: { wins: 0, losses: 2, ties: 0, errors: 0, winRate: 0 },
+      exitCode: 2,
+      gateBreaches,
+    });
+    expect(line).toContain('gate=exact_match.b:0.3330<0.9');
+    expect(line).toContain('gate=json_valid.b:0.5000<1');
+  });
+
+  test('single-line, no newlines embedded', () => {
+    const line = buildCompactLine({
+      summary: { wins: 1, losses: 0, ties: 0, errors: 0, winRate: 1 },
+      exitCode: 0,
+    });
+    expect(line).not.toContain('\n');
   });
 });

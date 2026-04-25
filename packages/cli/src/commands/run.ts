@@ -60,8 +60,20 @@ export interface RunOptions {
   /**
    * Emit a single machine-readable JSON object to `writeJson` and suppress
    * human progress chatter on `write`. Intended for CI / PR-bot consumers.
+   * Equivalent to `format: 'json'`; kept as a separate flag for backwards
+   * compatibility.
    */
   json?: boolean;
+  /**
+   * Output format.
+   * - `human` (default): the multi-line progress + summary block.
+   * - `json`: same payload as `json: true` — machine-readable JSON on stdout,
+   *   human chatter on stderr.
+   * - `compact`: one stable grep-friendly line on stdout with the key
+   *   metrics, human chatter suppressed. Intended for shell pipelines and
+   *   PR-comment bots that don't want to parse JSON.
+   */
+  format?: 'human' | 'json' | 'compact';
   /** When set, write the JSON payload to this path (stdout still gets it if `json` is true). */
   jsonPath?: string;
   /** When set, write a self-contained status SVG badge to this path. */
@@ -232,6 +244,36 @@ export interface JsonPayload {
   gateBreaches?: EvaluatorGateBreach[];
 }
 
+/**
+ * Build the stable one-line `key=value` summary for `--format compact`.
+ * Ordering is load-bearing — downstream consumers (PR-bot, CI grep) can rely
+ * on positional awk. Always includes exit, summary counts, winRate. Includes
+ * cost/time only when the run captured them. Appends `gate=<metric>:<actual>`
+ * entries when any failOn gate breached.
+ */
+export function buildCompactLine(args: {
+  runId?: string;
+  summary: RunSummary;
+  exitCode: number;
+  gateBreaches?: EvaluatorGateBreach[];
+}): string {
+  const s = args.summary;
+  const parts: string[] = [];
+  parts.push(`exit=${args.exitCode}`);
+  if (args.runId) parts.push(`run=${args.runId}`);
+  parts.push(`wins=${s.wins}`);
+  parts.push(`losses=${s.losses}`);
+  parts.push(`ties=${s.ties}`);
+  parts.push(`errors=${s.errors}`);
+  parts.push(`winRate=${s.winRate.toFixed(4)}`);
+  if (s.totalCostUsd !== undefined) parts.push(`costUsd=${s.totalCostUsd.toFixed(6)}`);
+  if (s.totalLatencyMs !== undefined) parts.push(`latencyMs=${Math.round(s.totalLatencyMs)}`);
+  for (const b of args.gateBreaches ?? []) {
+    parts.push(`gate=${b.metric}:${b.actual.toFixed(4)}<${b.threshold}`);
+  }
+  return parts.join(' ');
+}
+
 export function buildJsonPayload(args: {
   config: Config;
   cells: CellResult[];
@@ -273,10 +315,13 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const configPath = opts.configPath ?? resolve(cwd, DEFAULT_CONFIG);
   const mock = opts.mock ?? false;
-  const json = opts.json === true;
-  // In --json mode, route human chatter to stderr so stdout stays a clean
-  // JSON stream for downstream tools.
-  const defaultWrite = json
+  // --json is kept as an alias; explicit `format` wins when both are set.
+  const format: 'human' | 'json' | 'compact' = opts.format ?? (opts.json === true ? 'json' : 'human');
+  const json = format === 'json';
+  const compact = format === 'compact';
+  // In json/compact mode, route human chatter to stderr so stdout stays a
+  // clean stream for downstream tools.
+  const defaultWrite = json || compact
     ? (line: string) => process.stderr.write(line)
     : (line: string) => process.stdout.write(line);
   const write = opts.write ?? defaultWrite;
@@ -453,6 +498,16 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
       writeFileSync(absJson, serialized, 'utf8');
       if (!json) write(`\n  json:    ${absJson}\n`);
     }
+  }
+
+  if (compact) {
+    const line = buildCompactLine({
+      ...(runId !== undefined ? { runId } : {}),
+      summary,
+      exitCode,
+      gateBreaches,
+    });
+    writeJson(line + '\n');
   }
 
   if (opts.costCsvPath) {

@@ -61,7 +61,8 @@ Usage:
     --allow-langfuse                Accept Langfuse-style JSONL exports
     --report <path>                 Write a self-contained HTML report
     --fail-on-regress               Exit 2 when candidate loses more cells than it wins
-    --json                          Emit machine-readable JSON on stdout (human logs → stderr)
+    --format <mode>                 Output format: human (default) | json | compact
+    --json                          Alias for --format json (machine-readable JSON on stdout)
     --json-out <path>               Also write the JSON payload to this file
     --badge-out <path>              Write a status SVG badge (self-hostable in your repo)
     --calibration <path>            Color the badge by calibration agreement (paired with --badge-out)
@@ -250,6 +251,11 @@ async function main(argv: string[]): Promise<number> {
         const reportPath = parseFlag(rest, '--report');
         const failOnRegress = rest.includes('--fail-on-regress');
         const json = rest.includes('--json');
+        const formatRaw = parseFlag(rest, '--format');
+        if (formatRaw !== undefined && !['human', 'json', 'compact'].includes(formatRaw)) {
+          throw new Error(`--format must be one of: human, json, compact (got "${formatRaw}")`);
+        }
+        const format = formatRaw as 'human' | 'json' | 'compact' | undefined;
         const jsonPath = parseFlag(rest, '--json-out');
         const badgePath = parseFlag(rest, '--badge-out');
         const calibrationPath = parseFlag(rest, '--calibration');
@@ -259,6 +265,7 @@ async function main(argv: string[]): Promise<number> {
         const scanPii = rest.includes('--scan-pii');
         const detach = rest.includes('--detach');
         const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json, detach };
+        if (format !== undefined) opts.format = format;
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;
         if (jsonPath) opts.jsonPath = jsonPath;
