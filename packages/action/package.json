@@ -1,6 +1,6 @@
 {
   "name": "@rubric/action",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "private": true,
   "description": "GitHub Action — runs rubric on pull requests and posts results.",
   "license": "MIT",

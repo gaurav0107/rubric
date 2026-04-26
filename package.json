@@ -1,6 +1,6 @@
 {
   "name": "rubric-monorepo",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "private": true,
   "description": "Monorepo root for rubric — pairwise prompt evaluation framework",
   "license": "MIT",

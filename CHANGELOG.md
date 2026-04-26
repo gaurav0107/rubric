@@ -2,6 +2,23 @@
 
 All notable changes to rubric. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [2.1.0] — 2026-04-27
+
+Visual redesign — `rubric serve` now looks like it belongs in a terminal. Zero functional changes, no API/config/data changes, no test suite changes.
+
+### Changed
+
+- **Hacker terminal theme for `rubric serve`.** Full CSS rewrite of the single-file UI at `packages/cli/src/server/ui.ts`. Palette collapsed to phosphor green (`#39ff14`) on near-black (`#030603`) with red for loss/error, amber for tie. Everything in monospace (`ui-monospace, JetBrains Mono, Fira Code, Menlo`), no sans-serif anywhere — the surface is meant to feel like a shell, not a dashboard. Zero border-radius on buttons, pills, and chips. Uppercase labels with `0.14em` letter-spacing. CRT scanline overlay (`body::before` repeating-linear-gradient with `mix-blend-mode: multiply`) plus a subtle 24×24 phosphor grid (`body::after`) masked to fade at the edges. Custom monospace scrollbars and block-character checkboxes.
+- **Terminal-grammar labels.** Brand `>_ RUBRIC █` with a blinking cursor. Pane titles prefixed with `[ ` (bracket-open), case rows prefixed with `$ ` (shell dollar), empty states prefixed with `// `, error banner prefixed with `ERROR::`. Button text rewritten in shell idiom: `▶ Run` → `> run`, `📜 Runs` → `runs.log`, `Save (⌘S)` → `:w (⌘S)`, `✨ Steelman` → `steelman()`, drawer `Close` → `[esc]`, `Diff 2` → `diff <2>`. Placeholder values (`—`) standardized on dim-green `--`.
+- **ASCII idle state.** Empty results pane now shows a block-character "RUBRIC" wordmark with `awaiting input █ · press > run to populate grid` plus a dim `// no runs yet · prompts and cases are ready` sub-hint. Replaces the previous one-line "Run an evaluation to populate the grid." dead zone.
+- **Verdict color semantics tightened.** Win cells get a `0 0 6px rgba(57,255,20,0.45)` phosphor glow. Loss cells glow red. Tie cells glow amber. The summary row uses the same text-shadow values so the eye locks onto outcomes immediately.
+
+### Notes
+
+- Single file touched: `packages/cli/src/server/ui.ts` (+300 lines CSS, label/placeholder text edits). No logic changed. 360 tests pass. Typecheck unchanged (preexisting `allowImportingTsExtensions` issues in `@rubric/shared` are unrelated and persist on main).
+- Verified via headless browser at 1440×900: idle state renders correctly, mock-mode sweep over 5 demo cases completes with correct verdict coloring (win=phosphor, loss=red, tie=amber, err=red).
+- No dependency changes. No config or data migrations. Existing runs in `~/.rubric/runs` display identically in the redesigned runs drawer.
+
 ## [2.0.2] — 2026-04-27
 
 Critical hotfix — v2.0.1 shipped with a broken `rubric serve` UI.
