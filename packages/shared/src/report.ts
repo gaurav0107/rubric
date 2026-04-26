@@ -1,3 +1,4 @@
+import type { EvaluatorGateBreach, MetricSummary } from './evaluators.ts';
 import type { Case, CellResult, Config, RunSummary, Verdict } from './types.ts';
 
 export interface RenderReportInput {
@@ -8,6 +9,10 @@ export interface RenderReportInput {
   /** Overrides for the header; defaults to the config's prompt paths. */
   title?: string;
   generatedAt?: Date;
+  /** Per-metric aggregation from `summarizeEvaluations`. Rendered as a table above the per-cell section. */
+  metrics?: MetricSummary[];
+  /** Any `failOn` thresholds that tripped. Rendered inline with an alert style. */
+  gateBreaches?: EvaluatorGateBreach[];
 }
 
 export function renderReportHtml(input: RenderReportInput): string {
@@ -16,6 +21,7 @@ export function renderReportHtml(input: RenderReportInput): string {
   const { config, cases, cells, summary } = input;
 
   const header = renderHeader(title, config, summary, when);
+  const metricsBlock = renderMetrics(input.metrics, input.gateBreaches);
   const body = renderCells(cases, cells);
 
   return `<!DOCTYPE html>
@@ -28,10 +34,57 @@ export function renderReportHtml(input: RenderReportInput): string {
 <body>
 <main>
 ${header}
+${metricsBlock}
 ${body}
 </main>
 </body>
 </html>
+`;
+}
+
+function renderMetrics(
+  metrics: MetricSummary[] | undefined,
+  breaches: EvaluatorGateBreach[] | undefined,
+): string {
+  if (!metrics || metrics.length === 0) return '';
+  const breachByMetric = new Map<string, EvaluatorGateBreach>();
+  for (const b of breaches ?? []) breachByMetric.set(b.metric, b);
+
+  const rows = metrics.map((m) => {
+    const breach = breachByMetric.get(m.metric);
+    const rate = m.passRate !== undefined ? `${(m.passRate * 100).toFixed(1)}%` : '—';
+    const mean = m.mean !== undefined ? m.mean.toFixed(2) : '—';
+    const sideBadge = m.side === 'a' ? 'A' : m.side === 'b' ? 'B' : m.side === 'both' ? 'A+B' : 'mixed';
+    const rowClass = breach ? ' class="breach"' : '';
+    const rateCell = breach
+      ? `<td class="rate breach-cell">${escape(rate)} <small>&lt; ${escape((breach.threshold * 100).toFixed(1))}%</small></td>`
+      : `<td class="rate">${escape(rate)}</td>`;
+    return `<tr${rowClass}>
+      <td class="metric mono">${escape(m.metric)}</td>
+      <td class="side">${escape(sideBadge)}</td>
+      <td class="count">${m.count}</td>
+      <td class="mean">${escape(mean)}</td>
+      ${rateCell}
+    </tr>`;
+  }).join('\n');
+
+  const breachNote = breaches && breaches.length > 0
+    ? `<p class="breach-note"><strong>Gate breached:</strong> ${breaches.length} metric${breaches.length === 1 ? '' : 's'} below threshold — CI exit code 2.</p>`
+    : '';
+
+  return `
+<section class="metrics">
+  <h2>Evaluator metrics</h2>
+  ${breachNote}
+  <table class="metric-table">
+    <thead>
+      <tr><th>metric</th><th>side</th><th>n</th><th>mean</th><th>pass rate</th></tr>
+    </thead>
+    <tbody>
+${rows}
+    </tbody>
+  </table>
+</section>
 `;
 }
 
@@ -187,4 +240,23 @@ const STYLE = `
   .out pre { margin: 0; white-space: pre-wrap; word-break: break-word;
     font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
   @media (max-width: 700px) { .outputs { grid-template-columns: 1fr; } }
+  .metrics { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; margin-bottom: 20px; }
+  .metrics h2 { margin: 0 0 10px; font-size: 15px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.03em; }
+  .metrics .breach-note { margin: 0 0 10px; padding: 8px 10px; border-radius: 6px;
+    background: #fef2f2; border-left: 3px solid var(--loss); color: var(--loss); font-size: 13px; }
+  .metric-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .metric-table th, .metric-table td { padding: 6px 10px; text-align: left;
+    border-bottom: 1px solid var(--border); }
+  .metric-table th { color: var(--muted); font-weight: 500; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em; }
+  .metric-table td.count, .metric-table td.mean, .metric-table td.rate { text-align: right;
+    font-variant-numeric: tabular-nums; }
+  .metric-table td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; }
+  .metric-table td.side { color: var(--muted); font-size: 11px; }
+  .metric-table tr.breach { background: #fef6f6; }
+  .metric-table td.breach-cell { color: var(--loss); font-weight: 600; }
+  .metric-table td.breach-cell small { color: var(--muted); font-weight: 400; margin-left: 4px; }
 `;

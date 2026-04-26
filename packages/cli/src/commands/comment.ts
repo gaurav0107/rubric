@@ -107,6 +107,8 @@ export function runComment(opts: CommentOptions): CommentResult {
   if (opts.reportUrl) renderInput.reportUrl = opts.reportUrl;
   if (opts.minAgreement !== undefined) renderInput.minAgreement = opts.minAgreement;
   if (opts.title) renderInput.title = opts.title;
+  if (payload.metrics && payload.metrics.length > 0) renderInput.metrics = payload.metrics;
+  if (payload.gateBreaches && payload.gateBreaches.length > 0) renderInput.gateBreaches = payload.gateBreaches;
 
   const markdown = renderPrComment(renderInput);
   write(markdown);

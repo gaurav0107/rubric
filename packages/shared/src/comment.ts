@@ -1,4 +1,5 @@
 import type { CalibrationReport } from './calibrate.ts';
+import type { EvaluatorGateBreach, MetricSummary } from './evaluators.ts';
 import type { CellResult, ModelId, RunSummary, Verdict } from './types.ts';
 
 export interface PrCommentInput {
@@ -19,6 +20,10 @@ export interface PrCommentInput {
   reportUrl?: string;
   /** e.g. baseline.md -> candidate.md; shown in the header if provided. */
   title?: string;
+  /** Per-metric evaluator summary — renders a collapsible breakdown below the main summary table. */
+  metrics?: MetricSummary[];
+  /** failOn breaches — highlighted as a bold line above the metrics table when present. */
+  gateBreaches?: EvaluatorGateBreach[];
 }
 
 export type PrVerdict = 'pass' | 'regress' | 'tie' | 'error';
@@ -130,6 +135,33 @@ function costLine(summary: RunSummary): string | null {
   return `Cost: **${fmtUsd(summary.totalCostUsd)}** across ${cells} cell${cells === 1 ? '' : 's'} (avg ${fmtUsd(avg)}/cell).`;
 }
 
+function metricsSection(
+  metrics: MetricSummary[] | undefined,
+  breaches: EvaluatorGateBreach[] | undefined,
+): string {
+  if (!metrics || metrics.length === 0) return '';
+  const rows = metrics.map((m) => {
+    const rate = m.passRate !== undefined ? pct(m.passRate) : '—';
+    const mean = m.mean !== undefined ? m.mean.toFixed(2) : '—';
+    const side = m.side === 'a' ? 'A' : m.side === 'b' ? 'B' : m.side === 'both' ? 'A+B' : 'mixed';
+    return `| \`${m.metric}\` | ${side} | ${m.count} | ${mean} | ${rate} |`;
+  });
+  const out: string[] = [];
+  if (breaches && breaches.length > 0) {
+    const items = breaches.map((b) => `\`${b.metric}\` ${pct(b.actual)} < ${pct(b.threshold)} (failOn, n=${b.sample})`);
+    out.push(`> **Gate breached** — ${items.join('; ')}. CI exit code 2.`);
+    out.push('');
+  }
+  out.push('<details><summary>Evaluator metrics</summary>');
+  out.push('');
+  out.push('| metric | side | n | mean | pass rate |');
+  out.push('| --- | --- | ---: | ---: | ---: |');
+  out.push(...rows);
+  out.push('');
+  out.push('</details>');
+  return out.join('\n');
+}
+
 function modelTable(tallies: ModelTally[]): string {
   if (tallies.length === 0) return '';
   const rows = tallies.map((t) => {
@@ -170,6 +202,9 @@ export function renderPrComment(input: PrCommentInput): string {
       parts.push('', modelTable(tallies));
     }
   }
+
+  const metricsBlock = metricsSection(input.metrics, input.gateBreaches);
+  if (metricsBlock) parts.push('', metricsBlock);
 
   parts.push('', calibrationSection(input.calibration, input.judge.model, minAgreement));
 

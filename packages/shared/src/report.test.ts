@@ -71,4 +71,39 @@ describe('renderReportHtml', () => {
     expect(html).toContain('wins');
     expect(html).toContain('errors');
   });
+
+  test('renders evaluator metrics table when metrics are provided', () => {
+    const html = renderReportHtml({
+      config, cases, cells, summary,
+      metrics: [
+        { metric: 'exact_match.a', side: 'a', count: 5, passCount: 2, passRate: 0.4 },
+        { metric: 'exact_match.b', side: 'b', count: 5, passCount: 4, passRate: 0.8 },
+      ],
+    });
+    expect(html).toContain('Evaluator metrics');
+    expect(html).toContain('exact_match.a');
+    expect(html).toContain('exact_match.b');
+    expect(html).toContain('40.0%');
+    expect(html).toContain('80.0%');
+  });
+
+  test('highlights gate breaches with a breach banner', () => {
+    const html = renderReportHtml({
+      config, cases, cells, summary,
+      metrics: [
+        { metric: 'exact_match.b', side: 'b', count: 5, passCount: 2, passRate: 0.4 },
+      ],
+      gateBreaches: [
+        { type: 'exact-match', metric: 'exact_match.b', threshold: 0.9, actual: 0.4, sample: 5 },
+      ],
+    });
+    expect(html).toContain('Gate breached');
+    expect(html).toContain('breach');
+    expect(html).toContain('&lt; 90.0%');
+  });
+
+  test('omits metrics section when no metrics are provided', () => {
+    const html = renderReportHtml({ config, cases, cells, summary });
+    expect(html).not.toContain('Evaluator metrics');
+  });
 });

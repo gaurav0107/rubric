@@ -467,7 +467,12 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
 
   if (opts.reportPath) {
     const absReport = resolve(cwd, opts.reportPath);
-    const html = renderReportHtml({ config: loaded.config, cases, cells, summary });
+    const reportInput: Parameters<typeof renderReportHtml>[0] = {
+      config: loaded.config, cases, cells, summary,
+    };
+    if (metricSummary.metrics.length > 0) reportInput.metrics = metricSummary.metrics;
+    if (gateBreaches.length > 0) reportInput.gateBreaches = gateBreaches;
+    const html = renderReportHtml(reportInput);
     writeFileSync(absReport, html, 'utf8');
     write(`\n  report:  ${absReport}\n`);
   }

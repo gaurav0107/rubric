@@ -224,6 +224,51 @@ describe('renderPrComment', () => {
     expect(md).not.toContain('Cost:');
   });
 
+  test('renders evaluator metrics table when metrics are provided', () => {
+    const md = renderPrComment({
+      summary: sum({ wins: 3, losses: 1, winRate: 0.75 }),
+      models: ['openai/gpt-4o-mini' as ModelId],
+      judge: JUDGE,
+      metrics: [
+        { metric: 'exact_match.a', side: 'a', count: 5, passCount: 2, passRate: 0.4 },
+        { metric: 'exact_match.b', side: 'b', count: 5, passCount: 4, passRate: 0.8 },
+      ],
+    });
+    expect(md).toContain('<details><summary>Evaluator metrics</summary>');
+    expect(md).toContain('`exact_match.a`');
+    expect(md).toContain('`exact_match.b`');
+    expect(md).toContain('40.0%');
+    expect(md).toContain('80.0%');
+  });
+
+  test('emits gate-breach callout when failOn thresholds tripped', () => {
+    const md = renderPrComment({
+      summary: sum({ wins: 3, losses: 1, winRate: 0.75 }),
+      models: ['openai/gpt-4o-mini' as ModelId],
+      judge: JUDGE,
+      metrics: [
+        { metric: 'exact_match.b', side: 'b', count: 5, passCount: 2, passRate: 0.4 },
+      ],
+      gateBreaches: [
+        { type: 'exact-match', metric: 'exact_match.b', threshold: 0.9, actual: 0.4, sample: 5 },
+      ],
+    });
+    expect(md).toContain('Gate breached');
+    expect(md).toContain('`exact_match.b`');
+    expect(md).toContain('40.0%');
+    expect(md).toContain('< 90.0%');
+  });
+
+  test('omits evaluator section when metrics are empty', () => {
+    const md = renderPrComment({
+      summary: sum({ wins: 3, losses: 1, winRate: 0.75 }),
+      models: ['openai/gpt-4o-mini' as ModelId],
+      judge: JUDGE,
+    });
+    expect(md).not.toContain('Evaluator metrics');
+    expect(md).not.toContain('Gate breached');
+  });
+
   test('output is valid-looking Markdown ending in newline', () => {
     const md = renderPrComment({
       summary: sum({ wins: 1, winRate: 1 }),
