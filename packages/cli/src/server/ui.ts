@@ -403,6 +403,17 @@ export const INDEX_HTML = `<!doctype html>
     }
     .runs-drawer { width: 100%; max-width: 100%; }
   }
+
+  @media (pointer: coarse) {
+    header button, header label,
+    .mode-toggle button,
+    .prompts-pane .tabs button,
+    .prompts-pane .footer button,
+    .runs-drawer-header button,
+    .runs-drawer-row button {
+      min-height: 44px;
+    }
+  }
 </style>
 </head>
 <body>
