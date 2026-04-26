@@ -8,12 +8,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createOpenAIFinetuneClient,
+  createTogetherFinetuneClient,
   defaultExposeAlias,
   findJob,
   isTerminal,
   listStates,
   loadFinetuneConfig,
   mapOpenAIStatus,
+  mapTogetherStatus,
   prepareSftJsonl,
   readState,
   splitPromptTemplate,
@@ -288,6 +290,96 @@ describe('openai adapter', () => {
       expect(() => createOpenAIFinetuneClient()).toThrow(/OPENAI_API_KEY/);
     } finally {
       if (prev !== undefined) process.env.OPENAI_API_KEY = prev;
+    }
+  });
+});
+
+describe('Together.ai finetune client', () => {
+  it('maps provider-specific status strings onto the canonical set', () => {
+    // Intermediate states collapse so the CLI's isTerminal whitelist doesn't need a Together branch.
+    expect(mapTogetherStatus('pending')).toBe('queued');
+    expect(mapTogetherStatus('validating')).toBe('queued');
+    expect(mapTogetherStatus('uploading')).toBe('running');
+    expect(mapTogetherStatus('compressing')).toBe('running');
+    expect(mapTogetherStatus('completed')).toBe('succeeded');
+    expect(mapTogetherStatus('error')).toBe('failed');
+    expect(mapTogetherStatus('user_error')).toBe('failed');
+    // Unknown states pass through — we refuse to pretend they're something they're not.
+    expect(mapTogetherStatus('futuristic_state')).toBe('futuristic_state');
+  });
+
+  it('drives upload → create → poll with an injected fetch', async () => {
+    const calls: Array<{ url: string; method: string; body?: string }> = [];
+    const fake: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      const method = init?.method ?? 'GET';
+      const body = init?.body instanceof FormData ? '[formdata]' : (init?.body as string | undefined);
+      calls.push({ url, method, ...(body !== undefined ? { body } : {}) });
+      if (url.endsWith('/files') && method === 'POST') {
+        return new Response(JSON.stringify({ id: 'file-xyz' }), { status: 200 });
+      }
+      if (url.endsWith('/fine-tunes') && method === 'POST') {
+        return new Response(JSON.stringify({ id: 'ft-123', status: 'pending' }), { status: 200 });
+      }
+      if (url.endsWith('/fine-tunes/ft-123') && method === 'GET') {
+        return new Response(JSON.stringify({
+          id: 'ft-123',
+          status: 'completed',
+          output_name: 'my-org/llama-3-ft:v1',
+        }), { status: 200 });
+      }
+      return new Response('not found', { status: 404 });
+    };
+    const client = createTogetherFinetuneClient({ apiKey: 'tg-test', fetchImpl: fake });
+    const up = await client.uploadTrainingFile('{}', 'train.jsonl');
+    expect(up.id).toBe('file-xyz');
+    const job = await client.createJob({
+      trainingFileId: up.id,
+      baseModel: 'meta-llama/Llama-3-8B',
+      hyperparameters: { nEpochs: 3, batchSize: 4, learningRateMultiplier: 0.00005 },
+    });
+    expect(job.id).toBe('ft-123');
+    expect(job.status).toBe('queued');
+    const poll = await client.getJob(job.id);
+    expect(poll.status).toBe('succeeded');
+    expect(poll.fineTunedModel).toBe('my-org/llama-3-ft:v1');
+    expect(calls.length).toBe(3);
+    // Together uses flat top-level hyperparameter keys (no `hyperparameters` envelope).
+    expect(calls[1]!.body).toContain('"n_epochs":3');
+    expect(calls[1]!.body).toContain('"batch_size":4');
+    expect(calls[1]!.body).toContain('"learning_rate":0.00005');
+    expect(calls[1]!.body).not.toContain('"hyperparameters"');
+  });
+
+  it('surfaces provider errors with status codes', async () => {
+    const fake: typeof fetch = async () => new Response('bad key', { status: 401, statusText: 'Unauthorized' });
+    const client = createTogetherFinetuneClient({ apiKey: 'tg-test', fetchImpl: fake });
+    await expect(client.createJob({ trainingFileId: 'f', baseModel: 'x' })).rejects.toThrow(/401/);
+  });
+
+  it('cancelJob hits the per-job cancel endpoint', async () => {
+    let cancelUrl = '';
+    const fake: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as Request).url;
+      if (url.endsWith('/fine-tunes/ft-999/cancel') && init?.method === 'POST') {
+        cancelUrl = url;
+        return new Response(JSON.stringify({ id: 'ft-999', status: 'cancelled' }), { status: 200 });
+      }
+      return new Response('unexpected', { status: 500 });
+    };
+    const client = createTogetherFinetuneClient({ apiKey: 'tg-test', fetchImpl: fake });
+    const r = await client.cancelJob('ft-999');
+    expect(r.status).toBe('cancelled');
+    expect(cancelUrl).toContain('/fine-tunes/ft-999/cancel');
+  });
+
+  it('refuses to construct without an api key', () => {
+    const prev = process.env.TOGETHER_API_KEY;
+    delete process.env.TOGETHER_API_KEY;
+    try {
+      expect(() => createTogetherFinetuneClient()).toThrow(/TOGETHER_API_KEY/);
+    } finally {
+      if (prev !== undefined) process.env.TOGETHER_API_KEY = prev;
     }
   });
 });

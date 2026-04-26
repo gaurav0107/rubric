@@ -466,6 +466,16 @@ shows up in review diffs.
 Trained OpenAI ids pass through the built-in `openai/` provider
 unchanged — there's no extra provider block to add.
 
+**Together.ai is a first-class alternative.** Set `base` to a
+`together/…` slug (e.g. `together/meta-llama/Llama-3-8B`) and export
+`TOGETHER_API_KEY` instead of `OPENAI_API_KEY`. Every subcommand
+(`launch`, `status`, `wait`, `cancel`, `eval`) routes through the
+Together adapter automatically, and `eval` emits a `together/<trained>`
+model id that the built-in `together/` provider already knows how to
+call. Hyperparameters map across both adapters: `nEpochs`, `batchSize`,
+and `learningRateMultiplier` travel under whatever names each API
+expects.
+
 **Exit codes are script-friendly:**
 
 | Command                  | 0              | 1                          | 124      |

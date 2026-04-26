@@ -423,4 +423,38 @@ describe('runFinetuneEval', () => {
     expect(r.exitCode).toBe(1);
     expect(lines.join('')).toContain('has not succeeded yet');
   });
+
+  it('emits a together/ prefix when the job was trained on Together', () => {
+    const fx = fixtureWorkspace();
+    // Rewrite the finetunes.json job to use a Together base model.
+    writeFileSync(
+      fx.configPath,
+      JSON.stringify({
+        version: 1,
+        jobs: [{
+          name: 'greeter',
+          base: 'together/meta-llama/Llama-3-8B',
+          trainData: 'data/cases.jsonl',
+          promptTemplate: 'prompts/candidate.md',
+        }],
+      }),
+      'utf8',
+    );
+    updateState(fx.ftRoot, 'greeter', {
+      status: 'succeeded',
+      jobId: 'ft-123',
+      trainedModelId: 'my-org/llama-3-ft:v1',
+    });
+    const r = runFinetuneEval({
+      name: 'greeter',
+      cwd: fx.root,
+      configPath: fx.configPath,
+      rubricConfigPath: fx.rubricConfigPath,
+      finetuneRoot: fx.ftRoot,
+      write: () => {},
+    });
+    expect(r.exitCode).toBe(0);
+    const emitted = JSON.parse(readFileSync(r.outPath, 'utf8')) as { models: string[] };
+    expect(emitted.models[0]).toBe('together/my-org/llama-3-ft:v1');
+  });
 });

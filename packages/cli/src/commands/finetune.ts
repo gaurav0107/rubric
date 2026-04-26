@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   createOpenAIFinetuneClient,
+  createTogetherFinetuneClient,
   defaultExposeAlias,
   defaultFinetuneRoot,
   findJob,
@@ -193,6 +194,35 @@ function stripProviderPrefix(modelId: string): string {
   return slash >= 0 ? modelId.slice(slash + 1) : modelId;
 }
 
+/**
+ * Pick the right `FinetuneClient` for a job. Routing keys off the
+ * `base` model's provider prefix: `together/` → Together.ai, everything
+ * else falls back to OpenAI (preserving the pre-2.0 behavior).
+ */
+function resolveFinetuneClient(job: FinetuneJob, apiKey?: string): FinetuneClient {
+  if (job.base.startsWith('together/')) {
+    return createTogetherFinetuneClient(apiKey ? { apiKey } : {});
+  }
+  return createOpenAIFinetuneClient(apiKey ? { apiKey } : {});
+}
+
+/**
+ * Look up the finetune job for a name-only subcommand (status/cancel/wait).
+ * Returns undefined if the config is unreadable — the caller falls back to
+ * the pre-2.0 OpenAI default so we don't regress existing workflows where
+ * the finetunes.json was deleted but a provider job is still outstanding.
+ */
+function tryFindJob(cwd: string, configPath: string | undefined, name: string): FinetuneJob | undefined {
+  const abs = configPath ? resolve(cwd, configPath) : resolve(cwd, DEFAULT_FINETUNES_JSON);
+  if (!existsSync(abs)) return undefined;
+  try {
+    const loaded = loadFinetuneConfig(abs);
+    return findJob(loaded.config, name);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runFinetuneLaunch(opts: FinetuneLaunchOptions): Promise<{ exitCode: number; jobId?: string }> {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const configPath = opts.configPath ? resolve(cwd, opts.configPath) : resolve(cwd, DEFAULT_FINETUNES_JSON);
@@ -215,7 +245,7 @@ export async function runFinetuneLaunch(opts: FinetuneLaunchOptions): Promise<{ 
     return { exitCode: 1, jobId: state.jobId };
   }
 
-  const client = opts.client ?? createOpenAIFinetuneClient(opts.apiKey ? { apiKey: opts.apiKey } : {});
+  const client = opts.client ?? resolveFinetuneClient(job, opts.apiKey);
   const content = readFileSync(state.preparedPath, 'utf8');
   write(`  uploading ${state.preparedPath}…\n`);
   const up = await client.uploadTrainingFile(content, `${job.name}.jsonl`);
@@ -239,6 +269,7 @@ export async function runFinetuneLaunch(opts: FinetuneLaunchOptions): Promise<{ 
 export interface FinetuneStatusOptions {
   name: string;
   cwd?: string;
+  configPath?: string;
   finetuneRoot?: string;
   client?: FinetuneClient;
   apiKey?: string;
@@ -262,7 +293,9 @@ export async function runFinetuneStatus(opts: FinetuneStatusOptions): Promise<{ 
     write(`${state.status}  ${state.trainedModelId ?? ''}\n`);
     return { exitCode: state.status === 'succeeded' ? 0 : 1, status: state.status };
   }
-  const client = opts.client ?? createOpenAIFinetuneClient(opts.apiKey ? { apiKey: opts.apiKey } : {});
+  const cwd = resolve(opts.cwd ?? process.cwd());
+  const ftJob = tryFindJob(cwd, opts.configPath, opts.name);
+  const client = opts.client ?? (ftJob ? resolveFinetuneClient(ftJob, opts.apiKey) : createOpenAIFinetuneClient(opts.apiKey ? { apiKey: opts.apiKey } : {}));
   const job = await client.getJob(state.jobId);
   const patch: Partial<FinetuneState> = { status: job.status as FinetuneState['status'] };
   if (job.fineTunedModel) patch.trainedModelId = job.fineTunedModel;
@@ -275,6 +308,7 @@ export async function runFinetuneStatus(opts: FinetuneStatusOptions): Promise<{ 
 export interface FinetuneWaitOptions {
   name: string;
   cwd?: string;
+  configPath?: string;
   finetuneRoot?: string;
   client?: FinetuneClient;
   apiKey?: string;
@@ -289,6 +323,7 @@ export async function runFinetuneWait(opts: FinetuneWaitOptions): Promise<{ exit
   while (true) {
     const baseOpts: FinetuneStatusOptions = { name: opts.name, write: () => {} };
     if (opts.cwd) baseOpts.cwd = opts.cwd;
+    if (opts.configPath) baseOpts.configPath = opts.configPath;
     if (opts.finetuneRoot) baseOpts.finetuneRoot = opts.finetuneRoot;
     if (opts.client) baseOpts.client = opts.client;
     if (opts.apiKey) baseOpts.apiKey = opts.apiKey;
@@ -308,6 +343,7 @@ export async function runFinetuneWait(opts: FinetuneWaitOptions): Promise<{ exit
 export interface FinetuneCancelOptions {
   name: string;
   cwd?: string;
+  configPath?: string;
   finetuneRoot?: string;
   client?: FinetuneClient;
   apiKey?: string;
@@ -326,7 +362,9 @@ export async function runFinetuneCancel(opts: FinetuneCancelOptions): Promise<{ 
     write(`"${opts.name}" is already ${state.status} — nothing to cancel\n`);
     return { exitCode: 0 };
   }
-  const client = opts.client ?? createOpenAIFinetuneClient(opts.apiKey ? { apiKey: opts.apiKey } : {});
+  const cwd = resolve(opts.cwd ?? process.cwd());
+  const ftJob = tryFindJob(cwd, opts.configPath, opts.name);
+  const client = opts.client ?? (ftJob ? resolveFinetuneClient(ftJob, opts.apiKey) : createOpenAIFinetuneClient(opts.apiKey ? { apiKey: opts.apiKey } : {}));
   const res = await client.cancelJob(state.jobId);
   updateState(finetuneRoot, opts.name, { status: 'cancelled' });
   write(`cancelled ${res.id}\n`);
@@ -368,11 +406,12 @@ export function runFinetuneEval(opts: FinetuneEvalOptions): { exitCode: number; 
   }
 
   const loadedRubric = loadConfig(rubricConfigPath);
-  // The trained model lives under OpenAI's API with an id like
-  //   ft:gpt-4o-mini:acme::abc
-  // Our built-in openai/ provider passes the model string through unchanged,
-  // so `openai/ft:...` just works. No extra provider entry needed.
-  const exposedModelId = `openai/${state.trainedModelId}`;
+  // Re-expose the trained model under the same provider prefix the job used.
+  // OpenAI SFT: `openai/ft:gpt-4o-mini:acme::abc`. Together: `together/<org>/<trained-model>`.
+  // Both providers pass the tail through unchanged to the wire, so no extra
+  // provider registration is required.
+  const providerPrefix = job.base.startsWith('together/') ? 'together' : 'openai';
+  const exposedModelId = `${providerPrefix}/${state.trainedModelId}`;
   const nextConfig: Config = {
     ...loadedRubric.config,
     models: [exposedModelId, ...loadedRubric.config.models.slice(1)],
