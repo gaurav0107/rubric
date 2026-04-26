@@ -384,6 +384,25 @@ export const INDEX_HTML = `<!doctype html>
     display: none;
   }
   .runs-drawer-backdrop.open { display: block; }
+
+  @media (max-width: 768px) {
+    header {
+      flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px;
+    }
+    header .sub { order: 10; flex-basis: 100%; font-size: 11px; }
+    main {
+      grid-template-columns: 1fr; grid-auto-rows: minmax(220px, auto);
+    }
+    section { border-right: none; border-bottom: 1px solid var(--border); }
+    section:last-child { border-bottom: none; }
+    .results-pane .summary {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .results-pane .summary .cell:nth-child(n+5) {
+      border-top: 1px solid var(--border);
+    }
+    .runs-drawer { width: 100%; max-width: 100%; }
+  }
 </style>
 </head>
 <body>
