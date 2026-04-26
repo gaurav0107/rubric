@@ -266,7 +266,8 @@ async function main(argv: string[]): Promise<number> {
         const maxCasesRaw = parseFlag(rest, '--max-cases');
         const scanPii = rest.includes('--scan-pii');
         const detach = rest.includes('--detach');
-        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json, detach };
+        const verbose = rest.includes('--verbose');
+        const opts: Parameters<typeof runRun>[0] = { mock, allowLangfuse, failOnRegress, json, detach, verbose };
         if (format !== undefined) opts.format = format;
         if (configPath) opts.configPath = configPath;
         if (reportPath) opts.reportPath = reportPath;

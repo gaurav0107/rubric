@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import {
   createConfiguredProviders,
   loadConfig,
+  redactHeaders,
   splitModelId,
   type Provider,
   type ProviderConfig,
@@ -28,15 +29,6 @@ export interface ProvidersTestResult {
 }
 
 const DEFAULT_PROMPT = 'Reply in one short sentence: what is 2 + 2?';
-
-function redactHeaders(headers: Record<string, string> | undefined): Record<string, string> {
-  if (!headers) return {};
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) {
-    out[k] = /auth|token|key|secret/i.test(k) ? '***' : v;
-  }
-  return out;
-}
 
 function pickModelForProvider(
   name: string,

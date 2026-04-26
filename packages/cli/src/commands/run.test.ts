@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { buildCompactLine, buildJsonPayload, decideExitCode } from './run.ts';
-import type { CellResult, Config, EvaluatorGateBreach, ModelId, RunSummary } from '../../../shared/src/index.ts';
+import { buildCompactLine, buildJsonPayload, decideExitCode, writeProviderDiagnostics } from './run.ts';
+import type { CellResult, Config, EvaluatorGateBreach, ModelId, ProviderConfig, RunSummary } from '../../../shared/src/index.ts';
 
 function sum(p: Partial<RunSummary>): RunSummary {
   return {
@@ -160,5 +160,58 @@ describe('buildCompactLine', () => {
       exitCode: 0,
     });
     expect(line).not.toContain('\n');
+  });
+});
+
+describe('writeProviderDiagnostics', () => {
+  test('redacts Authorization / x-api-key / token headers', () => {
+    const lines: string[] = [];
+    const provider: ProviderConfig = {
+      name: 'corp',
+      wire: 'openai-chat',
+      baseUrl: 'https://gateway.internal/v1',
+      models: ['corp/acme-7b' as ModelId],
+      keyEnv: 'CORP_TOKEN',
+      headers: {
+        Authorization: 'Bearer supersecret-do-not-leak',
+        'x-api-key': 'ak_live_shouldbehidden',
+        'x-request-id': 'req-42',
+        'content-type': 'application/json',
+      },
+    };
+    writeProviderDiagnostics((l) => lines.push(l), [provider]);
+    const text = lines.join('');
+    expect(text).toContain('corp/');
+    expect(text).toContain('https://gateway.internal/v1');
+    expect(text).toContain('env CORP_TOKEN');
+    expect(text).toContain('req-42');
+    expect(text).toContain('application/json');
+    // The actual bearer token and api key must NEVER appear in the output.
+    expect(text).not.toContain('supersecret-do-not-leak');
+    expect(text).not.toContain('ak_live_shouldbehidden');
+    expect(text).toContain('***');
+  });
+
+  test('prints a friendly line when no user providers are declared', () => {
+    const lines: string[] = [];
+    writeProviderDiagnostics((l) => lines.push(l), undefined);
+    const text = lines.join('');
+    expect(text).toContain('built-ins');
+    expect(text).toContain('no user-declared providers');
+  });
+
+  test('keyFile path shows but the file contents never do', () => {
+    const lines: string[] = [];
+    writeProviderDiagnostics((l) => lines.push(l), [{
+      name: 'local',
+      wire: 'openai-chat',
+      baseUrl: 'http://localhost:11434',
+      models: ['local/llama' as ModelId],
+      keyFile: '~/.rubric/local-key',
+    }]);
+    const text = lines.join('');
+    expect(text).toContain('file ~/.rubric/local-key');
+    // Sanity: since there are no headers, the output should say (none).
+    expect(text).toContain('(none)');
   });
 });

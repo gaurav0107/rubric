@@ -15,6 +15,7 @@ import {
   defaultRegistryRoot,
   loadConfig,
   parseCasesJsonl,
+  redactHeaders,
   resolveCriteria,
   renderBadgeSvg,
   renderCostCsv,
@@ -99,6 +100,14 @@ export interface RunOptions {
    */
   detach?: boolean;
   /**
+   * When true, print a diagnostics block before the sweep: each configured
+   * provider's base URL, redacted headers, and key source. All secrets are
+   * scrubbed via the shared `redactHeaders` helper — no bearer token should
+   * ever reach the user's terminal. Intended for debugging 401/403 against
+   * corporate gateways; safe to paste into a GitHub issue.
+   */
+  verbose?: boolean;
+  /**
    * Internal seam: lets tests substitute a fake spawner so we don't actually
    * fork a process. Returns the child's pid.
    */
@@ -161,6 +170,44 @@ function defaultSpawnWorker(
 function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefined, baseDir: string): Provider[] {
   if (mock) return [createMockProvider({ acceptAll: true })];
   return createConfiguredProviders(userProviders, baseDir);
+}
+
+/**
+ * Emit a provider diagnostics block for `--verbose`. The rule: NEVER print a
+ * bearer token, an API key, or anything else that could compromise a live
+ * credential. We show:
+ *   - the provider's name and baseUrl (both public)
+ *   - its extra headers, routed through `redactHeaders` so `Authorization`
+ *     / `x-api-key` / `*token*` / `*secret*` collapse to `***`
+ *   - the key source (env var name OR file path — never the value)
+ * Users pasting this block into a GitHub issue should be able to do so
+ * without thinking twice about what they're about to leak.
+ */
+export function writeProviderDiagnostics(
+  write: (line: string) => void,
+  userProviders: ProviderConfig[] | undefined,
+): void {
+  write(`\nverbose: provider diagnostics\n`);
+  write(`  built-ins: openai/ groq/ openrouter/ ollama/ (key source: env *_API_KEY)\n`);
+  const list = userProviders ?? [];
+  if (list.length === 0) {
+    write(`  no user-declared providers\n`);
+    return;
+  }
+  for (const p of list) {
+    write(`  ${p.name}/\n`);
+    write(`    baseUrl:    ${p.baseUrl}\n`);
+    if (p.keyEnv) write(`    keySource:  env ${p.keyEnv}\n`);
+    else if (p.keyFile) write(`    keySource:  file ${p.keyFile}\n`);
+    else write(`    keySource:  (unset — resolveProviderKey will throw on first request)\n`);
+    const redacted = redactHeaders(p.headers);
+    const entries = Object.entries(redacted);
+    if (entries.length === 0) {
+      write(`    headers:    (none)\n`);
+    } else {
+      write(`    headers:    ${JSON.stringify(redacted)}\n`);
+    }
+  }
 }
 
 function buildJudge(mock: boolean, config: Config, providers: Provider[], criteria: string, originalCriteria: Criteria): Judge {
@@ -356,6 +403,9 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     judge: { ...loaded.config.judge, criteria: { custom: criteriaText } },
   };
   const providers = buildProviders(mock, loaded.config.providers, loaded.baseDir);
+  if (opts.verbose === true && !mock) {
+    writeProviderDiagnostics(write, loaded.config.providers);
+  }
   const judge = buildJudge(mock, resolvedConfig, providers, criteriaText, loaded.config.judge.criteria);
 
   const wantRegistry = opts.skipRegistry !== true;
