@@ -27,13 +27,15 @@ export const INDEX_HTML = `<!doctype html>
     --loss: #ef5350;
     --tie: #d4a94b;
     --err: #b26eff;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --mono: ui-monospace, "JetBrains Mono", "Fira Code", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: ui-sans-serif, "Inter var", "Inter", "SF Pro Text", "Segoe UI Variable Text", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
     background: var(--bg); color: var(--text);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font: 14px/1.5 var(--sans);
+    font-feature-settings: "ss01", "cv11";
     display: flex; flex-direction: column;
   }
   header {
@@ -41,7 +43,10 @@ export const INDEX_HTML = `<!doctype html>
     padding: 10px 16px; border-bottom: 1px solid var(--border);
     background: var(--panel);
   }
-  header h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+  header h1 {
+    margin: 0; font-size: 18px; font-weight: 700;
+    letter-spacing: -0.01em; color: var(--text);
+  }
   header .sub { color: var(--muted); font-size: 12px; font-family: var(--mono); }
   header .spacer { flex: 1; }
   header button, header label {
@@ -146,7 +151,10 @@ export const INDEX_HTML = `<!doctype html>
   .results-pane .summary .cell {
     background: var(--panel); padding: 10px 12px; text-align: center;
   }
-  .results-pane .summary .cell .n { font-size: 20px; font-weight: 600; }
+  .results-pane .summary .cell .n {
+    font-size: 20px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
   .results-pane .summary .cell .k { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
   .results-pane .summary .cell.win .n { color: var(--win); }
   .results-pane .summary .cell.loss .n { color: var(--loss); }
