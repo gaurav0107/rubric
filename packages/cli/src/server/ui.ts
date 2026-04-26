@@ -294,6 +294,69 @@ export const INDEX_HTML = String.raw`<!doctype html>
     margin: 0; white-space: pre-wrap; word-break: break-word;
     font-family: var(--mono); font-size: 11px; color: var(--text);
   }
+
+  /* Runs drawer — overlay that slides in from the right when "📜 Runs" is clicked. */
+  .runs-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 520px;
+    background: var(--panel); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .18s ease-out;
+    z-index: 40; box-shadow: -8px 0 24px rgba(0,0,0,.4);
+  }
+  .runs-drawer.open { transform: translateX(0); }
+  .runs-drawer .title {
+    padding: 10px 14px; font-size: 13px; font-weight: 600;
+    border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px;
+  }
+  .runs-drawer .title .spacer { flex: 1; }
+  .runs-drawer .title button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .runs-drawer .title button.primary { border-color: var(--accent); color: var(--accent); }
+  .runs-drawer .title button:disabled { opacity: .5; cursor: not-allowed; }
+  .runs-drawer .body { flex: 1; overflow: auto; padding: 12px 14px; }
+  .runs-drawer .empty { color: var(--muted); font-size: 12px; padding: 24px 0; text-align: center; }
+  .runs-drawer .runs-list { display: flex; flex-direction: column; gap: 6px; }
+  .runs-drawer .run-row {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--panel-2); cursor: pointer; font-size: 12px;
+  }
+  .runs-drawer .run-row:hover { border-color: var(--accent-weak); }
+  .runs-drawer .run-row.selected { border-color: var(--accent); }
+  .runs-drawer .run-row input[type=checkbox] { accent-color: var(--accent); }
+  .runs-drawer .run-row .rid { font-family: var(--mono); font-size: 11px; color: var(--text); }
+  .runs-drawer .run-row .meta { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+  .runs-drawer .run-row .status { padding: 1px 6px; border-radius: 10px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+  .runs-drawer .run-row .status.complete { background: var(--accent-weak); color: var(--accent); }
+  .runs-drawer .run-row .status.running  { background: #3a3217; color: var(--tie); }
+  .runs-drawer .run-row .status.failed   { background: #3a1f1f; color: var(--loss); }
+  .runs-drawer .run-row .status.pending,
+  .runs-drawer .run-row .status.abandoned { background: #1f2a38; color: var(--muted); }
+  .runs-drawer .run-detail {
+    margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--panel-2); font-size: 12px;
+  }
+  .runs-drawer .run-detail h4 { margin: 0 0 6px 0; font-size: 12px; font-weight: 600; }
+  .runs-drawer .run-detail dl {
+    display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0;
+    font-family: var(--mono); font-size: 11px;
+  }
+  .runs-drawer .run-detail dt { color: var(--muted); }
+  .runs-drawer .run-detail dd { margin: 0; color: var(--text); }
+  .runs-drawer .diff-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;
+  }
+  .runs-drawer .diff-col { border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: var(--panel-2); }
+  .runs-drawer .diff-col h5 {
+    margin: 0 0 6px 0; font-size: 11px; font-family: var(--mono); color: var(--muted);
+  }
+  .runs-drawer-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35;
+    display: none;
+  }
+  .runs-drawer-backdrop.open { display: block; }
 </style>
 </head>
 <body>
@@ -307,6 +370,7 @@ export const INDEX_HTML = String.raw`<!doctype html>
       <button data-mode="compare-models" aria-pressed="false">models</button>
     </div>
     <label><input type="checkbox" id="mock-toggle"> mock mode</label>
+    <button id="runs-btn" title="Browse past runs from the registry">📜 Runs</button>
     <button id="run-btn" class="primary">▶ Run</button>
   </header>
 
@@ -363,6 +427,19 @@ export const INDEX_HTML = String.raw`<!doctype html>
       </div>
     </section>
   </main>
+
+  <div id="runs-backdrop" class="runs-drawer-backdrop"></div>
+  <aside id="runs-drawer" class="runs-drawer" aria-hidden="true">
+    <div class="title">
+      <strong>Runs</strong>
+      <span class="spacer"></span>
+      <button id="runs-diff-btn" class="primary" disabled title="Select two runs to compare">Diff 2</button>
+      <button id="runs-close-btn">Close</button>
+    </div>
+    <div class="body" id="runs-body">
+      <div class="empty">Loading…</div>
+    </div>
+  </aside>
 
 <script>
 (() => {
@@ -982,6 +1059,315 @@ export const INDEX_HTML = String.raw`<!doctype html>
       btn.textContent = '✨ Steelman';
     }
   }
+
+  // ── Runs drawer ────────────────────────────────────────────────────────────
+  // Browse the local registry (~/.rubric/runs), open one for summary+cells, or
+  // select two via checkboxes to side-by-side diff their summaries. Zero-dep
+  // vanilla JS to match the rest of the file.
+  const runsState = {
+    open: false,
+    runs: [],           // list manifests
+    selected: new Set(),// ids checked for diff
+    active: null,       // id currently expanded
+  };
+
+  function shortTs(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  }
+
+  function formatPct(n) {
+    if (typeof n !== 'number' || !isFinite(n)) return '—';
+    return (n * 100).toFixed(1) + '%';
+  }
+
+  function openRunsDrawer() {
+    runsState.open = true;
+    $('runs-drawer').classList.add('open');
+    $('runs-drawer').setAttribute('aria-hidden', 'false');
+    $('runs-backdrop').classList.add('open');
+    loadRunsList();
+  }
+
+  function closeRunsDrawer() {
+    runsState.open = false;
+    runsState.active = null;
+    runsState.selected.clear();
+    $('runs-drawer').classList.remove('open');
+    $('runs-drawer').setAttribute('aria-hidden', 'true');
+    $('runs-backdrop').classList.remove('open');
+    updateDiffButton();
+  }
+
+  function updateDiffButton() {
+    $('runs-diff-btn').disabled = runsState.selected.size !== 2;
+  }
+
+  async function loadRunsList() {
+    const body = $('runs-body');
+    body.innerHTML = '<div class="empty">Loading…</div>';
+    try {
+      const res = await fetch('/api/runs?limit=50');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      runsState.runs = data.runs || [];
+      renderRunsList();
+    } catch (err) {
+      body.innerHTML = '';
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'failed to load runs: ' + (err.message || err);
+      body.appendChild(e);
+    }
+  }
+
+  function renderRunsList() {
+    const body = $('runs-body');
+    body.innerHTML = '';
+    if (runsState.runs.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No runs in registry yet. Run `rubric run` to create one.';
+      body.appendChild(empty);
+      return;
+    }
+    const hint = document.createElement('div');
+    hint.className = 'empty';
+    hint.style.textAlign = 'left';
+    hint.style.padding = '0 0 8px 0';
+    hint.textContent = 'Click a row to inspect. Check two rows and "Diff 2" to compare.';
+    body.appendChild(hint);
+
+    const list = document.createElement('div');
+    list.className = 'runs-list';
+    for (const r of runsState.runs) {
+      const row = document.createElement('div');
+      row.className = 'run-row';
+      row.dataset.runId = r.id;
+      if (runsState.active === r.id) row.classList.add('selected');
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = runsState.selected.has(r.id);
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        if (cb.checked) {
+          if (runsState.selected.size >= 2) {
+            cb.checked = false;
+            return;
+          }
+          runsState.selected.add(r.id);
+        } else {
+          runsState.selected.delete(r.id);
+        }
+        updateDiffButton();
+      });
+      row.appendChild(cb);
+
+      const meta = document.createElement('div');
+      meta.style.flex = '1';
+      meta.style.minWidth = '0';
+      const rid = document.createElement('div');
+      rid.className = 'rid';
+      rid.textContent = r.id;
+      const sub = document.createElement('div');
+      sub.className = 'meta';
+      const when = shortTs(r.finishedAt || r.startedAt);
+      const sum = r.summary
+        ? r.summary.wins + 'W/' + r.summary.losses + 'L/' + r.summary.ties + 'T · ' + formatPct(r.summary.winRate)
+        : '—';
+      sub.textContent = when + ' · ' + sum;
+      meta.appendChild(rid);
+      meta.appendChild(sub);
+      row.appendChild(meta);
+
+      const status = document.createElement('span');
+      status.className = 'status ' + (r.status || 'pending');
+      status.textContent = r.status || '?';
+      row.appendChild(status);
+
+      row.addEventListener('click', () => openRunDetail(r.id));
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+  }
+
+  async function openRunDetail(id) {
+    runsState.active = id;
+    for (const row of document.querySelectorAll('.run-row')) {
+      row.classList.toggle('selected', row.dataset.runId === id);
+    }
+    const body = $('runs-body');
+    const existing = body.querySelector('.run-detail');
+    if (existing) existing.remove();
+    const detail = document.createElement('div');
+    detail.className = 'run-detail';
+    detail.innerHTML = '<div class="empty">Loading…</div>';
+    body.appendChild(detail);
+    try {
+      const res = await fetch('/api/runs/' + encodeURIComponent(id));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || ('HTTP ' + res.status));
+      }
+      const data = await res.json();
+      renderRunDetail(detail, data.manifest, data.cells);
+    } catch (err) {
+      detail.innerHTML = '';
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'failed to load run: ' + (err.message || err);
+      detail.appendChild(e);
+    }
+  }
+
+  function renderRunDetail(container, manifest, cells) {
+    container.innerHTML = '';
+    const h = document.createElement('h4');
+    h.textContent = manifest.id;
+    container.appendChild(h);
+
+    const dl = document.createElement('dl');
+    const rows = [
+      ['status', manifest.status || '—'],
+      ['started', shortTs(manifest.startedAt)],
+      ['finished', shortTs(manifest.finishedAt)],
+      ['cells', (manifest.summary
+        ? (manifest.summary.wins + manifest.summary.losses + manifest.summary.ties + manifest.summary.errors)
+        : cells.length) + ' of ' + (manifest.plannedCells || '?')],
+      ['win rate', manifest.summary ? formatPct(manifest.summary.winRate) : '—'],
+      ['W/L/T/E', manifest.summary
+        ? [manifest.summary.wins, manifest.summary.losses, manifest.summary.ties, manifest.summary.errors].join(' / ')
+        : '—'],
+    ];
+    for (const [k, v] of rows) {
+      const dt = document.createElement('dt');
+      dt.textContent = k;
+      const dd = document.createElement('dd');
+      dd.textContent = String(v);
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+    container.appendChild(dl);
+
+    if (cells && cells.length > 0) {
+      const h2 = document.createElement('h4');
+      h2.style.marginTop = '10px';
+      h2.textContent = 'cells (' + cells.length + ')';
+      container.appendChild(h2);
+      const table = document.createElement('table');
+      table.className = 'grid-table';
+      table.innerHTML =
+        '<thead><tr><th>#</th><th>model</th><th>winner</th><th>reason</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      for (const c of cells.slice(0, 20)) {
+        const tr = document.createElement('tr');
+        const w = (c.judge && c.judge.winner) || (c.error ? 'error' : '—');
+        const r = (c.judge && c.judge.reason) || (c.error || '');
+        tr.innerHTML =
+          '<td>' + c.caseIndex + '</td>' +
+          '<td class="mono">' + String(c.model || '') + '</td>' +
+          '<td>' + w + '</td>' +
+          '<td>' + r.replace(/[<>&]/g, (ch) => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[ch])) + '</td>';
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      container.appendChild(table);
+      if (cells.length > 20) {
+        const more = document.createElement('div');
+        more.className = 'empty';
+        more.style.textAlign = 'left';
+        more.textContent = '… ' + (cells.length - 20) + ' more cell(s) hidden.';
+        container.appendChild(more);
+      }
+    }
+  }
+
+  async function diffSelected() {
+    if (runsState.selected.size !== 2) return;
+    const [idA, idB] = [...runsState.selected];
+    const body = $('runs-body');
+    const existing = body.querySelector('.run-detail');
+    if (existing) existing.remove();
+    const detail = document.createElement('div');
+    detail.className = 'run-detail';
+    detail.innerHTML = '<div class="empty">Diffing…</div>';
+    body.appendChild(detail);
+    try {
+      const [rA, rB] = await Promise.all([
+        fetch('/api/runs/' + encodeURIComponent(idA)).then((r) => r.json()),
+        fetch('/api/runs/' + encodeURIComponent(idB)).then((r) => r.json()),
+      ]);
+      renderRunDiff(detail, rA, rB);
+    } catch (err) {
+      detail.innerHTML = '';
+      const e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'diff failed: ' + (err.message || err);
+      detail.appendChild(e);
+    }
+  }
+
+  function renderRunDiff(container, A, B) {
+    container.innerHTML = '';
+    const h = document.createElement('h4');
+    h.textContent = 'diff · ' + A.manifest.id.slice(-8) + ' vs ' + B.manifest.id.slice(-8);
+    container.appendChild(h);
+
+    const grid = document.createElement('div');
+    grid.className = 'diff-grid';
+    for (const side of [A, B]) {
+      const col = document.createElement('div');
+      col.className = 'diff-col';
+      const h5 = document.createElement('h5');
+      h5.textContent = side.manifest.id;
+      col.appendChild(h5);
+      const s = side.manifest.summary || {};
+      const dl = document.createElement('dl');
+      const rows = [
+        ['status', side.manifest.status || '—'],
+        ['finished', shortTs(side.manifest.finishedAt)],
+        ['wins', s.wins ?? '—'],
+        ['losses', s.losses ?? '—'],
+        ['ties', s.ties ?? '—'],
+        ['errors', s.errors ?? '—'],
+        ['win rate', typeof s.winRate === 'number' ? formatPct(s.winRate) : '—'],
+      ];
+      for (const [k, v] of rows) {
+        const dt = document.createElement('dt');
+        dt.textContent = k;
+        const dd = document.createElement('dd');
+        dd.textContent = String(v);
+        dl.appendChild(dt);
+        dl.appendChild(dd);
+      }
+      col.appendChild(dl);
+      grid.appendChild(col);
+    }
+    container.appendChild(grid);
+
+    const delta = document.createElement('div');
+    delta.style.marginTop = '10px';
+    delta.style.fontSize = '12px';
+    const wrA = A.manifest.summary && A.manifest.summary.winRate;
+    const wrB = B.manifest.summary && B.manifest.summary.winRate;
+    if (typeof wrA === 'number' && typeof wrB === 'number') {
+      const d = wrB - wrA;
+      const sign = d > 0 ? '+' : '';
+      delta.textContent = 'Δ win rate (B − A): ' + sign + (d * 100).toFixed(1) + '%';
+    } else {
+      delta.textContent = 'Δ win rate unavailable (missing summary on one side).';
+    }
+    container.appendChild(delta);
+  }
+
+  $('runs-btn').addEventListener('click', openRunsDrawer);
+  $('runs-close-btn').addEventListener('click', closeRunsDrawer);
+  $('runs-backdrop').addEventListener('click', closeRunsDrawer);
+  $('runs-diff-btn').addEventListener('click', diffSelected);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && runsState.open) closeRunsDrawer();
+  });
 
   loadWorkspace();
 })();

@@ -224,10 +224,12 @@ async function main(argv: string[]): Promise<number> {
         const configPath = parseFlag(rest, '--config');
         const portRaw = parseFlag(rest, '--port');
         const host = parseFlag(rest, '--host');
+        const registryRoot = parseFlag(rest, '--registry-root');
         const mock = rest.includes('--mock');
         const opts: Parameters<typeof runServe>[0] = { mock };
         if (configPath) opts.configPath = configPath;
         if (host) opts.host = host;
+        if (registryRoot) opts.registryRoot = registryRoot;
         if (portRaw !== undefined) {
           const n = Number(portRaw);
           if (!Number.isFinite(n) || n < 1 || n > 65535) {

@@ -8,6 +8,8 @@ export interface ServeOptions {
   port?: number;
   host?: string;
   mock?: boolean;
+  /** Override the registry root used by the Runs drawer. Defaults to `~/.rubric/runs`. */
+  registryRoot?: string;
   /** Stream for human chatter; defaults to stdout. */
   write?: (line: string) => void;
   /** If set, the function resolves after the server is listening instead of blocking forever. Useful for tests. */
@@ -28,6 +30,7 @@ export async function runServe(opts: ServeOptions = {}): Promise<ServeResult> {
   const serverOpts: ServerOptions = { cwd };
   if (opts.configPath) serverOpts.configPath = opts.configPath;
   if (opts.mock) serverOpts.mock = true;
+  if (opts.registryRoot) serverOpts.registryRoot = opts.registryRoot;
 
   const handlers = makeHandlers(serverOpts);
   const server = createHttpServer(serverOpts, handlers, INDEX_HTML);

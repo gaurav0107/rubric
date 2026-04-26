@@ -16,8 +16,12 @@ import {
   createMockProvider,
   createOpenAIJudge,
   createStructuralJudge,
+  defaultRegistryRoot,
+  listRuns,
   loadConfig,
   parseCasesJsonl,
+  readCells,
+  readManifest,
   resolveCriteria,
   runEval,
   runSteelman,
@@ -28,6 +32,7 @@ import {
   type Judge,
   type Provider,
   type ProviderConfig,
+  type RunManifest,
   type SteelmanFailingCase,
   type SteelmanResult,
 } from '../../../shared/src/index.ts';
@@ -40,6 +45,8 @@ export interface ServerOptions {
   host?: string;
   /** Custom index.html content; falls back to the bundled default when absent. */
   indexHtml?: string;
+  /** Override the registry root used by the `/api/runs` routes. Defaults to `defaultRegistryRoot()` (`~/.rubric/runs`). */
+  registryRoot?: string;
 }
 
 export interface WorkspaceSnapshot {
@@ -142,6 +149,10 @@ export interface Handlers {
     iterate: () => AsyncIterable<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } } | { type: 'done'; cells: CellResult[] }>;
   }>;
   steelman: (body: SteelmanRequestBody) => Promise<SteelmanResult & { which: 'baseline' | 'candidate' }>;
+  /** Enumerate runs from the registry, newest first. Omit cells to keep payload small. */
+  listRuns: (opts?: { limit?: number }) => RunManifest[];
+  /** Fetch a run's manifest + all cells. 404 when the id is unknown. */
+  loadRun: (id: string) => { manifest: RunManifest; cells: CellResult[] };
 }
 
 function calibrationPathFor(ws: WorkspaceSnapshot): string {
@@ -167,12 +178,24 @@ function readCalibrationEntries(path: string): CalibrationLabel[] {
   return (parsed as { entries: CalibrationLabel[] }).entries;
 }
 
-export function makeHandlers(opts: ServerOptions): Handlers {
+export function makeHandlers(opts: ServerOptions = {}): Handlers {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
+  const registryRoot = opts.registryRoot ?? defaultRegistryRoot();
 
   return {
     getWorkspace: () => loadWorkspace(cwd, configPath),
+    listRuns(listOpts) {
+      const runs = listRuns(registryRoot);
+      const limit = listOpts?.limit;
+      if (limit !== undefined && limit > 0) return runs.slice(0, limit);
+      return runs;
+    },
+    loadRun(id) {
+      const manifest = readManifest(registryRoot, id);
+      const cells = readCells(registryRoot, id);
+      return { manifest, cells };
+    },
     savePrompt(which, content) {
       const ws = loadWorkspace(cwd, configPath);
       const target = which === 'baseline' ? ws.resolved.baseline : ws.resolved.candidate;
@@ -294,6 +317,42 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
           prompts: ws.prompts,
           cases: ws.cases,
         });
+        return;
+      }
+
+      // Run registry — browse history, reload a run, diff two runs client-side.
+      if (method === 'GET' && url.startsWith('/api/runs')) {
+        // /api/runs              → list
+        // /api/runs?limit=20     → list, capped
+        // /api/runs/<id>         → manifest + cells for one run
+        const qIdx = url.indexOf('?');
+        const pathPart = qIdx === -1 ? url : url.slice(0, qIdx);
+        const query = qIdx === -1 ? '' : url.slice(qIdx + 1);
+        const segments = pathPart.split('/').filter(Boolean); // ['api','runs', <id?>]
+        if (segments.length === 2) {
+          const limitRaw = new URLSearchParams(query).get('limit');
+          const limit = limitRaw !== null ? Math.max(0, Number(limitRaw)) : undefined;
+          try {
+            const runs = handlers.listRuns(limit !== undefined ? { limit } : undefined);
+            sendJson(res, 200, { runs });
+          } catch (err) {
+            sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+          }
+          return;
+        }
+        if (segments.length === 3) {
+          const id = decodeURIComponent(segments[2]!);
+          try {
+            const { manifest, cells } = handlers.loadRun(id);
+            sendJson(res, 200, { manifest, cells });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const notFound = /not found|ENOENT|no manifest/i.test(msg);
+            sendJson(res, notFound ? 404 : 500, { error: msg });
+          }
+          return;
+        }
+        sendJson(res, 404, { error: `no route for ${method} ${url}` });
         return;
       }
 
