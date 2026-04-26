@@ -1,6 +1,6 @@
 {
   "name": "@rubric/web",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "description": "Hosted layer — rubric.dev. Cloudflare Workers + Durable Objects + D1 + R2.",
   "license": "MIT",

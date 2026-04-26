@@ -2,6 +2,20 @@
 
 All notable changes to rubric. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [2.0.2] — 2026-04-27
+
+Critical hotfix — v2.0.1 shipped with a broken `rubric serve` UI.
+
+### Fixed
+
+- **Blank `rubric serve` UI.** Dropping `String.raw` in v2.0.1 (to fix the emoji rendering bug) also stripped the `\n` escapes inside two SSE-parsing lines (`buffered.indexOf('\n\n')` and `raw.split('\n')`). The resulting raw newline inside a single-quoted string made the entire `<script>` block a syntax error, so no event listeners were bound and no API calls fired — config path, prompts, and case list never populated. Served HTML was 200 OK with an empty shell. Fixed by re-escaping those two literals as `'\\n\\n'` / `'\\n'` so the template literal emits the intended `\n` escape into the served JS.
+- Tests didn't catch this — the server test asserts response status and length, not that the embedded script parses in a browser. Added to the post-release checklist: curl + headless-browse smoke test before tagging.
+
+### Notes
+
+- No API, config, or data changes. Single-file edit to `packages/cli/src/server/ui.ts`.
+- 360 tests green. Manual verification: `curl http://127.0.0.1:7333/` returns 200, config path populates, 5 demo cases render, no console errors.
+
 ## [2.0.1] — 2026-04-26
 
 Hotfix for a shipped regression in the `rubric serve` UI plus polish for typography and mobile.

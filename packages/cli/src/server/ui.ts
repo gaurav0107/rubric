@@ -998,11 +998,11 @@ export const INDEX_HTML = `<!doctype html>
         if (done) break;
         buffered += dec.decode(value, { stream: true });
         for (;;) {
-          const split = buffered.indexOf('\n\n');
+          const split = buffered.indexOf('\\n\\n');
           if (split === -1) break;
           const raw = buffered.slice(0, split);
           buffered = buffered.slice(split + 2);
-          const lines = raw.split('\n');
+          const lines = raw.split('\\n');
           let event = 'message'; let data = '';
           for (const line of lines) {
             if (line.startsWith('event: ')) event = line.slice(7);
