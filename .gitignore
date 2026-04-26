@@ -28,3 +28,4 @@ pnpm-debug.log*
 
 report.html
 prompts/_calibration.json.local
+.gstack/

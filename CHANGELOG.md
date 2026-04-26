@@ -2,6 +2,22 @@
 
 All notable changes to rubric. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [2.0.1] — 2026-04-26
+
+Hotfix for a shipped regression in the `rubric serve` UI plus polish for typography and mobile.
+
+### Fixed
+
+- **Broken emoji in `rubric serve` header.** `INDEX_HTML` was tagged with `String.raw`, and Bun's raw tag escapes non-ASCII source characters into literal `\u{…}` text. Every 📜 / ▶ / ✨ / ⌘ / em-dash rendered as six-to-eight ASCII characters in the served HTML. Dropped the tag — the template had zero backslashes and zero interpolations, so the tag was pure overhead plus the escape bug.
+- **Default serif body font.** Added an explicit `ui-sans-serif, "Inter var", ...` stack with `font-feature-settings: "ss01", "cv11"`. Brand `rubric` promoted to 18px / 700 / -0.01em letter-spacing. Stat cells got `font-variant-numeric: tabular-nums` so numeric columns stop shimmying between runs.
+- **Three-pane grid on mobile.** `@media (max-width: 768px)` now stacks panes vertically with `border-bottom` separators, wraps the header, breaks the stat summary into a 4-col grid, and widens the runs drawer to 100%.
+- **Sub-44px touch targets on coarse pointers.** `@media (pointer: coarse)` enforces `min-height: 44px` on all header, tab, footer, and drawer buttons.
+
+### Notes
+
+- All fixes are CSS / single-file template changes in `packages/cli/src/server/ui.ts`. No logic touched. Tests green (360 pass / 0 fail).
+- Full audit: `~/.gstack/projects/rubric/designs/design-audit-20260426/design-audit-localhost.md`.
+
 ## [2.0.0] — 2026-04-26
 
 Second major release. Everything here ships today; the hosted cloud layer is deliberately deferred.
