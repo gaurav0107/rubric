@@ -71,6 +71,7 @@ Usage:
     --max-cases <n>                 Fail if the dataset has more than n cases
     --scan-pii                      Warn when case input/expected looks like PII (non-fatal)
     --detach                        Spawn a worker, print the run id, exit (use \`rubric runs wait <id>\`)
+    --verbose                       Print provider diagnostics (base URLs, key sources, redacted headers) before running
   rubric seed <source-flag> <in.jsonl> [options]
                                     Convert an LLM-observability export into cases + calibration
     --from-langfuse <path>          Langfuse JSONL export (input + output + optional feedback)
