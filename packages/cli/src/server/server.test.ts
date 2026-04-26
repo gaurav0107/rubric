@@ -157,4 +157,42 @@ describe('/api/runs', () => {
       rmSync(emptyRoot, { recursive: true, force: true });
     }
   });
+
+  test('GET /api/runs/<id>/clusters groups losing cells by judge-reason', async () => {
+    // Seed a fresh run with multiple losses so clustering has material.
+    const { id } = createRun({
+      root: registryRoot,
+      config: minimalConfig(),
+      prompts: { baseline: 'b', candidate: 'c' },
+      datasetText: 'd',
+      plannedCells: 4,
+    });
+    const mk = (i: number, winner: 'a' | 'b', reason: string): CellResult => ({
+      caseIndex: i,
+      model: 'openai/gpt-4o-mini' as ModelId,
+      outputA: '',
+      outputB: '',
+      judge: { winner, reason },
+    });
+    appendCell(registryRoot, id, mk(0, 'a', 'Candidate was verbose and rambling'));
+    appendCell(registryRoot, id, mk(1, 'a', 'Too verbose, with rambling asides'));
+    appendCell(registryRoot, id, mk(2, 'a', 'Hallucinated a URL citation'));
+    appendCell(registryRoot, id, mk(3, 'b', 'candidate wins'));
+    updateManifest(registryRoot, id, { status: 'complete' });
+    await withServer(registryRoot, cwd, async (url) => {
+      const res = await fetch(`${url}/api/runs/${encodeURIComponent(id)}/clusters`);
+      expect(res.status).toBe(200);
+      const body = await res.json() as { clusters: Array<{ count: number; caseIndices: number[]; label: string }> };
+      expect(body.clusters.length).toBeGreaterThanOrEqual(2);
+      expect(body.clusters[0]!.count).toBe(2);
+      expect(body.clusters[0]!.caseIndices.sort()).toEqual([0, 1]);
+    });
+  });
+
+  test('GET /api/runs/<unknown>/clusters returns 404', async () => {
+    await withServer(registryRoot, cwd, async (url) => {
+      const res = await fetch(`${url}/api/runs/does-not-exist/clusters`);
+      expect(res.status).toBe(404);
+    });
+  });
 });

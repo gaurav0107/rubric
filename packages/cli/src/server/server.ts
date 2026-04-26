@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import {
+  clusterFailures,
   createConfiguredProviders,
   createMockJudge,
   createMockProvider,
@@ -29,6 +30,7 @@ import {
   type CellResult,
   type Config,
   type Criteria,
+  type FailureCluster,
   type Judge,
   type Provider,
   type ProviderConfig,
@@ -153,6 +155,8 @@ export interface Handlers {
   listRuns: (opts?: { limit?: number }) => RunManifest[];
   /** Fetch a run's manifest + all cells. 404 when the id is unknown. */
   loadRun: (id: string) => { manifest: RunManifest; cells: CellResult[] };
+  /** Cluster a run's losing cells by judge-reason tokens. */
+  clusterRun: (id: string, losingSide?: 'a' | 'b') => { clusters: FailureCluster[] };
 }
 
 function calibrationPathFor(ws: WorkspaceSnapshot): string {
@@ -195,6 +199,16 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
       const manifest = readManifest(registryRoot, id);
       const cells = readCells(registryRoot, id);
       return { manifest, cells };
+    },
+    clusterRun(id, losingSide) {
+      // Resolve the manifest first so unknown ids 404 cleanly instead of
+      // silently returning "no clusters" (readCells just returns [] when the
+      // run doesn't exist).
+      readManifest(registryRoot, id);
+      const cells = readCells(registryRoot, id);
+      const input: Parameters<typeof clusterFailures>[0] = { cells };
+      if (losingSide) input.losingSide = losingSide;
+      return { clusters: clusterFailures(input) };
     },
     savePrompt(which, content) {
       const ws = loadWorkspace(cwd, configPath);
@@ -322,13 +336,14 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
 
       // Run registry — browse history, reload a run, diff two runs client-side.
       if (method === 'GET' && url.startsWith('/api/runs')) {
-        // /api/runs              → list
-        // /api/runs?limit=20     → list, capped
-        // /api/runs/<id>         → manifest + cells for one run
+        // /api/runs                     → list
+        // /api/runs?limit=20             → list, capped
+        // /api/runs/<id>                 → manifest + cells for one run
+        // /api/runs/<id>/clusters        → failure clusters for that run
         const qIdx = url.indexOf('?');
         const pathPart = qIdx === -1 ? url : url.slice(0, qIdx);
         const query = qIdx === -1 ? '' : url.slice(qIdx + 1);
-        const segments = pathPart.split('/').filter(Boolean); // ['api','runs', <id?>]
+        const segments = pathPart.split('/').filter(Boolean); // ['api','runs', <id?>, <subcmd?>]
         if (segments.length === 2) {
           const limitRaw = new URLSearchParams(query).get('limit');
           const limit = limitRaw !== null ? Math.max(0, Number(limitRaw)) : undefined;
@@ -345,6 +360,20 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
           try {
             const { manifest, cells } = handlers.loadRun(id);
             sendJson(res, 200, { manifest, cells });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const notFound = /not found|ENOENT|no manifest/i.test(msg);
+            sendJson(res, notFound ? 404 : 500, { error: msg });
+          }
+          return;
+        }
+        if (segments.length === 4 && segments[3] === 'clusters') {
+          const id = decodeURIComponent(segments[2]!);
+          const sideRaw = new URLSearchParams(query).get('side');
+          const side: 'a' | 'b' | undefined = sideRaw === 'a' || sideRaw === 'b' ? sideRaw : undefined;
+          try {
+            const out = handlers.clusterRun(id, side);
+            sendJson(res, 200, out);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             const notFound = /not found|ENOENT|no manifest/i.test(msg);

@@ -19,5 +19,6 @@ export * from './limits.ts';
 export * from './structural.ts';
 export * from './steelman.ts';
 export * from './evaluators.ts';
+export * from './cluster.ts';
 export * from './runs/registry.ts';
 export * from './finetune/index.ts';

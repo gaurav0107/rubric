@@ -352,6 +352,25 @@ export const INDEX_HTML = String.raw`<!doctype html>
   .runs-drawer .diff-col h5 {
     margin: 0 0 6px 0; font-size: 11px; font-family: var(--mono); color: var(--muted);
   }
+  .runs-drawer .clusters { margin-top: 12px; }
+  .runs-drawer .clusters .cluster-row {
+    display: grid; grid-template-columns: auto 1fr; gap: 6px 10px;
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--panel-2); margin-bottom: 6px;
+  }
+  .runs-drawer .clusters .cluster-row .count {
+    font-family: var(--mono); font-size: 11px; color: var(--loss);
+    background: #3a1f1f; padding: 1px 6px; border-radius: 10px; align-self: start;
+  }
+  .runs-drawer .clusters .cluster-row .label {
+    font-family: var(--mono); font-size: 11px; color: var(--text); align-self: start;
+  }
+  .runs-drawer .clusters .cluster-row .sample {
+    grid-column: 1 / -1; color: var(--muted); font-size: 11px; line-height: 1.35;
+  }
+  .runs-drawer .clusters .cluster-row .indices {
+    grid-column: 1 / -1; color: var(--muted); font-family: var(--mono); font-size: 10px;
+  }
   .runs-drawer-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 35;
     display: none;
@@ -1127,7 +1146,7 @@ export const INDEX_HTML = String.raw`<!doctype html>
     if (runsState.runs.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = 'No runs in registry yet. Run `rubric run` to create one.';
+      empty.textContent = 'No runs in registry yet. Run rubric run to create one.';
       body.appendChild(empty);
       return;
     }
@@ -1212,6 +1231,11 @@ export const INDEX_HTML = String.raw`<!doctype html>
       }
       const data = await res.json();
       renderRunDetail(detail, data.manifest, data.cells);
+      // Clustering is best-effort — a failure there shouldn't break the detail view.
+      fetch('/api/runs/' + encodeURIComponent(id) + '/clusters')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((c) => { if (c && Array.isArray(c.clusters)) renderRunClusters(detail, c.clusters); })
+        .catch(() => {});
     } catch (err) {
       detail.innerHTML = '';
       const e = document.createElement('div');
@@ -1219,6 +1243,41 @@ export const INDEX_HTML = String.raw`<!doctype html>
       e.textContent = 'failed to load run: ' + (err.message || err);
       detail.appendChild(e);
     }
+  }
+
+  function renderRunClusters(container, clusters) {
+    if (!clusters || clusters.length === 0) return;
+    const existing = container.querySelector('.clusters');
+    if (existing) existing.remove();
+    const wrap = document.createElement('div');
+    wrap.className = 'clusters';
+    const h = document.createElement('h4');
+    h.style.marginTop = '10px';
+    h.textContent = 'failure clusters (' + clusters.length + ')';
+    wrap.appendChild(h);
+    for (const c of clusters) {
+      const row = document.createElement('div');
+      row.className = 'cluster-row';
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = '×' + c.count;
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = c.label;
+      const sample = document.createElement('div');
+      sample.className = 'sample';
+      sample.textContent = c.sampleReason || '';
+      const indices = document.createElement('div');
+      indices.className = 'indices';
+      const idxPreview = c.caseIndices.slice(0, 8).join(', ');
+      indices.textContent = 'cases: ' + idxPreview + (c.caseIndices.length > 8 ? ', … (' + (c.caseIndices.length - 8) + ' more)' : '');
+      row.appendChild(count);
+      row.appendChild(label);
+      row.appendChild(sample);
+      row.appendChild(indices);
+      wrap.appendChild(row);
+    }
+    container.appendChild(wrap);
   }
 
   function renderRunDetail(container, manifest, cells) {
