@@ -7,7 +7,7 @@
  * at runtime without filesystem coupling.
  */
 
-export const INDEX_HTML = String.raw`<!doctype html>
+export const INDEX_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
