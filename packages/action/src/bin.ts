@@ -3,8 +3,8 @@
  * Tiny CLI invoked by action.yml as the last step: takes a path to the
  * already-rendered PR comment markdown and upserts it via the GitHub REST API.
  *
- * The heavy lifting (run → calibrate → comment) is handled upstream by the
- * `rubric` CLI; this binary only cares about posting the result.
+ * The heavy lifting (run → comment) is handled upstream by the `rubric`
+ * CLI; this binary only cares about posting the result.
  */
 import { readFileSync } from 'node:fs';
 import { upsertDriftIssue } from './drift-issue.ts';

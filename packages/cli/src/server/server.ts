@@ -7,9 +7,9 @@
  * result grid cell-by-cell as they resolve, instead of waiting for the full
  * sweep to finish.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import {
   createConfiguredProviders,
   createMockJudge,
@@ -124,17 +124,9 @@ function openSse(res: ServerResponse): { send: (event: string, data: unknown) =>
   };
 }
 
-export interface CalibrationLabel {
-  input: string;
-  output: string;
-  polarity: 'positive' | 'negative';
-  reason?: string;
-}
-
 export interface Handlers {
   getWorkspace: () => WorkspaceSnapshot;
   savePrompt: (which: 'baseline' | 'candidate', content: string) => void;
-  appendCalibrationLabel: (label: CalibrationLabel) => { path: string; entryCount: number };
   runSweep: (opts: { mock: boolean }) => Promise<{
     iterate: () => AsyncIterable<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } } | { type: 'done'; cells: CellResult[] }>;
   }>;
@@ -142,29 +134,6 @@ export interface Handlers {
   listRuns: (opts?: { limit?: number }) => RunManifest[];
   /** Fetch a run's manifest + all cells. 404 when the id is unknown. */
   loadRun: (id: string) => { manifest: RunManifest; cells: CellResult[] };
-}
-
-function calibrationPathFor(ws: WorkspaceSnapshot): string {
-  return resolve(dirname(ws.resolved.baseline), '_calibration.json.local');
-}
-
-function readCalibrationEntries(path: string): CalibrationLabel[] {
-  if (!existsSync(path)) return [];
-  const text = readFileSync(path, 'utf8');
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`existing calibration file is not valid JSON: ${msg}`);
-  }
-  if (
-    typeof parsed !== 'object' || parsed === null
-    || !Array.isArray((parsed as Record<string, unknown>).entries)
-  ) {
-    throw new Error(`calibration file at ${path} must be { "entries": [...] }`);
-  }
-  return (parsed as { entries: CalibrationLabel[] }).entries;
 }
 
 export function makeHandlers(opts: ServerOptions = {}): Handlers {
@@ -189,21 +158,6 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
       const ws = loadWorkspace(cwd, configPath);
       const target = which === 'baseline' ? ws.resolved.baseline : ws.resolved.candidate;
       writeFileSync(target, content, 'utf8');
-    },
-    appendCalibrationLabel(label) {
-      const ws = loadWorkspace(cwd, configPath);
-      const path = calibrationPathFor(ws);
-      const existing = readCalibrationEntries(path);
-      const entry: CalibrationLabel = {
-        input: label.input,
-        output: label.output,
-        polarity: label.polarity,
-      };
-      if (label.reason) entry.reason = label.reason;
-      existing.push(entry);
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, JSON.stringify({ entries: existing }, null, 2) + '\n', 'utf8');
-      return { path, entryCount: existing.length };
     },
     async runSweep({ mock }) {
       const ws = loadWorkspace(cwd, configPath);
@@ -338,28 +292,6 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         }
         handlers.savePrompt(parsed.which, parsed.content);
         sendJson(res, 200, { ok: true });
-        return;
-      }
-
-      if (method === 'POST' && url === '/api/calibration') {
-        const body = await readBody(req);
-        const parsed = JSON.parse(body) as Partial<CalibrationLabel>;
-        if (typeof parsed.input !== 'string' || typeof parsed.output !== 'string') {
-          sendJson(res, 400, { error: 'input and output must be strings' });
-          return;
-        }
-        if (parsed.polarity !== 'positive' && parsed.polarity !== 'negative') {
-          sendJson(res, 400, { error: 'polarity must be "positive" or "negative"' });
-          return;
-        }
-        const label: CalibrationLabel = {
-          input: parsed.input,
-          output: parsed.output,
-          polarity: parsed.polarity,
-        };
-        if (typeof parsed.reason === 'string' && parsed.reason.length > 0) label.reason = parsed.reason;
-        const result = handlers.appendCalibrationLabel(label);
-        sendJson(res, 200, { ok: true, path: result.path, entryCount: result.entryCount });
         return;
       }
 

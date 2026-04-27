@@ -66,9 +66,9 @@ dataset (JSONL)  →  for each case:
 
 Because the judge is just another LLM, rubric also ships an **override
 log**: every time you disagree with a cell's verdict via `rubric
-disagree` (or the serve UI), the correction is appended to a per-run
-`overrides.jsonl`. That log is the calibration corpus — v2.3 will train
-a small residual classifier on it to score the judge itself.
+disagree`, the correction is appended to a per-run `overrides.jsonl`.
+That log is the calibration corpus — v2.3 will train a small residual
+classifier on it to score the judge itself.
 
 ---
 
@@ -268,9 +268,10 @@ rubric disagree case-3/openai/gpt-4o-mini --undo
 The override log is append-only — nothing is ever mutated in place, so
 you can `git diff` your history of disagreements.
 
-In-UI: `rubric serve` shows `A` / `B` / `tie` override buttons on each
-decided cell's verdict banner so you can accumulate overrides without
-leaving the browser. The same file is written either way.
+In-UI override buttons in `rubric serve` are a v2.3 follow-up — the
+v2.1 per-side `+ good / - bad` calibration widget was removed along
+with `rubric calibrate`, and the `A / B / tie` replacement hasn't
+shipped yet. Drive disagreements from the CLI for v2.2.
 
 **Why this replaces `rubric calibrate`.** In v2.1 calibration was a
 separate labeling exercise with its own JSON file and its own UI. It

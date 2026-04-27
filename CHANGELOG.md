@@ -19,7 +19,7 @@ Radical cut. v2.1 sprawled — calibrate, finetune, history, share, pull, failur
 
 ### Added
 
-- **`rubric disagree <cell-ref> --verdict A|B|tie [--reason] [--run] [--undo]`.** CLI for overriding the judge on one cell. Writes to `~/.rubric/runs/<id>/overrides.jsonl` (append-only). The serve UI gains `A` / `B` / `tie` buttons per verdict banner that append to the same log. The PR comment footer lists overrides. This log is the calibration corpus — v2.3 will train a residual classifier on it to score the judge, not the outputs.
+- **`rubric disagree <cell-ref> --verdict A|B|tie [--reason] [--run] [--undo]`.** CLI for overriding the judge on one cell. Writes to `~/.rubric/runs/<id>/overrides.jsonl` (append-only). The PR comment footer lists overrides. This log is the calibration corpus — v2.3 will train a residual classifier on it to score the judge, not the outputs. In-UI override buttons in `rubric serve` are **not** shipped in v2.2 (the v2.1 per-side `+good / -bad` calibration widget was removed); wire from the CLI for now.
 - **Migration banner.** First `rubric <anything>` on a machine that last ran a pre-2.2 CLI prints one stderr line listing the removed features + CHANGELOG pointer. Gated on `$RUBRIC_HOME/.last-cli-version`; fires at-most-once per upgrade.
 - **Config back-compat warnings.** Legacy top-level keys (`finetunes`, `share`, `calibrate`, `cluster`) and legacy evaluator `type`s (`cluster`, `steelman`) now surface as `LoadedConfig.warnings` instead of throwing. CLI entry points (`run`, `watch`, `providers`, `disagree`, `serve`) print each warning to stderr so v2.1 configs load cleanly with a visible nudge toward cleanup.
 

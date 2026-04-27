@@ -397,23 +397,6 @@ export const INDEX_HTML = `<!doctype html>
     border: 1px solid var(--border); border-left: 2px solid var(--accent-dim);
     line-height: 1.55;
   }
-  .detail-side .label-row { display: flex; gap: 6px; align-items: center; }
-  .detail-side .label-row .hint { color: var(--muted); font-size: 10px; margin-left: auto; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.12em; }
-  .detail-side button.lbl {
-    background: var(--panel-2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 0;
-    padding: 4px 9px; font: 10px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
-    cursor: pointer;
-    transition: all .08s;
-  }
-  .detail-side button.lbl.pos:hover { border-color: var(--win); color: var(--win); box-shadow: 0 0 6px rgba(57,255,20,0.3); }
-  .detail-side button.lbl.neg:hover { border-color: var(--loss); color: var(--loss); box-shadow: 0 0 6px rgba(255,56,96,0.3); }
-  .detail-side button.lbl:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-  .detail-side .saved { color: var(--win); font-size: 10px; font-family: var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
-  .detail-side .saved::before { content: "✓ "; }
-  .detail-side .save-err { color: var(--loss); font-size: 10px; font-family: var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
-  .detail-side .save-err::before { content: "✗ "; }
-
   .empty {
     padding: 40px 16px; color: var(--muted); text-align: center;
     font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
@@ -831,7 +814,7 @@ export const INDEX_HTML = `<!doctype html>
     const detailRow = document.createElement('tr');
     detailRow.className = 'detail-row';
     detailRow.style.display = 'none';
-    detailRow.appendChild(buildDetailCell(cell, caseInput, caseExpected));
+    detailRow.appendChild(buildDetailCell(cell, caseExpected));
     row.addEventListener('click', () => {
       const open = detailRow.style.display !== 'none';
       detailRow.style.display = open ? 'none' : '';
@@ -868,7 +851,7 @@ export const INDEX_HTML = `<!doctype html>
     $('progress').textContent = evt.progress.done + '/' + evt.progress.total;
   }
 
-  function buildDetailCell(cell, caseInput, caseExpected) {
+  function buildDetailCell(cell, caseExpected) {
     const td = document.createElement('td');
     td.colSpan = 5;
 
@@ -877,8 +860,8 @@ export const INDEX_HTML = `<!doctype html>
     const box = document.createElement('div');
     box.className = 'detail-box';
 
-    box.appendChild(detailSide('A', 'A (baseline)', cell.outputA, caseInput));
-    box.appendChild(detailSide('B', 'B (candidate)', cell.outputB, caseInput));
+    box.appendChild(detailSide('A', 'A (baseline)', cell.outputA));
+    box.appendChild(detailSide('B', 'B (candidate)', cell.outputB));
     td.appendChild(box);
     return td;
   }
@@ -938,7 +921,7 @@ export const INDEX_HTML = `<!doctype html>
     return block;
   }
 
-  function detailSide(side, modelName, output, caseInput) {
+  function detailSide(side, modelName, output) {
     const wrap = document.createElement('div');
     wrap.className = 'detail-side';
 
@@ -952,50 +935,6 @@ export const INDEX_HTML = `<!doctype html>
     pre.addEventListener('click', (e) => e.stopPropagation());
     wrap.appendChild(pre);
 
-    const row = document.createElement('div');
-    row.className = 'label-row';
-    const pos = document.createElement('button');
-    pos.className = 'lbl pos';
-    pos.textContent = '+ good';
-    const neg = document.createElement('button');
-    neg.className = 'lbl neg';
-    neg.textContent = '− bad';
-    const hint = document.createElement('span');
-    hint.className = 'hint';
-    hint.textContent = 'calibrate';
-    row.appendChild(pos);
-    row.appendChild(neg);
-    row.appendChild(hint);
-    wrap.appendChild(row);
-
-    const feedback = document.createElement('div');
-    feedback.className = 'saved';
-    feedback.style.display = 'none';
-    wrap.appendChild(feedback);
-
-    async function fire(polarity) {
-      pos.disabled = neg.disabled = true;
-      feedback.textContent = 'saving…';
-      feedback.className = 'saved';
-      feedback.style.display = 'block';
-      try {
-        const res = await fetch('/api/calibration', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ input: caseInput, output: output || '', polarity }),
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        feedback.textContent = 'saved (' + data.entryCount + ' labels)';
-      } catch (err) {
-        feedback.className = 'save-err';
-        feedback.textContent = 'save failed: ' + (err.message || err);
-      } finally {
-        pos.disabled = neg.disabled = false;
-      }
-    }
-    pos.addEventListener('click', (e) => { e.stopPropagation(); fire('positive'); });
-    neg.addEventListener('click', (e) => { e.stopPropagation(); fire('negative'); });
     return wrap;
   }
 

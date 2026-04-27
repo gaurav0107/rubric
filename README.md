@@ -21,7 +21,7 @@ export OPENAI_API_KEY=sk-...
 rubric run               # runs the eval; prints win/loss/tie summary
 
 # or, iterate with a live-diff three-pane UI:
-rubric serve             # http://127.0.0.1:5174 — edit prompts, re-run, label pairs
+rubric serve             # http://127.0.0.1:5174 — edit prompts, re-run, browse past runs
 ```
 
 `rubric run` exits `0` on pass, `1` on judge errors, and — with `--fail-on-regress` — `2` when the candidate loses more cells than it wins. That's the CI gate.
@@ -49,7 +49,7 @@ The judge is just another LLM. When you disagree with a verdict, say so:
 rubric disagree case-3/openai/gpt-4o-mini --verdict A --reason "judge missed the factual error in B"
 ```
 
-Every override is appended to `~/.rubric/runs/<id>/overrides.jsonl` and is visible in the serve UI (and in the PR comment footer). The override log is the calibration corpus — in v2.3 it will train a small residual classifier that scores the *judge*, not the outputs.
+Every override is appended to `~/.rubric/runs/<id>/overrides.jsonl` and surfaces in the PR comment footer. The override log is the calibration corpus — in v2.3 it will train a small residual classifier that scores the *judge*, not the outputs. (In-UI override buttons in `rubric serve` are a v2.3 follow-up; drive disagreements from the CLI for now.)
 
 ## GitHub Action
 
@@ -182,7 +182,7 @@ and commit the generated `Formula/rubric.rb` to a companion `homebrew-rubric` ta
 - [x] CLI commands: `init`, `quickstart`, `serve`, `watch`, `run`, `seed --from-csv`, `comment`, `disagree`, `runs`, `providers test`.
 - [x] `--fail-on-regress`, `--json-out`, `--report`, `--cost-csv` on `run`.
 - [x] PR comment with judge-model callout + cost rollup + optional report link.
-- [x] `rubric serve` three-pane live-diff UI with in-UI disagreement logging.
+- [x] `rubric serve` three-pane live-diff UI.
 - [x] `rubric watch` re-evals on file save with a persistent judge-call cache.
 - [x] `rubric disagree` override log (seed corpus for v2.3 calibration).
 - [x] GitHub Action composite wrapper with idempotent comment upsert.
