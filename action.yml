@@ -1,5 +1,5 @@
 name: 'rubric'
-description: 'Pairwise prompt evaluation on pull requests — posts a calibrated judge verdict as a PR comment.'
+description: 'Pairwise prompt evaluation on pull requests — posts a judge verdict as a PR comment.'
 author: 'rubric'
 branding:
   icon: 'git-pull-request'
@@ -10,18 +10,10 @@ inputs:
     description: 'Path to rubric.config.json (relative to repo root).'
     required: false
     default: 'rubric.config.json'
-  calibration:
-    description: 'Path to calibration labels JSON. Leave empty to skip calibration (comment will show "unverified").'
-    required: false
-    default: ''
   report-url:
     description: 'URL of a hosted HTML report to link from the comment footer.'
     required: false
     default: ''
-  min-agreement:
-    description: 'Agreement threshold below which the calibrated judge is flagged as "weak" (0..1).'
-    required: false
-    default: '0.8'
   fail-on-regress:
     description: 'Exit 2 when the candidate loses more cells than it wins.'
     required: false
@@ -62,24 +54,10 @@ runs:
         fi
         rubric run "${ARGS[@]}"
 
-    - name: Calibrate judge
-      if: inputs.calibration != ''
-      shell: bash
-      env:
-        OPENAI_API_KEY: ${{ env.OPENAI_API_KEY }}
-      run: |
-        rubric calibrate \
-          --config "${{ inputs.config }}" \
-          --labels "${{ inputs.calibration }}" \
-          --json-out "${{ runner.temp }}/rubric-cal.json"
-
     - name: Render PR comment
       shell: bash
       run: |
-        ARGS=( "--from" "${{ runner.temp }}/rubric-run.json" "--min-agreement" "${{ inputs.min-agreement }}" )
-        if [ -f "${{ runner.temp }}/rubric-cal.json" ]; then
-          ARGS+=( "--calibration" "${{ runner.temp }}/rubric-cal.json" )
-        fi
+        ARGS=( "--from" "${{ runner.temp }}/rubric-run.json" )
         if [ -n "${{ inputs.report-url }}" ]; then
           ARGS+=( "--report-url" "${{ inputs.report-url }}" )
         fi

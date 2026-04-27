@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import type { CalibrationReport } from './calibrate.ts';
 import { classifyVerdict, renderPrComment } from './comment.ts';
 import type { CellResult, ModelId, RunSummary } from './types.ts';
 
@@ -28,95 +27,15 @@ describe('classifyVerdict', () => {
 });
 
 describe('renderPrComment', () => {
-  test('unverified banner when no calibration is provided', () => {
+  test('pass status line and judge section always render', () => {
     const md = renderPrComment({
       summary: sum({ wins: 3, losses: 1, ties: 0, winRate: 0.75 }),
       models: ['openai/gpt-4o-mini' as ModelId],
       judge: JUDGE,
     });
     expect(md).toContain('**PASS**');
-    expect(md).toContain('calibration: **unverified**');
-    expect(md).toContain('rubric calibrate');
-    expect(md).not.toContain('Agreement:');
-  });
-
-  test('calibrated banner includes agreement %', () => {
-    const calibration: CalibrationReport = {
-      total: 20,
-      agreements: 18,
-      disagreements: 2,
-      errors: 0,
-      agreement: 0.9,
-      matrix: {
-        humanPositiveJudgePositive: 10,
-        humanPositiveJudgeNegative: 1,
-        humanNegativeJudgePositive: 1,
-        humanNegativeJudgeNegative: 8,
-      },
-      results: [],
-    };
-    const md = renderPrComment({
-      summary: sum({ wins: 3, losses: 1, winRate: 0.75 }),
-      models: ['openai/gpt-4o-mini' as ModelId],
-      judge: JUDGE,
-      calibration,
-    });
-    expect(md).toContain('calibration: **calibrated**');
-    expect(md).toContain('Agreement: **90.0%**');
-    expect(md).toContain('(18 / 20 decisive, 0 errors)');
-    expect(md).not.toContain('below the');
-  });
-
-  test('flags calibrated-but-weak when agreement is under threshold', () => {
-    const calibration: CalibrationReport = {
-      total: 20,
-      agreements: 14,
-      disagreements: 6,
-      errors: 0,
-      agreement: 0.7,
-      matrix: {
-        humanPositiveJudgePositive: 7,
-        humanPositiveJudgeNegative: 3,
-        humanNegativeJudgePositive: 3,
-        humanNegativeJudgeNegative: 7,
-      },
-      results: [],
-    };
-    const md = renderPrComment({
-      summary: sum({ wins: 3, losses: 1, winRate: 0.75 }),
-      models: ['openai/gpt-4o-mini' as ModelId],
-      judge: JUDGE,
-      calibration,
-    });
-    expect(md).toContain('calibration: **weak**');
-    expect(md).toContain('below the 80.0% threshold');
-  });
-
-  test('respects custom minAgreement', () => {
-    const calibration: CalibrationReport = {
-      total: 20,
-      agreements: 19,
-      disagreements: 1,
-      errors: 0,
-      agreement: 0.95,
-      matrix: {
-        humanPositiveJudgePositive: 10,
-        humanPositiveJudgeNegative: 0,
-        humanNegativeJudgePositive: 1,
-        humanNegativeJudgeNegative: 9,
-      },
-      results: [],
-    };
-    // Agreement 95% but threshold is 97% -> weak.
-    const md = renderPrComment({
-      summary: sum({ wins: 3, losses: 1 }),
-      models: ['openai/gpt-4o-mini' as ModelId],
-      judge: JUDGE,
-      calibration,
-      minAgreement: 0.97,
-    });
-    expect(md).toContain('calibration: **weak**');
-    expect(md).toContain('below the 97.0% threshold');
+    expect(md).toContain('### Judge:');
+    expect(md).toContain('rubric disagree');
   });
 
   test('regression status line when candidate loses', () => {

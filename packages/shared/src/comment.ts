@@ -1,4 +1,3 @@
-import type { CalibrationReport } from './calibrate.ts';
 import type { EvaluatorGateBreach, MetricSummary } from './evaluators.ts';
 import type { CellResult, ModelId, RunSummary, Verdict } from './types.ts';
 
@@ -8,14 +7,6 @@ export interface PrCommentInput {
   cells?: CellResult[];
   models: ModelId[];
   judge: { model: ModelId };
-  /**
-   * When omitted, the comment renders the "unverified judge" banner. When
-   * present, it shows the agreement %. A separate minAgreement threshold
-   * governs whether calibrated-but-weak is called out.
-   */
-  calibration?: CalibrationReport;
-  /** Bar below which a calibrated judge is flagged as weak. Default 0.8. */
-  minAgreement?: number;
   /** Optional absolute URL to a generated HTML report. */
   reportUrl?: string;
   /** e.g. baseline.md -> candidate.md; shown in the header if provided. */
@@ -85,31 +76,12 @@ function statusLine(v: PrVerdict, summary: RunSummary): string {
   }
 }
 
-function calibrationSection(
-  calibration: CalibrationReport | undefined,
-  judgeModel: ModelId,
-  minAgreement: number,
-): string {
-  if (!calibration) {
-    return [
-      `### Judge: \`${judgeModel}\` · calibration: **unverified**`,
-      '',
-      '> This judge has not been calibrated against human labels. Run `rubric calibrate` to measure agreement before trusting this verdict.',
-    ].join('\n');
-  }
-  const decisive = calibration.agreements + calibration.disagreements;
-  const weak = calibration.agreement < minAgreement;
-  const label = weak ? 'weak' : 'calibrated';
-  const lines = [
-    `### Judge: \`${judgeModel}\` · calibration: **${label}**`,
+function judgeSection(judgeModel: ModelId): string {
+  return [
+    `### Judge: \`${judgeModel}\``,
     '',
-    `- Agreement: **${pct(calibration.agreement)}** (${calibration.agreements} / ${decisive} decisive, ${calibration.errors} error${calibration.errors === 1 ? '' : 's'})`,
-    `- Labels: ${calibration.total}`,
-  ];
-  if (weak) {
-    lines.push('', `> Judge agreement is below the ${pct(minAgreement)} threshold — treat verdicts as indicative, not authoritative.`);
-  }
-  return lines.join('\n');
+    '> Verdicts reflect the judge model. Override any cell you disagree with via `rubric disagree`; the override log becomes the calibration corpus.',
+  ].join('\n');
 }
 
 function summaryTable(summary: RunSummary): string {
@@ -182,7 +154,6 @@ function modelTable(tallies: ModelTally[]): string {
 
 export function renderPrComment(input: PrCommentInput): string {
   const verdict = classifyVerdict(input.summary);
-  const minAgreement = input.minAgreement ?? 0.8;
 
   const header = input.title ? `# rubric — ${input.title}` : '# rubric';
   const parts: string[] = [
@@ -206,7 +177,7 @@ export function renderPrComment(input: PrCommentInput): string {
   const metricsBlock = metricsSection(input.metrics, input.gateBreaches);
   if (metricsBlock) parts.push('', metricsBlock);
 
-  parts.push('', calibrationSection(input.calibration, input.judge.model, minAgreement));
+  parts.push('', judgeSection(input.judge.model));
 
   if (input.reportUrl) {
     parts.push('', `[Full report](${input.reportUrl})`);

@@ -146,44 +146,6 @@ describe('runEval', () => {
     expect(progress[progress.length - 1]).toEqual({ done: 2, total: 2 });
   });
 
-  test('compare-models pairs models[0] vs models[1] per case', async () => {
-    const cases: Case[] = [{ input: 'one' }, { input: 'two' }];
-    const config: Config = {
-      ...makeConfig(['mock/m1', 'mock/m2'] as ModelId[]),
-      mode: 'compare-models',
-    };
-    const provider = createMockProvider();
-    const judge = createMockJudge({ verdict: 'a', reason: 'A wins' });
-
-    const { cells, summary } = await runEval({
-      config,
-      cases,
-      prompts,
-      providers: [provider],
-      judge,
-    });
-
-    expect(cells.length).toBe(2);
-    for (const cell of cells) {
-      expect(cell.model).toBe('mock/m1' as ModelId);
-      expect(cell.modelB).toBe('mock/m2' as ModelId);
-      // outputA starts with "[mock/m1" and outputB with "[mock/m2"
-      expect(cell.outputA.startsWith('[mock/m1')).toBe(true);
-      expect(cell.outputB.startsWith('[mock/m2')).toBe(true);
-    }
-    expect(summary.losses).toBe(2);
-  });
-
-  test('compare-models rejects single-model configs', async () => {
-    const cases: Case[] = [{ input: 'one' }];
-    const config: Config = { ...makeConfig(['mock/m1'] as ModelId[]), mode: 'compare-models' };
-    const provider = createMockProvider();
-    const judge = createMockJudge();
-    await expect(
-      runEval({ config, cases, prompts, providers: [provider], judge }),
-    ).rejects.toThrow(/at least 2 models/);
-  });
-
   test('summarizes total cost + latency when cells report them', async () => {
     const cases: Case[] = [{ input: '1' }, { input: '2' }];
     const config = makeConfig(['mock/m1'] as ModelId[]);

@@ -8,6 +8,29 @@ Tracked work items. Top-of-file is the active increment; Phase 2 is paused work 
 
 ---
 
+## v2.2 Radical Cut (shipped 2026-04-27)
+
+Operator directive 2026-04-27: ship internal launch to 10-person team. Cut everything that wasn't load-bearing on the internal-launch path — keep the wedge sharp, trade breadth for polish.
+
+- [x] **Removed commands.** `rubric finetune`, `rubric calibrate`, `rubric history`, `rubric share`, `rubric pull`, `rubric run --detach`, `rubric runs wait`, `rubric runs resume`. Migration stubs in `bin.ts` print `removed in v2.2 — see CHANGELOG` to stderr and exit 2.
+- [x] **Removed flags.** `--badge-out`, `--calibration`, `--min-agreement` on `rubric run` / `rubric comment`.
+- [x] **Removed rubric / mode.** `"model-comparison"` criteria and `"compare-models"` mode cut — compare two models by pointing baseline + candidate at the same prompt file and listing the two models in `models[]`.
+- [x] **Removed adapters.** `rubric seed --from-langfuse / --from-helicone / --from-langsmith / --from-openai-logs / --from-synthetic` — CSV only.
+- [x] **Removed evaluator types.** `cluster`, `steelman` (warn-and-drop on load for back-compat).
+- [x] **Removed providers.** Together.ai adapter cut (OpenAI / Groq / OpenRouter / Ollama + user-declared stay).
+- [x] **Override log as calibration corpus.** `rubric disagree <cell-ref> --verdict A|B|tie [--reason] [--undo]` writes to `~/.rubric/runs/<id>/overrides.jsonl`. Serve UI gains override buttons per cell. Surfaced in the PR comment footer. Seeds v2.3 residual-classifier calibration.
+- [x] **Migration banner.** First post-upgrade run writes one stderr line listing removed features + CHANGELOG pointer. Gated on `$RUBRIC_HOME/.last-cli-version` marker — at-most-once per upgrade.
+- [x] **Config back-compat.** Legacy top-level keys (`finetunes`, `share`, `calibrate`, `cluster`) and legacy evaluator types warn-and-drop via `LoadedConfig.warnings` instead of throwing. v2.1 configs load cleanly on first v2.2 run with one warning line per legacy key.
+- [x] **Docs sweep.** README, guide.md, action.yml, examples/drift-detector.yml scrubbed of removed surface. v2.2 surface reflects only what ships.
+
+## v2.3 Calibration (next)
+
+- [ ] **Residual classifier.** Train a small logistic-regression / LightGBM head on the override log. Features: judge verdict, judge confidence, per-evaluator metrics, output length delta, model family. Label: the human override. Output: per-cell "judge likely wrong" score.
+- [ ] **Calibrated verdict in PR comment.** Badge state: `trusted` / `review` / `flagged` based on the classifier's score distribution over the run. Opt-in until we've got enough data.
+- [ ] **Calibration surface in serve UI.** Highlight cells with high classifier disagreement risk so labelers focus their time.
+
+---
+
 ## v1.1 Usage Expansion (shipped 2026-04-24)
 
 Operator directive 2026-04-24: defer hosted/deployment work, expand the CLI's usability inside corporate networks + shorten time-to-first-eval for new users.

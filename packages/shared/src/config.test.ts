@@ -24,11 +24,62 @@ describe('validateConfig', () => {
       models: ['openai/gpt-4o-mini', 'anthropic/claude-3-5-sonnet'],
       judge: { model: 'openai/gpt-4o', criteria: { custom: 'judge harshly' } },
       concurrency: 8,
-      mode: 'compare-models',
+      mode: 'compare-prompts',
     });
     expect(cfg.judge.criteria).toEqual({ custom: 'judge harshly' });
     expect(cfg.concurrency).toBe(8);
-    expect(cfg.mode).toBe('compare-models');
+    expect(cfg.mode).toBe('compare-prompts');
+  });
+
+  test('rejects removed compare-models mode with a pointer to the replacement', () => {
+    expect(() =>
+      validateConfig({
+        prompts: { baseline: 'a.md', candidate: 'b.md' },
+        dataset: 'data.jsonl',
+        models: ['openai/gpt-4o-mini'],
+        judge: { model: 'openai/gpt-4o', criteria: 'default' },
+        mode: 'compare-models',
+      }),
+    ).toThrow(/compare-models.*removed/i);
+  });
+
+  test('warns on legacy top-level keys (v2.1 configs load without throwing)', () => {
+    const warnings: string[] = [];
+    const cfg = validateConfig(
+      {
+        prompts: { baseline: 'a.md', candidate: 'b.md' },
+        dataset: 'data.jsonl',
+        models: ['openai/gpt-4o-mini'],
+        judge: { model: 'openai/gpt-4o', criteria: 'default' },
+        finetunes: [{ model: 'openai/gpt-4o-mini', dataset: 'train.jsonl' }],
+        share: { token: 'xxx' },
+      },
+      undefined,
+      warnings,
+    );
+    expect(cfg.models).toEqual(['openai/gpt-4o-mini']);
+    expect(warnings).toContain(`key 'finetunes' removed in v2.2, ignored`);
+    expect(warnings).toContain(`key 'share' removed in v2.2, ignored`);
+  });
+
+  test('warns on legacy cluster/steelman evaluators and drops them', () => {
+    const warnings: string[] = [];
+    const cfg = validateConfig(
+      {
+        prompts: { baseline: 'a.md', candidate: 'b.md' },
+        dataset: 'data.jsonl',
+        models: ['openai/gpt-4o-mini'],
+        judge: { model: 'openai/gpt-4o', criteria: 'default' },
+        evaluators: [
+          { type: 'cluster', failOn: 0.5 },
+          { type: 'json-valid' },
+        ],
+      },
+      undefined,
+      warnings,
+    );
+    expect(cfg.evaluators).toEqual([{ type: 'json-valid' }]);
+    expect(warnings.some((w) => w.includes(`evaluators[0].type 'cluster' removed in v2.2`))).toBe(true);
   });
 
   test.each([
@@ -101,6 +152,28 @@ describe('loadConfig', () => {
       expect(loaded.baseDir).toBe(dir);
       expect(loaded.resolved.baseline).toBe(join(dir, 'prompts/a.md'));
       expect(loaded.resolved.dataset).toBe(join(dir, 'data/cases.jsonl'));
+      expect(loaded.warnings).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('surfaces legacy-key warnings through LoadedConfig.warnings', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rubric-cfg-'));
+    try {
+      const configPath = join(dir, 'rubric.config.json');
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          prompts: { baseline: 'a.md', candidate: 'b.md' },
+          dataset: 'data.jsonl',
+          models: ['openai/gpt-4o-mini'],
+          judge: { model: 'openai/gpt-4o', criteria: 'default' },
+          finetunes: [],
+        }),
+      );
+      const loaded = loadConfig(configPath);
+      expect(loaded.warnings).toContain(`key 'finetunes' removed in v2.2, ignored`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -38,7 +38,7 @@ function stringify(v: unknown): string {
 
 /**
  * Render a prompt template against a case. Supports {{input}}, {{expected}},
- * and dotted metadata paths like {{metadata.tag}} or {{metadata.langfuse.output}}.
+ * and dotted metadata paths like {{metadata.tag}} or {{metadata.category}}.
  */
 export function renderPrompt(template: string, c: Case, opts: RenderOptions = {}): string {
   const onMissing = opts.onMissing ?? 'throw';

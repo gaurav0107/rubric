@@ -64,6 +64,7 @@ export async function runProvidersTest(opts: ProvidersTestOptions): Promise<Prov
   const promptText = opts.prompt ?? DEFAULT_PROMPT;
 
   const loaded = loadConfig(configPath);
+  for (const w of loaded.warnings) write(`  ⚠ config: ${w}\n`);
   const userProviders = loaded.config.providers;
 
   // Resolve the requested target: either `name` or `name/model`.

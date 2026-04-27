@@ -1,11 +1,8 @@
-import { spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   appendCell,
   checkEvaluatorGates,
-  completedCellKeys,
   createConfiguredProviders,
   createMockJudge,
   createMockProvider,
@@ -17,14 +14,12 @@ import {
   parseCasesJsonl,
   redactHeaders,
   resolveCriteria,
-  renderBadgeSvg,
   renderCostCsv,
   renderReportHtml,
   runEval,
   summarizeEvaluations,
   updateManifest,
   validateRunInputs,
-  type CalibrationReport,
   type CellResult,
   type Config,
   type Criteria,
@@ -44,7 +39,6 @@ export interface RunOptions {
   cwd?: string;
   mock?: boolean;
   concurrency?: number;
-  allowLangfuse?: boolean;
   /** Disable registry writes (used internally by `runs rerun` to avoid nested bookkeeping, not a user-facing flag). */
   skipRegistry?: boolean;
   /** Override registry root (`RUBRIC_HOME` / tests). */
@@ -77,10 +71,6 @@ export interface RunOptions {
   format?: 'human' | 'json' | 'compact';
   /** When set, write the JSON payload to this path (stdout still gets it if `json` is true). */
   jsonPath?: string;
-  /** When set, write a self-contained status SVG badge to this path. */
-  badgePath?: string;
-  /** Optional calibration JSON path; colors the badge accordingly. */
-  calibrationPath?: string;
   /** When set, write a per-cell cost/latency CSV for spreadsheet analysis. */
   costCsvPath?: string;
   /**
@@ -94,12 +84,6 @@ export interface RunOptions {
   /** Stream for the JSON payload when `json` is true; defaults to process.stdout. */
   writeJson?: (payload: string) => void;
   /**
-   * Spawn a detached worker and exit. The parent prints the run id and
-   * returns immediately; the child runs `rubric runs resume <id>` under its
-   * own pid with stdio redirected to the run's log file.
-   */
-  detach?: boolean;
-  /**
    * When true, print a diagnostics block before the sweep: each configured
    * provider's base URL, redacted headers, and key source. All secrets are
    * scrubbed via the shared `redactHeaders` helper — no bearer token should
@@ -107,13 +91,6 @@ export interface RunOptions {
    * corporate gateways; safe to paste into a GitHub issue.
    */
   verbose?: boolean;
-  /**
-   * Internal seam: lets tests substitute a fake spawner so we don't actually
-   * fork a process. Returns the child's pid.
-   */
-  spawnWorker?: (runId: string, registryRoot: string) => number;
-  /** When `detach` is true, use this to locate the CLI entrypoint (defaults to the current bin.ts). */
-  binPath?: string;
 }
 
 export interface RunResult {
@@ -122,50 +99,9 @@ export interface RunResult {
   exitCode: number;
   /** Present when the run was recorded in the registry (every live run by default). */
   runId?: string;
-  /** When true, the run was backgrounded via `--detach` and `summary`/`total` are placeholders. */
-  detached?: boolean;
-  /** Pid of the detached worker, when `detached` is true. */
-  workerPid?: number;
 }
 
 const DEFAULT_CONFIG = 'rubric.config.json';
-
-/**
- * Locate the CLI entrypoint (bin.ts) so --detach can re-invoke ourselves.
- * In dev we resolve relative to this module; in a shipped build the caller
- * can override via `binPath`.
- */
-function defaultBinPath(): string {
-  const here = fileURLToPath(import.meta.url);
-  // run.ts lives at packages/cli/src/commands/run.ts; bin.ts at packages/cli/src/bin.ts
-  return resolve(here, '..', '..', 'bin.ts');
-}
-
-/**
- * Default detached spawner. Redirects stdio to the run's log so the parent
- * can exit cleanly without leaving pipes open.
- */
-function defaultSpawnWorker(
-  runId: string,
-  registryRoot: string,
-  binPath: string,
-  extra: { mock?: boolean; concurrency?: number } = {},
-): number {
-  const args = [binPath, 'runs', 'resume', runId, '--registry-root', registryRoot];
-  if (extra.mock) args.push('--mock');
-  if (extra.concurrency !== undefined) args.push('--concurrency', String(extra.concurrency));
-  const spawnOpts: SpawnOptions = {
-    detached: true,
-    stdio: 'ignore',
-    env: process.env,
-  };
-  const child = nodeSpawn(process.execPath, args, spawnOpts);
-  child.unref();
-  if (child.pid === undefined) {
-    throw new Error('failed to spawn detached worker (no pid)');
-  }
-  return child.pid;
-}
 
 function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefined, baseDir: string): Provider[] {
   if (mock) return [createMockProvider({ acceptAll: true })];
@@ -375,12 +311,13 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
   const writeJson = opts.writeJson ?? ((payload: string) => process.stdout.write(payload));
 
   const loaded = loadConfig(configPath);
+  for (const w of loaded.warnings) write(`  ⚠ config: ${w}\n`);
   const prompts = {
     baseline: readFileSync(loaded.resolved.baseline, 'utf8'),
     candidate: readFileSync(loaded.resolved.candidate, 'utf8'),
   };
   const datasetText = readFileSync(loaded.resolved.dataset, 'utf8');
-  const cases = parseCasesJsonl(datasetText, { allowLangfuse: opts.allowLangfuse ?? false });
+  const cases = parseCasesJsonl(datasetText);
 
   if (opts.limits) {
     const { errors, warnings } = validateRunInputs({ prompts, cases, limits: opts.limits });
@@ -424,29 +361,6 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     runId = created.id;
     updateManifest(registryRoot, runId, { status: 'running' });
     write(`  run id:  ${runId}\n`);
-  }
-
-  // --detach: fork a worker that resumes this pre-created run, then exit.
-  // We must return BEFORE building providers/judge so the parent process
-  // never holds network sockets on behalf of the child.
-  if (opts.detach === true) {
-    if (!runId) throw new Error('--detach requires a registry-backed run (cannot combine with --skip-registry)');
-    const bin = opts.binPath ?? defaultBinPath();
-    const extra: { mock?: boolean; concurrency?: number } = {};
-    if (mock) extra.mock = true;
-    if (opts.concurrency !== undefined) extra.concurrency = opts.concurrency;
-    const spawner = opts.spawnWorker ?? ((id: string, root: string) => defaultSpawnWorker(id, root, bin, extra));
-    const pid = spawner(runId, registryRoot);
-    write(`  detached: worker pid ${pid}\n`);
-    write(`  next:    rubric runs wait ${runId}\n`);
-    return {
-      total: 0,
-      summary: { wins: 0, losses: 0, ties: 0, errors: 0, winRate: 0 },
-      exitCode: 0,
-      runId,
-      detached: true,
-      workerPid: pid,
-    };
   }
 
   const onCell = (cell: CellResult, p: { done: number; total: number }) => {
@@ -569,19 +483,6 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     const absCsv = resolve(cwd, opts.costCsvPath);
     writeFileSync(absCsv, renderCostCsv({ cells, summary }), 'utf8');
     write(`\n  cost csv: ${absCsv}\n`);
-  }
-
-  if (opts.badgePath) {
-    const absBadge = resolve(cwd, opts.badgePath);
-    const badgeInput: Parameters<typeof renderBadgeSvg>[0] = { summary };
-    if (opts.calibrationPath) {
-      const calAbs = resolve(cwd, opts.calibrationPath);
-      const raw = readFileSync(calAbs, 'utf8');
-      const parsed = JSON.parse(raw) as CalibrationReport;
-      badgeInput.calibration = parsed;
-    }
-    writeFileSync(absBadge, renderBadgeSvg(badgeInput), 'utf8');
-    write(`\n  badge:   ${absBadge}\n`);
   }
 
   if (runId) {

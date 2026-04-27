@@ -120,7 +120,7 @@ function parseFailOn(raw: Record<string, unknown>, fld: string, path?: string): 
   return n;
 }
 
-function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
+function validateEvaluators(v: unknown, path?: string, warnings?: string[]): EvaluatorConfigEntry[] {
   if (!Array.isArray(v)) throw new ConfigError('evaluators must be an array', path);
   const out: EvaluatorConfigEntry[] = [];
   for (let i = 0; i < v.length; i++) {
@@ -129,6 +129,12 @@ function validateEvaluators(v: unknown, path?: string): EvaluatorConfigEntry[] {
     if (!isRecord(raw)) throw new ConfigError(`${fld} must be an object`, path);
     const type = raw.type;
     if (typeof type !== 'string') throw new ConfigError(`${fld}.type must be a string`, path);
+    // Legacy evaluator types removed in v2.2. Instead of throwing, ignore them
+    // with a warning so v2.1 configs keep loading on first run.
+    if (type === 'cluster' || type === 'steelman') {
+      warnings?.push(`${fld}.type '${type}' removed in v2.2, ignored`);
+      continue;
+    }
     const failOn = parseFailOn(raw, fld, path);
     switch (type) {
       case 'exact-match': {
@@ -223,8 +229,21 @@ function validateCriteria(v: unknown, path?: string): Criteria {
   );
 }
 
-export function validateConfig(raw: unknown, path?: string): Config {
+/**
+ * Legacy top-level keys removed in v2.2. Loading a v2.1 config with any of
+ * these emits a warning and drops the key rather than throwing; this is the
+ * one-upgrade-grace-period behaviour called for in the design doc.
+ */
+const LEGACY_TOP_LEVEL_KEYS = new Set(['finetunes', 'share', 'calibrate', 'cluster']);
+
+export function validateConfig(raw: unknown, path?: string, warnings?: string[]): Config {
   if (!isRecord(raw)) throw new ConfigError('config must be a JSON object', path);
+
+  for (const key of LEGACY_TOP_LEVEL_KEYS) {
+    if (key in raw) {
+      warnings?.push(`key '${key}' removed in v2.2, ignored`);
+    }
+  }
 
   const prompts = raw.prompts;
   if (!isRecord(prompts) || typeof prompts.baseline !== 'string' || typeof prompts.candidate !== 'string') {
@@ -260,8 +279,11 @@ export function validateConfig(raw: unknown, path?: string): Config {
   }
 
   if (raw.mode !== undefined) {
-    if (raw.mode !== 'compare-prompts' && raw.mode !== 'compare-models') {
-      throw new ConfigError('mode must be "compare-prompts" or "compare-models"', path);
+    if (raw.mode === 'compare-models') {
+      throw new ConfigError('mode "compare-models" was removed in v2.2 — use compare-prompts (the default)', path);
+    }
+    if (raw.mode !== 'compare-prompts') {
+      throw new ConfigError('mode must be "compare-prompts"', path);
     }
     out.mode = raw.mode;
   }
@@ -271,7 +293,7 @@ export function validateConfig(raw: unknown, path?: string): Config {
   }
 
   if (raw.evaluators !== undefined) {
-    out.evaluators = validateEvaluators(raw.evaluators, path);
+    out.evaluators = validateEvaluators(raw.evaluators, path, warnings);
   }
 
   return out;
@@ -313,6 +335,12 @@ export interface LoadedConfig {
     candidate: string;
     dataset: string;
   };
+  /**
+   * Non-fatal warnings collected during validation (e.g. legacy v2.1 keys
+   * that were ignored). CLI surfaces prints these to stderr; they are not
+   * errors and do not stop the load.
+   */
+  warnings: string[];
 }
 
 function resolveFrom(baseDir: string, p: string): string {
@@ -341,7 +369,8 @@ export function loadConfig(configPath: string): LoadedConfig {
     delete (parsed as Record<string, unknown>).$schema;
   }
 
-  const config = validateConfig(parsed, abs);
+  const warnings: string[] = [];
+  const config = validateConfig(parsed, abs, warnings);
   const baseDir = dirname(abs);
 
   return {
@@ -353,5 +382,6 @@ export function loadConfig(configPath: string): LoadedConfig {
       candidate: resolveFrom(baseDir, config.prompts.candidate),
       dataset: resolveFrom(baseDir, config.dataset),
     },
+    warnings,
   };
 }

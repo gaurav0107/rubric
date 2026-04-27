@@ -168,9 +168,8 @@ describe('writeProviderDiagnostics', () => {
     const lines: string[] = [];
     const provider: ProviderConfig = {
       name: 'corp',
-      wire: 'openai-chat',
+      wireFormat: 'openai-chat',
       baseUrl: 'https://gateway.internal/v1',
-      models: ['corp/acme-7b' as ModelId],
       keyEnv: 'CORP_TOKEN',
       headers: {
         Authorization: 'Bearer supersecret-do-not-leak',
@@ -204,9 +203,8 @@ describe('writeProviderDiagnostics', () => {
     const lines: string[] = [];
     writeProviderDiagnostics((l) => lines.push(l), [{
       name: 'local',
-      wire: 'openai-chat',
+      wireFormat: 'openai-chat',
       baseUrl: 'http://localhost:11434',
-      models: ['local/llama' as ModelId],
       keyFile: '~/.rubric/local-key',
     }]);
     const text = lines.join('');

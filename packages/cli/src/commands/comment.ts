@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   renderPrComment,
-  type CalibrationReport,
   type ModelId,
   type RunSummary,
 } from '../../../shared/src/index.ts';
@@ -11,12 +10,8 @@ import type { JsonPayload } from './run.ts';
 export interface CommentOptions {
   /** Absolute or cwd-relative path to a `rubric run --json` payload. */
   fromPath: string;
-  /** Optional CalibrationReport JSON (from `rubric calibrate --json`). */
-  calibrationPath?: string;
   /** Optional URL to a hosted HTML report, linked from the comment footer. */
   reportUrl?: string;
-  /** Agreement threshold below which calibrated judge is flagged weak. Default 0.8. */
-  minAgreement?: number;
   /** Optional title suffix; e.g. "baseline.md vs candidate.md". */
   title?: string;
   cwd?: string;
@@ -56,26 +51,12 @@ function validateRunPayload(raw: unknown, path: string): JsonPayload {
   return raw as unknown as JsonPayload;
 }
 
-function validateCalibrationReport(raw: unknown, path: string): CalibrationReport {
-  if (!isRecord(raw)) throw new Error(`${path}: calibration report must be a JSON object`);
-  if (typeof raw.agreement !== 'number' || !isRecord(raw.matrix) || !Array.isArray(raw.results)) {
-    throw new Error(`${path}: calibration report shape mismatch (missing agreement/matrix/results)`);
-  }
-  return raw as unknown as CalibrationReport;
-}
-
 export function runComment(opts: CommentOptions): CommentResult {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const write = opts.write ?? ((line: string) => process.stdout.write(line));
 
   const fromAbs = resolve(cwd, opts.fromPath);
   const payload = validateRunPayload(parseJsonFile(fromAbs), fromAbs);
-
-  let calibration: CalibrationReport | undefined;
-  if (opts.calibrationPath) {
-    const calAbs = resolve(cwd, opts.calibrationPath);
-    calibration = validateCalibrationReport(parseJsonFile(calAbs), calAbs);
-  }
 
   // Reconstruct the cells the renderer expects. The --json payload uses a flat
   // per-cell shape (winner/reason/error); the renderer wants CellResult-shaped
@@ -103,9 +84,7 @@ export function runComment(opts: CommentOptions): CommentResult {
     models,
     judge: { model: payload.judge.model },
   };
-  if (calibration) renderInput.calibration = calibration;
   if (opts.reportUrl) renderInput.reportUrl = opts.reportUrl;
-  if (opts.minAgreement !== undefined) renderInput.minAgreement = opts.minAgreement;
   if (opts.title) renderInput.title = opts.title;
   if (payload.metrics && payload.metrics.length > 0) renderInput.metrics = payload.metrics;
   if (payload.gateBreaches && payload.gateBreaches.length > 0) renderInput.gateBreaches = payload.gateBreaches;

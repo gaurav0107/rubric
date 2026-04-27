@@ -64,7 +64,8 @@ export interface Config {
   models: ModelId[];
   judge: { model: ModelId; criteria: Criteria };
   concurrency?: number;
-  mode?: 'compare-prompts' | 'compare-models';
+  /** Reserved for future modes. v2.2 supports only "compare-prompts" (the default). */
+  mode?: 'compare-prompts';
   /** User-declared providers; added on top of the four built-ins (openai/groq/openrouter/ollama). */
   providers?: ProviderConfig[];
   /** Additive metrics that run alongside the pairwise judge. Omit or leave empty for today's behavior. */
@@ -74,20 +75,6 @@ export interface Config {
 export interface Case {
   input: string;
   expected?: string;
-  metadata?: Record<string, unknown>;
-}
-
-export type FeedbackPolarity = 'positive' | 'negative';
-
-export interface Feedback {
-  polarity: FeedbackPolarity;
-  reason?: string;
-}
-
-export interface LangfuseLine {
-  input: string;
-  output: string;
-  feedback?: Feedback | FeedbackPolarity;
   metadata?: Record<string, unknown>;
 }
 
@@ -112,10 +99,8 @@ export interface EvaluationRow {
 
 export interface CellResult {
   caseIndex: number;
-  /** Primary model. In compare-prompts this is the only model in the cell; in compare-models this is the A-side model. */
+  /** The model the cell ran on (both A and B sides in compare-prompts mode). */
   model: ModelId;
-  /** Present only when mode=compare-models: the B-side model. */
-  modelB?: ModelId;
   outputA: string;
   outputB: string;
   judge: JudgeResult | { error: string };

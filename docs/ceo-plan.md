@@ -1,5 +1,5 @@
 ---
-status: ACTIVE
+status: SUPERSEDED by 2026-04-27 v2.2 Radical Cut — see `TODOS.md` "v2.2 Radical Cut" and `CHANGELOG.md`. v1.2's finetune orchestration + async run detach/wait/resume were cut; the internal-launch wedge is now pairwise eval + override log + PR bot.
 supersedes: 2026-04-24 v1.1 Usage Expansion (shipped) — see git history
 ---
 # CEO Plan: rubric — v1.2 Eval Depth + Async Runs + Finetune Orchestration

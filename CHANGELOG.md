@@ -2,6 +2,48 @@
 
 All notable changes to rubric. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [2.2.0] — 2026-04-27
+
+Radical cut. v2.1 sprawled — calibrate, finetune, history, share, pull, failure clustering, steelman, multiple seed adapters, a second rubric type, a second mode, a second finetune provider. The internal-launch audit said none of that was load-bearing on the pairwise-eval wedge. v2.2 rips it all out and refocuses on the override log as the calibration corpus for v2.3.
+
+### Removed
+
+- **Commands.** `rubric finetune`, `rubric calibrate`, `rubric history`, `rubric share`, `rubric pull`. Migration stubs remain in `bin.ts` — running any of them prints `removed in v2.2 — see CHANGELOG` to stderr and exits 2.
+- **Async run lifecycle.** `rubric run --detach`, `rubric runs wait`, `rubric runs resume`. The remaining `rubric runs <list|show|status|diff|rerun>` commands read the registry; they no longer drive background workers.
+- **Flags.** `--badge-out` on `rubric run`. `--calibration` / `--min-agreement` on `rubric run` and `rubric comment`. Action inputs `calibration` and `min-agreement` are gone.
+- **Rubric + mode.** `"model-comparison"` criteria and `"compare-models"` mode. To compare two models, point `baseline.md` and `candidate.md` at the same prompt file and list the two models in `models[]` — each one becomes its own cell in the grid.
+- **Seed adapters.** `rubric seed --from-langfuse / --from-helicone / --from-langsmith / --from-openai-logs / --from-synthetic`. CSV is the only supported source — every tool in the stack can export CSV.
+- **Evaluator types.** `cluster`, `steelman`. Declared but unused evaluators of these types warn-and-drop at config load so v2.1 configs don't throw.
+- **Providers.** Together.ai adapter (was paired with finetune).
+- **UI.** Failure clustering in the runs drawer. Steelman-my-prompt button. "Vary prompts | models" segmented control in the serve header.
+
+### Added
+
+- **`rubric disagree <cell-ref> --verdict A|B|tie [--reason] [--run] [--undo]`.** CLI for overriding the judge on one cell. Writes to `~/.rubric/runs/<id>/overrides.jsonl` (append-only). The serve UI gains `A` / `B` / `tie` buttons per verdict banner that append to the same log. The PR comment footer lists overrides. This log is the calibration corpus — v2.3 will train a residual classifier on it to score the judge, not the outputs.
+- **Migration banner.** First `rubric <anything>` on a machine that last ran a pre-2.2 CLI prints one stderr line listing the removed features + CHANGELOG pointer. Gated on `$RUBRIC_HOME/.last-cli-version`; fires at-most-once per upgrade.
+- **Config back-compat warnings.** Legacy top-level keys (`finetunes`, `share`, `calibrate`, `cluster`) and legacy evaluator `type`s (`cluster`, `steelman`) now surface as `LoadedConfig.warnings` instead of throwing. CLI entry points (`run`, `watch`, `providers`, `disagree`, `serve`) print each warning to stderr so v2.1 configs load cleanly with a visible nudge toward cleanup.
+
+### Changed
+
+- **Documentation.** `README.md`, `docs/guide.md`, `action.yml`, and `examples/drift-detector.yml` rewritten against the v2.2 surface. TOC, command reference, rubric table, comparison-mode section, common recipes, and troubleshooting all reflect only what ships. `docs/design.md` and `docs/ceo-plan.md` marked superseded; read `TODOS.md` "v2.2 Radical Cut" and this entry for current scope.
+- **TODOS.** "v2.2 Radical Cut" section added at the top; v2.3 calibration plan scaffolded.
+
+### Migration
+
+- **v2.1 configs load as-is.** Any of `finetunes`, `share`, `calibrate`, `cluster` at the top level → warn and drop. Any evaluator with `type: "cluster"` or `type: "steelman"` → warn and drop. No action required unless you want to silence the warnings.
+- **Replace `rubric calibrate` with `rubric disagree`.** The workflow is the opposite shape: instead of a dedicated labeling session on a fixed set, you override verdicts whenever you notice the judge is wrong while using the tool. The log is the calibration corpus.
+- **Replace `rubric finetune <*>` with your provider's native CLI.** OpenAI's `openai api fine_tuning.jobs.create` or Together's dashboard are the supported paths. Point `judge.model` / `models[]` at the trained model id via the existing `provider/model` routing.
+- **Replace `rubric share` / `rubric pull` with `git`.** The workspace is already a repo's worth of files (config + prompts + dataset). Clone, branch, PR.
+- **Replace `rubric history` with `git log`.** Prompts live on disk as `.md` files; git already tracks who changed them when. Use `git log -p prompts/`.
+- **Replace `rubric run --detach` with your shell.** `rubric run ... &` or `nohup rubric run ...` or a CI runner. The registry at `~/.rubric/runs/` is written synchronously regardless, so `rubric runs status <id>` still works against a backgrounded run.
+- **Replace `"compare-models"` mode with duplicated prompt paths.** `{ "prompts": { "baseline": "shared.md", "candidate": "shared.md" }, "models": ["A", "B"] }`. Both models run against the same prompt; the grid shows one cell per model.
+
+### Notes
+
+- Tests: 284 pass / 0 fail against the v2.2 surface. Typecheck clean (pre-existing TS5097 noise on `.ts` extension imports is unchanged).
+- Smoke: `rubric quickstart` + `rubric run --mock --report` + `rubric serve --mock` all green.
+- No config schema version bump — existing v1 schema still covers the shrunk surface.
+
 ## [2.1.0] — 2026-04-27
 
 Visual redesign — `rubric serve` now looks like it belongs in a terminal. Zero functional changes, no API/config/data changes, no test suite changes.

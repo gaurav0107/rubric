@@ -160,36 +160,6 @@ export const INDEX_HTML = `<!doctype html>
     text-shadow: var(--glow); line-height: 14px;
   }
 
-  .mode-toggle {
-    display: inline-flex; border: 1px solid var(--border); border-radius: 0;
-    background: var(--panel-3);
-  }
-  .mode-toggle button {
-    background: transparent; border: 0; padding: 6px 12px;
-    color: var(--muted); cursor: pointer; text-transform: uppercase;
-    font: 12px/1 var(--mono); letter-spacing: 0.08em; border-radius: 0;
-  }
-  .mode-toggle button.active {
-    background: var(--accent-weak); color: var(--accent);
-    text-shadow: 0 0 4px rgba(57,255,20,0.4);
-  }
-  .mode-toggle button:hover:not(.active) { color: var(--text); }
-  .mode-toggle .label {
-    padding: 6px 10px 6px 12px; color: var(--muted-2); font-size: 10px;
-    text-transform: uppercase; letter-spacing: .2em;
-    border-right: 1px solid var(--border); display: inline-flex; align-items: center;
-  }
-
-  .prompts-pane.locked-candidate .tabs button[data-which=candidate] {
-    opacity: .3; cursor: not-allowed;
-  }
-  .mode-hint {
-    padding: 6px 14px; border-bottom: 1px solid var(--border);
-    background: var(--accent-weak); color: var(--accent); font-size: 11px; font-family: var(--mono);
-    letter-spacing: 0.04em;
-  }
-  .mode-hint::before { content: "// "; color: var(--muted-2); }
-
   main {
     display: grid; grid-template-columns: 1fr 320px 1.3fr;
     gap: 0; flex: 1; min-height: 0;
@@ -491,79 +461,6 @@ export const INDEX_HTML = `<!doctype html>
     text-shadow: 0 0 4px rgba(255,56,96,0.5);
   }
 
-  .steelman-panel {
-    border-top: 1px solid var(--border); background: var(--panel-2);
-    padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
-    font-size: 12px; font-family: var(--mono);
-    border-left: 2px solid var(--accent-dim);
-  }
-  .steelman-panel.err { background: rgba(255,56,96,0.06); color: var(--loss); border-left-color: var(--loss); }
-  .steelman-panel .title {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 10px; text-transform: uppercase; letter-spacing: .2em; color: var(--accent-dim);
-    font-weight: 600;
-  }
-  .steelman-panel .title::before { content: "◆ "; color: var(--accent); text-shadow: var(--glow); }
-  .steelman-panel .title .spacer { flex: 1; }
-  .steelman-panel .title button {
-    background: var(--panel-3); color: var(--text); border: 1px solid var(--border);
-    border-radius: 0; padding: 4px 10px;
-    font: 10px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
-    cursor: pointer;
-    transition: all .08s;
-  }
-  .steelman-panel .title button:hover { color: var(--accent); border-color: var(--accent-dim); }
-  .steelman-panel .title button.apply {
-    border-color: var(--accent); color: var(--accent);
-    background: var(--accent-weak);
-  }
-  .steelman-panel .title button.apply:hover { background: var(--accent); color: #000; }
-  .steelman-panel .rationale { color: var(--text); line-height: 1.55; font-size: 12px; }
-  .steelman-panel pre.revised {
-    margin: 0; white-space: pre-wrap; word-break: break-word;
-    font-family: var(--mono); font-size: 12px; color: var(--text-hi);
-    background: var(--panel-3); padding: 10px 12px; border-radius: 0;
-    max-height: 240px; overflow: auto;
-    border: 1px solid var(--border); border-left: 2px solid var(--accent);
-  }
-
-  .detail-verdict .steelman-row { display: flex; align-items: center; gap: 8px; }
-  .detail-verdict .steelman-row button {
-    background: var(--panel-3); color: var(--text); border: 1px solid var(--border);
-    border-radius: 0; padding: 4px 10px;
-    font: 10px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
-    cursor: pointer;
-    transition: all .08s;
-  }
-  .detail-verdict .steelman-row button:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 6px rgba(57,255,20,0.2); }
-  .detail-verdict .steelman-row button:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
-  .detail-verdict .micro-steelman {
-    margin-top: 8px; background: var(--panel-3); border: 1px solid var(--border);
-    border-left: 2px solid var(--accent-dim); border-radius: 0;
-    padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
-    font-size: 12px; font-family: var(--mono);
-  }
-  .detail-verdict .micro-steelman.err { border-color: var(--loss); border-left-color: var(--loss); color: var(--loss); }
-  .detail-verdict .micro-steelman .ms-title {
-    font-size: 9px; text-transform: uppercase; letter-spacing: .2em; color: var(--accent-dim);
-    display: flex; align-items: center; gap: 8px; font-weight: 600;
-  }
-  .detail-verdict .micro-steelman .ms-title::before { content: "▸ "; color: var(--accent); }
-  .detail-verdict .micro-steelman .ms-title .spacer { flex: 1; }
-  .detail-verdict .micro-steelman .ms-title button {
-    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 0; padding: 3px 8px;
-    font: 9px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
-    cursor: pointer;
-  }
-  .detail-verdict .micro-steelman .ms-title button:hover { color: var(--accent); border-color: var(--accent-dim); }
-  .detail-verdict .micro-steelman .ms-title button.apply { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); }
-  .detail-verdict .micro-steelman pre {
-    margin: 0; white-space: pre-wrap; word-break: break-word;
-    font-family: var(--mono); font-size: 11px; color: var(--text);
-    line-height: 1.55;
-  }
-
   /* Runs drawer — slides in from the right when RUNS is clicked. */
   .runs-drawer {
     position: fixed; top: 0; right: 0; bottom: 0; width: 540px;
@@ -688,30 +585,6 @@ export const INDEX_HTML = `<!doctype html>
     text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700;
   }
 
-  .runs-drawer .clusters { margin-top: 14px; }
-  .runs-drawer .clusters .cluster-row {
-    display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
-    padding: 8px 10px; border: 1px solid var(--border); border-radius: 0;
-    background: var(--panel-2); margin-bottom: 6px;
-    border-left: 2px solid var(--loss);
-  }
-  .runs-drawer .clusters .cluster-row .count {
-    font-family: var(--mono); font-size: 10px; color: var(--loss);
-    background: rgba(255,56,96,0.08); padding: 2px 8px; border: 1px solid var(--loss);
-    align-self: start; letter-spacing: 0.08em; font-weight: 700;
-  }
-  .runs-drawer .clusters .cluster-row .label {
-    font-family: var(--mono); font-size: 11px; color: var(--text-hi); align-self: start;
-    letter-spacing: 0.04em;
-  }
-  .runs-drawer .clusters .cluster-row .sample {
-    grid-column: 1 / -1; color: var(--muted); font-size: 11px; line-height: 1.45;
-    padding-left: 8px; border-left: 1px solid var(--border);
-  }
-  .runs-drawer .clusters .cluster-row .indices {
-    grid-column: 1 / -1; color: var(--muted-2); font-family: var(--mono); font-size: 10px;
-  }
-
   .runs-drawer-backdrop {
     position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 35;
     display: none;
@@ -740,7 +613,6 @@ export const INDEX_HTML = `<!doctype html>
 
   @media (pointer: coarse) {
     header button, header label,
-    .mode-toggle button,
     .prompts-pane .tabs button,
     .prompts-pane .footer button,
     .runs-drawer-header button,
@@ -755,11 +627,6 @@ export const INDEX_HTML = `<!doctype html>
     <h1>rubric</h1>
     <span class="sub" id="config-path">—</span>
     <span class="spacer"></span>
-    <div class="mode-toggle" id="mode-toggle" role="tablist" aria-label="compare mode">
-      <span class="label">vary</span>
-      <button data-mode="compare-prompts" class="active" aria-pressed="true">prompts</button>
-      <button data-mode="compare-models" aria-pressed="false">models</button>
-    </div>
     <label><input type="checkbox" id="mock-toggle"> mock mode</label>
     <button id="runs-btn" title="Browse past runs from the registry">runs.log</button>
     <button id="run-btn" class="primary">&gt; run</button>
@@ -773,7 +640,6 @@ export const INDEX_HTML = `<!doctype html>
         <span class="dot saved" id="prompt-dot"></span>
         <span id="prompts-title">prompts</span>
       </div>
-      <div class="mode-hint" id="mode-hint" style="display:none"></div>
       <div class="tabs">
         <button id="tab-baseline" class="active" data-which="baseline">baseline</button>
         <button id="tab-candidate" data-which="candidate">candidate</button>
@@ -781,10 +647,8 @@ export const INDEX_HTML = `<!doctype html>
       <textarea id="prompt-editor" spellcheck="false"></textarea>
       <div class="footer">
         <button id="save-btn">:w (⌘S)</button>
-        <button id="steelman-btn" title="Ask the judge model to strengthen this prompt">steelman()</button>
         <span class="hint" id="save-hint">editor is clean</span>
       </div>
-      <div id="steelman-panel" class="steelman-panel" style="display:none"></div>
     </section>
 
     <section class="cases-pane">
@@ -851,7 +715,6 @@ export const INDEX_HTML = `<!doctype html>
     active: 'baseline',
     dirty: false,
     running: false,
-    mode: 'compare-prompts',
   };
 
   function setError(msg) {
@@ -867,47 +730,12 @@ export const INDEX_HTML = `<!doctype html>
   }
 
   function activateTab(which) {
-    if (state.mode === 'compare-models' && which === 'candidate') return;
     state.active = which;
     for (const btn of document.querySelectorAll('.tabs button')) {
       btn.classList.toggle('active', btn.dataset.which === which);
     }
     $('prompt-editor').value = state.workspace ? state.workspace.prompts[which] : '';
     setDirty(false);
-  }
-
-  function applyMode() {
-    const pane = $('prompts-pane');
-    const hint = $('mode-hint');
-    const title = $('prompts-title');
-    const headerBtns = document.querySelectorAll('#mode-toggle button');
-    for (const btn of headerBtns) {
-      const active = btn.dataset.mode === state.mode;
-      btn.classList.toggle('active', active);
-      btn.setAttribute('aria-pressed', String(active));
-    }
-    if (state.mode === 'compare-models') {
-      pane.classList.add('locked-candidate');
-      title.textContent = 'shared prompt';
-      const models = (state.workspace && state.workspace.config && state.workspace.config.models) || [];
-      const pair = models.length >= 2 ? models[0] + ' vs ' + models[1] : 'needs ≥2 models in config';
-      hint.textContent = 'compare-models: ' + pair + ' — candidate tab is disabled (single shared prompt)';
-      hint.style.display = 'block';
-      if (state.active === 'candidate') activateTab('baseline');
-    } else {
-      pane.classList.remove('locked-candidate');
-      title.textContent = 'prompts';
-      hint.style.display = 'none';
-      hint.textContent = '';
-    }
-  }
-
-  function setMode(m) {
-    if (state.running) return;
-    if (m !== 'compare-prompts' && m !== 'compare-models') return;
-    if (state.mode === m) return;
-    state.mode = m;
-    applyMode();
   }
 
   function renderCases() {
@@ -973,11 +801,6 @@ export const INDEX_HTML = `<!doctype html>
 
   function verdictLabel(j) {
     if (j.error) return { cls: 'err', label: 'ERR' };
-    if (state.mode === 'compare-models') {
-      if (j.winner === 'b') return { cls: 'win', label: 'B' };
-      if (j.winner === 'a') return { cls: 'loss', label: 'A' };
-      return { cls: 'tie', label: 'TIE' };
-    }
     if (j.winner === 'b') return { cls: 'win', label: 'CAND' };
     if (j.winner === 'a') return { cls: 'loss', label: 'BASE' };
     return { cls: 'tie', label: 'TIE' };
@@ -997,12 +820,11 @@ export const INDEX_HTML = `<!doctype html>
     else if (v.cls === 'tie') counts.ties++;
     else counts.errors++;
     const reason = cell.judge.error || cell.judge.reason || '';
-    const modelLabel = cell.modelB ? (cell.model + ' vs ' + cell.modelB) : cell.model;
     const row = document.createElement('tr');
     row.className = 'header-row';
     row.innerHTML =
       '<td class="idx">▸ ' + cell.caseIndex + '</td>' +
-      '<td class="model">' + escapeHtml(modelLabel) + '</td>' +
+      '<td class="model">' + escapeHtml(cell.model) + '</td>' +
       '<td class="input" title="' + escapeHtml(caseInput) + '">' + escapeHtml(caseInput) + '</td>' +
       '<td class="verdict ' + v.cls + '">' + v.label + '</td>' +
       '<td class="reason">' + escapeHtml(reason) + '</td>';
@@ -1055,10 +877,8 @@ export const INDEX_HTML = `<!doctype html>
     const box = document.createElement('div');
     box.className = 'detail-box';
 
-    const labelA = cell.modelB ? cell.model : 'A (baseline)';
-    const labelB = cell.modelB ? cell.modelB : 'B (candidate)';
-    box.appendChild(detailSide('A', labelA, cell.outputA, caseInput));
-    box.appendChild(detailSide('B', labelB, cell.outputB, caseInput));
+    box.appendChild(detailSide('A', 'A (baseline)', cell.outputA, caseInput));
+    box.appendChild(detailSide('B', 'B (candidate)', cell.outputB, caseInput));
     td.appendChild(box);
     return td;
   }
@@ -1075,12 +895,12 @@ export const INDEX_HTML = `<!doctype html>
       headline = 'Judge errored before returning a verdict';
     } else if (j.winner === 'b') {
       block.classList.add('winner-b');
-      pillLabel = state.mode === 'compare-models' ? 'B WINS' : 'CAND WINS';
+      pillLabel = 'CAND WINS';
       headline = 'Why this side won';
     } else if (j.winner === 'a') {
       block.classList.add('winner-a');
-      pillLabel = state.mode === 'compare-models' ? 'A WINS' : 'BASE WINS';
-      headline = state.mode === 'compare-models' ? 'Why B lost' : 'Why the candidate lost';
+      pillLabel = 'BASE WINS';
+      headline = 'Why the candidate lost';
     } else {
       block.classList.add('winner-tie');
       pillLabel = 'TIE';
@@ -1114,118 +934,8 @@ export const INDEX_HTML = `<!doctype html>
       block.appendChild(exp);
     }
 
-    if (!j.error && (j.winner === 'a' || j.winner === 'b')) {
-      const row = document.createElement('div');
-      row.className = 'steelman-row';
-      const btn = document.createElement('button');
-      btn.textContent = 'steelman(losing)';
-      const hint = document.createElement('span');
-      hint.style.color = 'var(--muted)';
-      hint.style.fontSize = '11px';
-      hint.textContent = 'rewrite using this case as the anchor';
-      row.appendChild(btn);
-      row.appendChild(hint);
-      block.appendChild(row);
-
-      const target = document.createElement('div');
-      block.appendChild(target);
-
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await runMicroSteelman(cell, block, target, btn);
-      });
-    }
-
     block.addEventListener('click', (e) => e.stopPropagation());
     return block;
-  }
-
-  async function runMicroSteelman(cell, block, target, btn) {
-    const j = cell.judge;
-    if (j.error || (j.winner !== 'a' && j.winner !== 'b')) return;
-
-    const ws = state.workspace;
-    const caseRec = ws.cases[cell.caseIndex];
-    if (!caseRec) return;
-
-    const which = state.mode === 'compare-models'
-      ? 'baseline'
-      : (j.winner === 'a' ? 'candidate' : 'baseline');
-    const failedOutput = j.winner === 'a' ? cell.outputB : cell.outputA;
-    const betterOutput = j.winner === 'a' ? cell.outputA : cell.outputB;
-
-    const failing = [{
-      input: caseRec.input,
-      failedOutput: failedOutput || '',
-      betterOutput: betterOutput || '',
-      judgeReason: j.reason || '',
-    }];
-    if (typeof caseRec.expected === 'string') failing[0].expected = caseRec.expected;
-
-    btn.disabled = true;
-    btn.textContent = 'thinking...';
-    target.innerHTML = '';
-
-    const mock = $('mock-toggle').checked;
-    try {
-      const res = await fetch('/api/steelman', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ which, failingCases: failing, mock }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-
-      const panel = document.createElement('div');
-      panel.className = 'micro-steelman';
-
-      const head = document.createElement('div');
-      head.className = 'ms-title';
-      const lbl = document.createElement('span');
-      lbl.textContent = 'steelman of ' + which + ' (anchored on this case)';
-      const spacer = document.createElement('span');
-      spacer.className = 'spacer';
-      const applyBtn = document.createElement('button');
-      applyBtn.className = 'apply';
-      applyBtn.textContent = 'Apply → editor';
-      const dismissBtn = document.createElement('button');
-      dismissBtn.textContent = 'Dismiss';
-      head.appendChild(lbl);
-      head.appendChild(spacer);
-      head.appendChild(applyBtn);
-      head.appendChild(dismissBtn);
-      panel.appendChild(head);
-
-      const rationale = document.createElement('div');
-      rationale.style.color = 'var(--muted)';
-      rationale.textContent = data.rationale;
-      panel.appendChild(rationale);
-
-      const pre = document.createElement('pre');
-      pre.textContent = data.revised;
-      panel.appendChild(pre);
-
-      applyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        activateTab(which);
-        $('prompt-editor').value = data.revised;
-        setDirty(true);
-      });
-      dismissBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        target.innerHTML = '';
-      });
-
-      target.appendChild(panel);
-    } catch (err) {
-      const panel = document.createElement('div');
-      panel.className = 'micro-steelman err';
-      panel.textContent = 'steelman failed: ' + (err.message || err);
-      target.appendChild(panel);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'steelman(losing)';
-    }
   }
 
   function detailSide(side, modelName, output, caseInput) {
@@ -1296,10 +1006,7 @@ export const INDEX_HTML = `<!doctype html>
       state.workspace = await res.json();
       $('config-path').textContent = state.workspace.configPath;
       $('mock-toggle').checked = false;
-      const cfgMode = state.workspace.config && state.workspace.config.mode;
-      state.mode = cfgMode === 'compare-models' ? 'compare-models' : 'compare-prompts';
-      applyMode();
-      activateTab(state.mode === 'compare-models' ? 'baseline' : state.active);
+      activateTab(state.active);
       renderCases();
       setError(null);
     } catch (err) {
@@ -1336,14 +1043,13 @@ export const INDEX_HTML = `<!doctype html>
     counts.wins = 0; counts.losses = 0; counts.ties = 0; counts.errors = 0;
 
     const mock = $('mock-toggle').checked;
-    const mode = state.mode;
     const controller = new AbortController();
     let buffered = '';
     try {
       const res = await fetch('/api/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ mock, mode }),
+        body: JSON.stringify({ mock }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
@@ -1393,85 +1099,6 @@ export const INDEX_HTML = `<!doctype html>
     if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); savePrompt(); }
   });
   $('run-btn').addEventListener('click', runSweep);
-  for (const btn of document.querySelectorAll('#mode-toggle button')) {
-    btn.addEventListener('click', () => setMode(btn.dataset.mode));
-  }
-  $('steelman-btn').addEventListener('click', steelmanActivePrompt);
-
-  async function steelmanActivePrompt() {
-    if (!state.workspace) return;
-    const which = state.active;
-    const panel = $('steelman-panel');
-    const btn = $('steelman-btn');
-    btn.disabled = true;
-    btn.textContent = 'thinking...';
-    panel.style.display = 'block';
-    panel.className = 'steelman-panel';
-    panel.innerHTML = '<div class="title">steelman of ' + which + '</div><div class="rationale" style="color:var(--muted)">asking the judge model…</div>';
-
-    const mock = $('mock-toggle').checked;
-    try {
-      const res = await fetch('/api/steelman', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ which, mock }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-
-      panel.innerHTML = '';
-
-      const title = document.createElement('div');
-      title.className = 'title';
-      const tlabel = document.createElement('span');
-      tlabel.textContent = 'steelman of ' + which;
-      const spacer = document.createElement('span');
-      spacer.className = 'spacer';
-      const applyBtn = document.createElement('button');
-      applyBtn.className = 'apply';
-      applyBtn.textContent = 'Apply → editor';
-      const dismissBtn = document.createElement('button');
-      dismissBtn.textContent = 'Dismiss';
-      title.appendChild(tlabel);
-      title.appendChild(spacer);
-      title.appendChild(applyBtn);
-      title.appendChild(dismissBtn);
-      panel.appendChild(title);
-
-      const rationale = document.createElement('div');
-      rationale.className = 'rationale';
-      rationale.textContent = data.rationale;
-      panel.appendChild(rationale);
-
-      const pre = document.createElement('pre');
-      pre.className = 'revised';
-      pre.textContent = data.revised;
-      panel.appendChild(pre);
-
-      applyBtn.addEventListener('click', () => {
-        activateTab(which);
-        $('prompt-editor').value = data.revised;
-        setDirty(true);
-      });
-      dismissBtn.addEventListener('click', () => {
-        panel.style.display = 'none';
-        panel.innerHTML = '';
-      });
-    } catch (err) {
-      panel.className = 'steelman-panel err';
-      panel.innerHTML = '';
-      const title = document.createElement('div');
-      title.className = 'title';
-      title.textContent = 'steelman failed';
-      const body = document.createElement('div');
-      body.textContent = err.message || String(err);
-      panel.appendChild(title);
-      panel.appendChild(body);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'steelman()';
-    }
-  }
 
   // ── Runs drawer ────────────────────────────────────────────────────────────
   // Browse the local registry (~/.rubric/runs), open one for summary+cells, or
@@ -1625,11 +1252,6 @@ export const INDEX_HTML = `<!doctype html>
       }
       const data = await res.json();
       renderRunDetail(detail, data.manifest, data.cells);
-      // Clustering is best-effort — a failure there shouldn't break the detail view.
-      fetch('/api/runs/' + encodeURIComponent(id) + '/clusters')
-        .then((r) => (r.ok ? r.json() : null))
-        .then((c) => { if (c && Array.isArray(c.clusters)) renderRunClusters(detail, c.clusters); })
-        .catch(() => {});
     } catch (err) {
       detail.innerHTML = '';
       const e = document.createElement('div');
@@ -1637,41 +1259,6 @@ export const INDEX_HTML = `<!doctype html>
       e.textContent = 'failed to load run: ' + (err.message || err);
       detail.appendChild(e);
     }
-  }
-
-  function renderRunClusters(container, clusters) {
-    if (!clusters || clusters.length === 0) return;
-    const existing = container.querySelector('.clusters');
-    if (existing) existing.remove();
-    const wrap = document.createElement('div');
-    wrap.className = 'clusters';
-    const h = document.createElement('h4');
-    h.style.marginTop = '10px';
-    h.textContent = 'failure clusters (' + clusters.length + ')';
-    wrap.appendChild(h);
-    for (const c of clusters) {
-      const row = document.createElement('div');
-      row.className = 'cluster-row';
-      const count = document.createElement('span');
-      count.className = 'count';
-      count.textContent = '×' + c.count;
-      const label = document.createElement('span');
-      label.className = 'label';
-      label.textContent = c.label;
-      const sample = document.createElement('div');
-      sample.className = 'sample';
-      sample.textContent = c.sampleReason || '';
-      const indices = document.createElement('div');
-      indices.className = 'indices';
-      const idxPreview = c.caseIndices.slice(0, 8).join(', ');
-      indices.textContent = 'cases: ' + idxPreview + (c.caseIndices.length > 8 ? ', … (' + (c.caseIndices.length - 8) + ' more)' : '');
-      row.appendChild(count);
-      row.appendChild(label);
-      row.appendChild(sample);
-      row.appendChild(indices);
-      wrap.appendChild(row);
-    }
-    container.appendChild(wrap);
   }
 
   function renderRunDetail(container, manifest, cells) {

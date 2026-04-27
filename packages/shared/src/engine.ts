@@ -25,21 +25,6 @@ export interface RunEvalOptions {
   concurrency?: number;
   /** Abort propagation to provider calls. */
   signal?: AbortSignal;
-  /**
-   * Skip cells whose key (see `cellKey`) appears in this set. Used by the
-   * resume path to avoid re-running work that already landed in cells.jsonl.
-   * Cells that match are dropped from both the plan AND the result array;
-   * callers that want them in the final summary must merge externally.
-   */
-  skipCellKeys?: Set<string>;
-}
-
-/**
- * Stable identity for a planned cell. Callers that want resume semantics use
- * this to build their skip set from existing CellResults.
- */
-export function cellKey(c: { caseIndex: number; model: ModelId; modelB?: ModelId }): string {
-  return `${c.caseIndex}::${c.model}::${c.modelB ?? ''}`;
 }
 
 export interface RunEvalResult {
@@ -62,23 +47,11 @@ function pickProvider(providers: Provider[], modelId: ModelId): Provider {
 
 interface Cell {
   caseIndex: number;
-  /** A-side model. */
   model: ModelId;
-  /** B-side model (compare-models only); when omitted both sides run on `model`. */
-  modelB?: ModelId;
 }
 
-function planCells(cases: Case[], models: ModelId[], mode: 'compare-prompts' | 'compare-models'): Cell[] {
+function planCells(cases: Case[], models: ModelId[]): Cell[] {
   const cells: Cell[] = [];
-  if (mode === 'compare-models') {
-    if (models.length < 2) {
-      throw new Error(`mode="compare-models" requires at least 2 models, got ${models.length}`);
-    }
-    const a = models[0] as ModelId;
-    const b = models[1] as ModelId;
-    for (let i = 0; i < cases.length; i++) cells.push({ caseIndex: i, model: a, modelB: b });
-    return cells;
-  }
   for (let i = 0; i < cases.length; i++) {
     for (const model of models) cells.push({ caseIndex: i, model });
   }
@@ -92,7 +65,6 @@ async function runCell(
   providers: Provider[],
   judge: Judge,
   criteria: string,
-  mode: 'compare-prompts' | 'compare-models',
   signal: AbortSignal | undefined,
   evaluators: Evaluator[],
 ): Promise<CellResult> {
@@ -100,24 +72,18 @@ async function runCell(
   if (!c) throw new Error(`cell references missing case index ${cell.caseIndex}`);
 
   const started = Date.now();
-  const compareModels = mode === 'compare-models' && cell.modelB !== undefined;
   try {
-    const promptA = compareModels ? prompts.baseline : prompts.baseline;
-    const promptB = compareModels ? prompts.baseline : prompts.candidate;
-    const modelA = cell.model;
-    const modelB = compareModels ? (cell.modelB as ModelId) : cell.model;
-    const providerA = pickProvider(providers, modelA);
-    const providerB = pickProvider(providers, modelB);
+    const provider = pickProvider(providers, cell.model);
 
     const [outA, outB] = await Promise.all([
-      providerA.generate({
-        modelId: modelA,
-        prompt: renderPrompt(promptA, c),
+      provider.generate({
+        modelId: cell.model,
+        prompt: renderPrompt(prompts.baseline, c),
         ...(signal ? { signal } : {}),
       }),
-      providerB.generate({
-        modelId: modelB,
-        prompt: renderPrompt(promptB, c),
+      provider.generate({
+        modelId: cell.model,
+        prompt: renderPrompt(prompts.candidate, c),
         ...(signal ? { signal } : {}),
       }),
     ]);
@@ -137,13 +103,12 @@ async function runCell(
 
     const result: CellResult = {
       caseIndex: cell.caseIndex,
-      model: modelA,
+      model: cell.model,
       outputA: outA.text,
       outputB: outB.text,
       judge: verdict,
       latencyMs: Date.now() - started,
     };
-    if (compareModels) result.modelB = modelB;
     const costA = outA.costUsd ?? 0;
     const costB = outB.costUsd ?? 0;
     if (costA || costB) result.costUsd = costA + costB;
@@ -165,7 +130,6 @@ async function runCell(
       judge: { error: err instanceof Error ? err.message : String(err) },
       latencyMs: Date.now() - started,
     };
-    if (compareModels && cell.modelB !== undefined) result.modelB = cell.modelB;
     return result;
   }
 }
@@ -238,7 +202,6 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
     return { cells: [], summary: { wins: 0, losses: 0, ties: 0, errors: 0, winRate: 0 } };
   }
   const concurrency = opts.concurrency ?? config.concurrency ?? 4;
-  const mode = config.mode ?? 'compare-prompts';
   const criteriaString =
     typeof config.judge.criteria === 'string'
       ? config.judge.criteria
@@ -246,13 +209,11 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
         ? config.judge.criteria.custom
         : (() => { throw new Error('engine received a { file } criteria — caller must resolve with resolveCriteria() first'); })();
 
-  const fullPlan = planCells(cases, config.models, mode);
-  const skip = opts.skipCellKeys;
-  const plan = skip && skip.size > 0 ? fullPlan.filter((c) => !skip.has(cellKey(c))) : fullPlan;
+  const plan = planCells(cases, config.models);
   const evaluators = createEvaluators(config.evaluators);
   let done = 0;
   const cells = await mapWithConcurrency(plan, concurrency, async (cell) => {
-    const result = await runCell(cell, cases, prompts, providers, judge, criteriaString, mode, signal, evaluators);
+    const result = await runCell(cell, cases, prompts, providers, judge, criteriaString, signal, evaluators);
     done++;
     opts.onCell?.(result, { done, total: plan.length });
     return result;

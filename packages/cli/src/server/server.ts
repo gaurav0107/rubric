@@ -11,7 +11,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import {
-  clusterFailures,
   createConfiguredProviders,
   createMockJudge,
   createMockProvider,
@@ -25,18 +24,14 @@ import {
   readManifest,
   resolveCriteria,
   runEval,
-  runSteelman,
   type Case,
   type CellResult,
   type Config,
   type Criteria,
-  type FailureCluster,
   type Judge,
   type Provider,
   type ProviderConfig,
   type RunManifest,
-  type SteelmanFailingCase,
-  type SteelmanResult,
 } from '../../../shared/src/index.ts';
 
 export interface ServerOptions {
@@ -67,7 +62,7 @@ function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
     candidate: readFileSync(loaded.resolved.candidate, 'utf8'),
   };
   const datasetText = readFileSync(loaded.resolved.dataset, 'utf8');
-  const cases = parseCasesJsonl(datasetText, { allowLangfuse: false });
+  const cases = parseCasesJsonl(datasetText);
   return { configPath: loaded.path, config: loaded.config, prompts, cases, resolved: loaded.resolved, baseDir: loaded.baseDir };
 }
 
@@ -136,27 +131,17 @@ export interface CalibrationLabel {
   reason?: string;
 }
 
-export interface SteelmanRequestBody {
-  which: 'baseline' | 'candidate';
-  failingCases?: SteelmanFailingCase[];
-  guidance?: string;
-  mock?: boolean;
-}
-
 export interface Handlers {
   getWorkspace: () => WorkspaceSnapshot;
   savePrompt: (which: 'baseline' | 'candidate', content: string) => void;
   appendCalibrationLabel: (label: CalibrationLabel) => { path: string; entryCount: number };
-  runSweep: (opts: { mock: boolean; mode?: 'compare-prompts' | 'compare-models' }) => Promise<{
+  runSweep: (opts: { mock: boolean }) => Promise<{
     iterate: () => AsyncIterable<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } } | { type: 'done'; cells: CellResult[] }>;
   }>;
-  steelman: (body: SteelmanRequestBody) => Promise<SteelmanResult & { which: 'baseline' | 'candidate' }>;
   /** Enumerate runs from the registry, newest first. Omit cells to keep payload small. */
   listRuns: (opts?: { limit?: number }) => RunManifest[];
   /** Fetch a run's manifest + all cells. 404 when the id is unknown. */
   loadRun: (id: string) => { manifest: RunManifest; cells: CellResult[] };
-  /** Cluster a run's losing cells by judge-reason tokens. */
-  clusterRun: (id: string, losingSide?: 'a' | 'b') => { clusters: FailureCluster[] };
 }
 
 function calibrationPathFor(ws: WorkspaceSnapshot): string {
@@ -200,16 +185,6 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
       const cells = readCells(registryRoot, id);
       return { manifest, cells };
     },
-    clusterRun(id, losingSide) {
-      // Resolve the manifest first so unknown ids 404 cleanly instead of
-      // silently returning "no clusters" (readCells just returns [] when the
-      // run doesn't exist).
-      readManifest(registryRoot, id);
-      const cells = readCells(registryRoot, id);
-      const input: Parameters<typeof clusterFailures>[0] = { cells };
-      if (losingSide) input.losingSide = losingSide;
-      return { clusters: clusterFailures(input) };
-    },
     savePrompt(which, content) {
       const ws = loadWorkspace(cwd, configPath);
       const target = which === 'baseline' ? ws.resolved.baseline : ws.resolved.candidate;
@@ -230,35 +205,15 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
       writeFileSync(path, JSON.stringify({ entries: existing }, null, 2) + '\n', 'utf8');
       return { path, entryCount: existing.length };
     },
-    async steelman(body) {
-      const ws = loadWorkspace(cwd, configPath);
-      const prompt = body.which === 'baseline' ? ws.prompts.baseline : ws.prompts.candidate;
-      const mock = body.mock === true || opts.mock === true;
-      const providers = buildProviders(mock, ws.config.providers, ws.baseDir);
-      const provider = providers.find((p) => p.supports(ws.config.judge.model));
-      if (!provider) {
-        throw new Error(`no provider accepts judge.model "${ws.config.judge.model}" for steelman`);
-      }
-      const steelmanOpts: Parameters<typeof runSteelman>[0] = {
-        provider,
-        model: ws.config.judge.model,
-        prompt,
-      };
-      if (body.failingCases !== undefined) steelmanOpts.failingCases = body.failingCases;
-      if (body.guidance !== undefined) steelmanOpts.guidance = body.guidance;
-      const result = await runSteelman(steelmanOpts);
-      return { ...result, which: body.which };
-    },
-    async runSweep({ mock, mode }) {
+    async runSweep({ mock }) {
       const ws = loadWorkspace(cwd, configPath);
       const providers = buildProviders(mock, ws.config.providers, ws.baseDir);
       const criteriaText = resolveCriteria(ws.config.judge.criteria, ws.baseDir);
       const judge = buildJudge(mock, ws.config, providers, criteriaText, ws.config.judge.criteria);
-      const base: Config = {
+      const configForRun: Config = {
         ...ws.config,
         judge: { ...ws.config.judge, criteria: { custom: criteriaText } },
       };
-      const configForRun: Config = mode ? { ...base, mode } : base;
 
       let pushCell: ((c: CellResult, p: { done: number; total: number }) => void) | null = null;
       const queue: Array<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } }> = [];
@@ -339,11 +294,10 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         // /api/runs                     → list
         // /api/runs?limit=20             → list, capped
         // /api/runs/<id>                 → manifest + cells for one run
-        // /api/runs/<id>/clusters        → failure clusters for that run
         const qIdx = url.indexOf('?');
         const pathPart = qIdx === -1 ? url : url.slice(0, qIdx);
         const query = qIdx === -1 ? '' : url.slice(qIdx + 1);
-        const segments = pathPart.split('/').filter(Boolean); // ['api','runs', <id?>, <subcmd?>]
+        const segments = pathPart.split('/').filter(Boolean); // ['api','runs', <id?>]
         if (segments.length === 2) {
           const limitRaw = new URLSearchParams(query).get('limit');
           const limit = limitRaw !== null ? Math.max(0, Number(limitRaw)) : undefined;
@@ -360,20 +314,6 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
           try {
             const { manifest, cells } = handlers.loadRun(id);
             sendJson(res, 200, { manifest, cells });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            const notFound = /not found|ENOENT|no manifest/i.test(msg);
-            sendJson(res, notFound ? 404 : 500, { error: msg });
-          }
-          return;
-        }
-        if (segments.length === 4 && segments[3] === 'clusters') {
-          const id = decodeURIComponent(segments[2]!);
-          const sideRaw = new URLSearchParams(query).get('side');
-          const side: 'a' | 'b' | undefined = sideRaw === 'a' || sideRaw === 'b' ? sideRaw : undefined;
-          try {
-            const out = handlers.clusterRun(id, side);
-            sendJson(res, 200, out);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             const notFound = /not found|ENOENT|no manifest/i.test(msg);
@@ -423,49 +363,15 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         return;
       }
 
-      if (method === 'POST' && url === '/api/steelman') {
-        const body = await readBody(req);
-        const parsed = JSON.parse(body) as Partial<SteelmanRequestBody>;
-        if (parsed.which !== 'baseline' && parsed.which !== 'candidate') {
-          sendJson(res, 400, { error: 'which must be "baseline" or "candidate"' });
-          return;
-        }
-        if (parsed.failingCases !== undefined && !Array.isArray(parsed.failingCases)) {
-          sendJson(res, 400, { error: 'failingCases must be an array' });
-          return;
-        }
-        if (parsed.guidance !== undefined && typeof parsed.guidance !== 'string') {
-          sendJson(res, 400, { error: 'guidance must be a string' });
-          return;
-        }
-        const reqBody: SteelmanRequestBody = { which: parsed.which };
-        if (parsed.failingCases !== undefined) reqBody.failingCases = parsed.failingCases as SteelmanFailingCase[];
-        if (parsed.guidance !== undefined) reqBody.guidance = parsed.guidance;
-        if (parsed.mock === true) reqBody.mock = true;
-        try {
-          const result = await handlers.steelman(reqBody);
-          sendJson(res, 200, result);
-        } catch (err) {
-          sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
-        }
-        return;
-      }
-
       if (method === 'POST' && url === '/api/run') {
         const body = req.headers['content-length'] && Number(req.headers['content-length']) > 0
           ? await readBody(req)
           : '{}';
-        const parsed = JSON.parse(body) as { mock?: boolean; mode?: unknown };
+        const parsed = JSON.parse(body) as { mock?: boolean };
         const mock = parsed.mock === true || opts.mock === true;
-        let mode: 'compare-prompts' | 'compare-models' | undefined;
-        if (parsed.mode === 'compare-prompts' || parsed.mode === 'compare-models') {
-          mode = parsed.mode;
-        }
         const sse = openSse(res);
         try {
-          const sweepOpts: { mock: boolean; mode?: 'compare-prompts' | 'compare-models' } = { mock };
-          if (mode) sweepOpts.mode = mode;
-          const { iterate } = await handlers.runSweep(sweepOpts);
+          const { iterate } = await handlers.runSweep({ mock });
           for await (const evt of iterate()) {
             sse.send(evt.type, evt);
             if (evt.type === 'done') break;
