@@ -701,6 +701,7 @@ GitHub Search API to find existing issues by marker; if search indexing
 lags, the first run after the issue closes may create a duplicate.
 
 **Typecheck emits a pile of `TS5097` errors**
-Pre-existing noise: the codebase uses `.ts` extension imports (bun-
-native) which tsc's default resolver rejects. Filter them out:
-`bun run typecheck 2>&1 | grep -v TS5097`.
+Fixed in v2.2.0 — `tsconfig.base.json` now sets
+`allowImportingTsExtensions: true` / `noEmit: true`. If you've pulled
+v2.2 and still see this, you're on a stale checkout; `git pull` and
+re-run.
