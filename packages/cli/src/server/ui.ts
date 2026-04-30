@@ -27,7 +27,7 @@ export const INDEX_HTML = `<!doctype html>
     --border-hi:  #2c5a2c;
     --text:       #c4ffd1;
     --text-hi:    #e6ffe9;
-    --muted:      #3e7a4e;
+    --muted:      #5a9e6a;
     --muted-2:    #2a4a32;
     --accent:     #39ff14;
     --accent-dim: #1aa30b;
@@ -41,7 +41,26 @@ export const INDEX_HTML = `<!doctype html>
     --glow: 0 0 1px currentColor, 0 0 6px rgba(57,255,20,.35);
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+  html, body { height: 100%; margin: 0; font-family: var(--mono); }
+
+  /* Keyboard focus — high-contrast phosphor ring. Only on keyboard nav
+     so mouse clicks stay clean. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Skip link — visually hidden until focused. Lets keyboard users jump
+     past the header into editable content. */
+  .skip-link {
+    position: absolute; left: 8px; top: -40px;
+    background: var(--accent-weak); color: var(--accent);
+    padding: 8px 12px; border: 1px solid var(--accent-dim);
+    font: 12px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.1em;
+    z-index: 50; text-decoration: none;
+    transition: top .1s;
+  }
+  .skip-link:focus { top: 8px; }
 
   body {
     background: var(--bg); color: var(--text);
@@ -124,7 +143,8 @@ export const INDEX_HTML = `<!doctype html>
   header button, header label {
     background: var(--panel-3); color: var(--text);
     border: 1px solid var(--border); border-radius: 0;
-    padding: 6px 12px;
+    padding: 6px 12px; min-height: 32px;
+    display: inline-flex; align-items: center;
     font: 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
     cursor: pointer;
     transition: color .08s, border-color .08s, background .08s, box-shadow .08s;
@@ -173,6 +193,7 @@ export const INDEX_HTML = `<!doctype html>
   section:last-child { border-right: none; }
 
   .pane-title {
+    margin: 0;
     padding: 7px 14px; font-size: 10px; text-transform: uppercase; letter-spacing: .22em;
     color: var(--muted); border-bottom: 1px solid var(--border);
     background: var(--panel-2);
@@ -606,44 +627,45 @@ export const INDEX_HTML = `<!doctype html>
 </style>
 </head>
 <body>
+  <a href="#prompts-pane" class="skip-link">skip to prompts</a>
   <header>
     <h1>rubric</h1>
     <span class="sub" id="config-path">—</span>
     <span class="spacer"></span>
     <label><input type="checkbox" id="mock-toggle"> mock mode</label>
-    <button id="runs-btn" title="Browse past runs from the registry">runs.log</button>
-    <button id="run-btn" class="primary">&gt; run</button>
+    <button id="runs-btn" aria-label="browse past runs from the registry" title="Browse past runs from the registry">runs.log</button>
+    <button id="run-btn" class="primary" aria-label="run evaluation">&gt; run</button>
   </header>
 
-  <div id="err" class="err-banner" style="display:none"></div>
+  <div id="err" class="err-banner" role="alert" aria-live="assertive" style="display:none"></div>
 
   <main>
-    <section class="prompts-pane" id="prompts-pane">
-      <div class="pane-title">
-        <span class="dot saved" id="prompt-dot"></span>
+    <section class="prompts-pane" id="prompts-pane" role="region" aria-labelledby="prompts-pane-title">
+      <h2 class="pane-title" id="prompts-pane-title">
+        <span class="dot saved" id="prompt-dot" aria-hidden="true"></span>
         <span id="prompts-title">prompts</span>
-      </div>
+      </h2>
       <div class="tabs">
         <button id="tab-baseline" class="active" data-which="baseline">baseline</button>
         <button id="tab-candidate" data-which="candidate">candidate</button>
       </div>
-      <textarea id="prompt-editor" spellcheck="false"></textarea>
+      <textarea id="prompt-editor" spellcheck="false" aria-label="prompt editor"></textarea>
       <div class="footer">
-        <button id="save-btn">:w (⌘S)</button>
+        <button id="save-btn" aria-label="save prompt">:w (⌘S)</button>
         <span class="hint" id="save-hint">editor is clean</span>
       </div>
     </section>
 
-    <section class="cases-pane">
-      <div class="pane-title">cases <span id="case-count" style="color:var(--muted);margin-left:auto"></span></div>
+    <section class="cases-pane" role="region" aria-labelledby="cases-pane-title">
+      <h2 class="pane-title" id="cases-pane-title">cases <span id="case-count" style="color:var(--muted);margin-left:auto"></span></h2>
       <div class="list" id="cases-list"></div>
     </section>
 
-    <section class="results-pane">
-      <div class="pane-title">
+    <section class="results-pane" role="region" aria-labelledby="results-pane-title">
+      <h2 class="pane-title" id="results-pane-title">
         results
         <span id="progress" style="color:var(--muted);margin-left:auto;font-family:var(--mono);font-size:11px"></span>
-      </div>
+      </h2>
       <div class="summary" id="summary">
         <div class="cell win"><div class="n" id="sum-wins">0</div><div class="k">wins</div></div>
         <div class="cell loss"><div class="n" id="sum-losses">0</div><div class="k">losses</div></div>

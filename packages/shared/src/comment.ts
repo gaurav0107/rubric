@@ -38,12 +38,18 @@ interface ModelTally {
 }
 
 function tallyByModel(cells: CellResult[]): ModelTally[] {
-  const map = new Map<ModelId, ModelTally>();
+  const map = new Map<string, ModelTally>();
   for (const cell of cells) {
-    let t = map.get(cell.model);
+    // In compare-models mode the row is the pairing "A vs B"; in compare-prompts
+    // it's just the single model (A === B). Using the label string as the key
+    // keeps both modes on the same code path.
+    const label = (cell.modelB && cell.modelB !== cell.model)
+      ? (`${cell.model} vs ${cell.modelB}` as ModelId)
+      : cell.model;
+    let t = map.get(label);
     if (!t) {
-      t = { model: cell.model, wins: 0, losses: 0, ties: 0, errors: 0 };
-      map.set(cell.model, t);
+      t = { model: label, wins: 0, losses: 0, ties: 0, errors: 0 };
+      map.set(label, t);
     }
     if ('error' in cell.judge) {
       t.errors++;

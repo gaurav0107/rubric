@@ -141,7 +141,10 @@ function buildJudge(mock: boolean, config: Config, providers: Provider[], criter
 
 interface PlannedCell {
   caseIndex: number;
+  /** A-side model. Same as modelB in compare-prompts; `config.models[0]` in compare-models. */
   model: ModelId;
+  /** B-side model. Same as model in compare-prompts; `config.models[1]` in compare-models. */
+  modelB: ModelId;
   key: CellCacheKey;
 }
 
@@ -154,14 +157,37 @@ function planCells(args: {
   const { cases, config, prompts, criteriaText } = args;
   const rubricId = judgeRubricId(criteriaText);
   const cells: PlannedCell[] = [];
+  const compareModels = config.mode === 'compare-models';
   for (let i = 0; i < cases.length; i++) {
     const c = cases[i] as Case;
+    if (compareModels) {
+      // One prompt (baseline), two models. Validator guaranteed exactly 2 entries.
+      const modelA = config.models[0] as ModelId;
+      const modelB = config.models[1] as ModelId;
+      const prompt = renderPrompt(prompts.baseline, c);
+      cells.push({
+        caseIndex: i,
+        model: modelA,
+        modelB,
+        key: {
+          promptA: prompt,
+          promptB: prompt,
+          inputText: c.input,
+          modelA,
+          modelB,
+          judgeModelId: config.judge.model,
+          judgeRubricId: rubricId,
+        },
+      });
+      continue;
+    }
     for (const model of config.models) {
       const promptA = renderPrompt(prompts.baseline, c);
       const promptB = renderPrompt(prompts.candidate, c);
       cells.push({
         caseIndex: i,
         model,
+        modelB: model,
         key: {
           promptA,
           promptB,
@@ -185,12 +211,16 @@ async function evalCell(
   caseExpected: string | undefined,
   signal: AbortSignal,
 ): Promise<CellCacheValue> {
-  const provider = providers.find((p) => p.supports(planned.model));
-  if (!provider) throw new Error(`no provider for ${planned.model}`);
+  const providerA = providers.find((p) => p.supports(planned.model));
+  if (!providerA) throw new Error(`no provider for ${planned.model}`);
+  const providerB = planned.modelB === planned.model
+    ? providerA
+    : providers.find((p) => p.supports(planned.modelB));
+  if (!providerB) throw new Error(`no provider for ${planned.modelB}`);
 
   const [outA, outB] = await Promise.all([
-    provider.generate({ modelId: planned.model, prompt: planned.key.promptA, signal }),
-    provider.generate({ modelId: planned.model, prompt: planned.key.promptB, signal }),
+    providerA.generate({ modelId: planned.model, prompt: planned.key.promptA, signal }),
+    providerB.generate({ modelId: planned.modelB, prompt: planned.key.promptB, signal }),
   ]);
   const verdict: JudgeResult = await judge.judge({
     caseInput: planned.key.inputText,
@@ -299,6 +329,7 @@ async function runIteration(args: RunIterationArgs): Promise<IterationReport> {
       judge: value.judge,
       latencyMs: Date.now() - cellStarted,
     };
+    if (p.modelB !== p.model) cell.modelB = p.modelB;
     // Content-addressed override lookup. Matches what `rubric disagree` wrote.
     const contentKey = computeContentKey({
       promptA: p.key.promptA,
@@ -311,9 +342,10 @@ async function runIteration(args: RunIterationArgs): Promise<IterationReport> {
     });
     const override = args.overrides.get(contentKey);
     const tag = fromCache ? '·' : '▸';
+    const modelLabel = p.modelB !== p.model ? `${p.model} vs ${p.modelB}` : p.model;
     if ('error' in cell.judge) {
       errors++;
-      args.write(`    ${tag} [${index + 1}/${plan.length}] case-${p.caseIndex} ${p.model} err: ${cell.judge.error}\n`);
+      args.write(`    ${tag} [${index + 1}/${plan.length}] case-${p.caseIndex} ${modelLabel} err: ${cell.judge.error}\n`);
     } else {
       const judgeV = cell.judge.winner;
       const effectiveV: Verdict = override ? override.verdict : judgeV;
@@ -325,9 +357,9 @@ async function runIteration(args: RunIterationArgs): Promise<IterationReport> {
         const disagreeSuffix = override.verdict !== judgeV
           ? ` (→judge: ${verdictGlyph(judgeV)}, you: ${verdictGlyph(override.verdict)}${override.reason ? `, "${override.reason}"` : ''})`
           : ` (override agrees)`;
-        args.write(`    ${tag}✎ [${index + 1}/${plan.length}] case-${p.caseIndex} ${p.model} ${verdictGlyph(effectiveV)}${disagreeSuffix}\n`);
+        args.write(`    ${tag}✎ [${index + 1}/${plan.length}] case-${p.caseIndex} ${modelLabel} ${verdictGlyph(effectiveV)}${disagreeSuffix}\n`);
       } else {
-        args.write(`    ${tag} [${index + 1}/${plan.length}] case-${p.caseIndex} ${p.model} ${verdictGlyph(judgeV)}\n`);
+        args.write(`    ${tag} [${index + 1}/${plan.length}] case-${p.caseIndex} ${modelLabel} ${verdictGlyph(judgeV)}\n`);
       }
     }
     return cell;
@@ -409,22 +441,29 @@ export async function runWatch(opts: WatchOptions = {}): Promise<WatchResult> {
 
   const initial = loadPromptsAndDataset(loaded.config, loaded.resolved);
 
-  write(`rubric watch — ${basename(loaded.resolved.baseline)} vs ${basename(loaded.resolved.candidate)}\n`);
+  const compareModels = loaded.config.mode === 'compare-models';
+  const banner = compareModels
+    ? `${loaded.config.models[0]} vs ${loaded.config.models[1]} on ${basename(loaded.resolved.baseline)}`
+    : `${basename(loaded.resolved.baseline)} vs ${basename(loaded.resolved.candidate)}`;
+  write(`rubric watch — ${banner}\n`);
   write(`  config:      ${loaded.path}\n`);
   write(`  cases:       ${initial.cases.length}\n`);
   write(`  models:      ${loaded.config.models.join(', ')}\n`);
   write(`  judge:       ${loaded.config.judge.model}\n`);
-  write(`  mode:        ${mock ? 'mock' : 'live'}\n`);
+  write(`  mode:        ${mock ? 'mock' : 'live'}${compareModels ? ' (compare-models)' : ''}\n`);
   write(`  cache:       ${opts.noCache ? 'disabled' : cache.root}\n`);
   write(`  concurrency: ${concurrency}\n`);
 
+  const plannedCells = compareModels
+    ? initial.cases.length
+    : initial.cases.length * loaded.config.models.length;
   const run = createRun({
     root: registryRoot,
     config: loaded.config,
     configPath: loaded.path,
     prompts: initial.prompts,
     datasetText: initial.datasetText,
-    plannedCells: initial.cases.length * loaded.config.models.length,
+    plannedCells,
     note: 'watch session',
   });
   const runId = run.id;

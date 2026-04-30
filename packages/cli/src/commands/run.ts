@@ -124,7 +124,13 @@ export function writeProviderDiagnostics(
   userProviders: ProviderConfig[] | undefined,
 ): void {
   write(`\nverbose: provider diagnostics\n`);
-  write(`  built-ins: openai/ groq/ openrouter/ ollama/ (key source: env *_API_KEY)\n`);
+  const openaiKeySource = process.env.OPENAI_KEY
+    ? 'env OPENAI_KEY'
+    : (process.env.OPENAI_API_KEY ? 'env OPENAI_API_KEY (legacy alias)' : '(unset)');
+  const openaiProxy = process.env.OPENAI_PROXY?.trim();
+  write(`  built-ins: openai/ groq/ openrouter/ ollama/\n`);
+  write(`    openai keySource: ${openaiKeySource}\n`);
+  write(`    openai baseUrl:   ${openaiProxy ? openaiProxy + '  (via OPENAI_PROXY)' : 'https://api.openai.com/v1  (default)'}\n`);
   const list = userProviders ?? [];
   if (list.length === 0) {
     write(`  no user-declared providers\n`);
@@ -207,7 +213,10 @@ export function decideExitCode(
 
 export interface JsonCell {
   caseIndex: number;
+  /** A-side model (or the sole model in compare-prompts). */
   model: ModelId;
+  /** B-side model; only emitted in compare-models mode. */
+  modelB?: ModelId;
   latencyMs: number;
   costUsd?: number;
   winner?: Verdict;
@@ -271,6 +280,7 @@ export function buildJsonPayload(args: {
       model: c.model,
       latencyMs: c.latencyMs ?? 0,
     };
+    if (c.modelB !== undefined && c.modelB !== c.model) out.modelB = c.modelB;
     if (c.costUsd !== undefined) out.costUsd = c.costUsd;
     if ('error' in c.judge) {
       out.error = c.judge.error;
@@ -328,9 +338,17 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     }
   }
 
-  write(`rubric: ${cases.length} case(s) x ${loaded.config.models.length} model(s) = ${cases.length * loaded.config.models.length} cell(s)\n`);
+  const compareModels = loaded.config.mode === 'compare-models';
+  const plannedCellCount = compareModels
+    ? cases.length
+    : cases.length * loaded.config.models.length;
+  if (compareModels) {
+    write(`rubric: ${cases.length} case(s) x 1 pairing (${loaded.config.models[0]} vs ${loaded.config.models[1]}) = ${plannedCellCount} cell(s)\n`);
+  } else {
+    write(`rubric: ${cases.length} case(s) x ${loaded.config.models.length} model(s) = ${plannedCellCount} cell(s)\n`);
+  }
   write(`  config:   ${loaded.path}\n`);
-  write(`  mode:     ${mock ? 'mock' : 'live'}\n`);
+  write(`  mode:     ${mock ? 'mock' : 'live'}${compareModels ? ' (compare-models)' : ''}\n`);
 
   // Flatten { file: path } criteria to text before the engine sees them; the
   // engine is cwd-free and can't resolve file paths itself.
@@ -355,7 +373,7 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
       configPath: loaded.path,
       prompts,
       datasetText,
-      plannedCells: cases.length * loaded.config.models.length,
+      plannedCells: plannedCellCount,
       ...(opts.note !== undefined ? { note: opts.note } : {}),
     });
     runId = created.id;

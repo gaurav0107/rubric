@@ -162,11 +162,41 @@ describe('runWatch (once mode)', () => {
     expect(reports[0]!.misses).toBeGreaterThan(0);
   });
 
-  test('rejects configs that still declare the removed compare-models mode', async () => {
+  test('compare-models runs one cell per case with modelA≠modelB', async () => {
     const { dir, registryRoot, cacheRoot } = await setupProject();
     const configPath = join(dir, 'rubric.config.json');
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     config.mode = 'compare-models';
+    config.models = ['openai/gpt-5.1', 'openai/gpt-5.2'];
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+    const result = await runWatch({
+      cwd: dir, configPath,
+      mock: true, once: true,
+      registryRoot, cacheRoot,
+      write: () => {},
+    });
+
+    expect(result.exitCode).toBe(0);
+
+    const cells = readFileSync(join(registryRoot, result.runId, 'cells.jsonl'), 'utf8')
+      .trim().split('\n').map((l) => JSON.parse(l));
+    // One cell per case (5 seeded), not per model.
+    expect(cells.length).toBe(5);
+    const caseIndices = new Set(cells.map((c) => c.caseIndex));
+    expect(caseIndices.size).toBe(5);
+    for (const cell of cells) {
+      expect(cell.model).toBe('openai/gpt-5.1');
+      expect(cell.modelB).toBe('openai/gpt-5.2');
+    }
+  });
+
+  test('rejects compare-models with != 2 models', async () => {
+    const { dir, registryRoot, cacheRoot } = await setupProject();
+    const configPath = join(dir, 'rubric.config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.mode = 'compare-models';
+    config.models = ['openai/gpt-4o-mini'];
     writeFileSync(configPath, JSON.stringify(config, null, 2));
 
     await expect(
@@ -176,6 +206,6 @@ describe('runWatch (once mode)', () => {
         registryRoot, cacheRoot,
         write: () => {},
       }),
-    ).rejects.toThrow(/compare-models.*removed/i);
+    ).rejects.toThrow(/compare-models.*exactly 2/i);
   });
 });

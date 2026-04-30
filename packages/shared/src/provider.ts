@@ -55,18 +55,47 @@ export function splitModelId(id: ModelId): { providerPrefix: string; model: stri
 
 export interface OpenAIProviderOptions {
   apiKey?: string;
-  /** Optional override; defaults to process.env.OPENAI_API_KEY. */
+  /**
+   * Optional baseURL override. Precedence:
+   *   1. opts.baseURL (caller-provided)
+   *   2. process.env.OPENAI_PROXY (corporate / Azure gateway URL)
+   *   3. AI SDK default (https://api.openai.com/v1)
+   *
+   * When OPENAI_PROXY is used, an `x-client-app: rubric` header is added —
+   * most corp proxies require a client identifier. Caller can override via
+   * a user-declared provider in `providers[]` if they need a different one.
+   */
   baseURL?: string;
 }
 
+/**
+ * Resolve the OpenAI API key from env. `OPENAI_KEY` is preferred; falls back
+ * to `OPENAI_API_KEY` for back-compat with existing docs / CI configs.
+ */
+function envOpenAIKey(): string | undefined {
+  if (typeof process === 'undefined') return undefined;
+  return process.env?.OPENAI_KEY || process.env?.OPENAI_API_KEY || undefined;
+}
+
+/**
+ * Read the OpenAI proxy URL from env. Empty strings count as unset so users
+ * can defeat the proxy for one shell session with `OPENAI_PROXY=`.
+ */
+function envOpenAIProxy(): string | undefined {
+  if (typeof process === 'undefined') return undefined;
+  const v = process.env?.OPENAI_PROXY;
+  return v && v.trim().length > 0 ? v.trim().replace(/\/$/, '') : undefined;
+}
+
 export function createOpenAIProvider(opts: OpenAIProviderOptions = {}): Provider {
-  const apiKey = opts.apiKey ?? (typeof process !== 'undefined' ? process.env?.OPENAI_API_KEY : undefined);
+  const apiKey = opts.apiKey ?? envOpenAIKey();
+  const baseURL = opts.baseURL ?? envOpenAIProxy();
   const providerOpts: OpenAICompatibleOptions = {
     name: 'openai',
     prefix: 'openai',
     ...(apiKey ? { apiKey } : {}),
-    ...(opts.baseURL ? { baseURL: opts.baseURL } : {}),
-    keyHint: 'set OPENAI_API_KEY or pass { apiKey } to createOpenAIProvider()',
+    ...(baseURL ? { baseURL, headers: { 'x-client-app': 'rubric' } } : {}),
+    keyHint: 'set OPENAI_KEY (or OPENAI_API_KEY) or pass { apiKey } to createOpenAIProvider()',
   };
   return createOpenAICompatibleProvider(providerOpts);
 }
@@ -126,8 +155,14 @@ export function createOpenAICompatibleProvider(opts: OpenAICompatibleOptions): P
       const { model } = splitModelId(req.modelId);
       const started = Date.now();
 
+      // Use `client.chat(model)` (legacy /chat/completions) instead of
+      // `client(model)` (new /responses endpoint). Corporate proxies like
+      // Azure OpenAI behind a gateway typically only expose /chat/completions
+      // — `client(model)` would 404 on the /responses path. Every OpenAI-
+      // compatible provider we support (Groq, OpenRouter, Ollama) also speaks
+      // /chat/completions, so chat() is the universally safe surface.
       const callOpts: Parameters<typeof generateText>[0] = {
-        model: client(model),
+        model: client.chat(model),
         prompt: req.prompt,
       };
       if (req.system !== undefined) callOpts.system = req.system;

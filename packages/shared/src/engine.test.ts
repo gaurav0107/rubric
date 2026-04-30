@@ -187,6 +187,38 @@ describe('runEval', () => {
     expect(summary.costedCells).toBeUndefined();
   });
 
+  test('compare-models: one cell per case with distinct modelA/modelB', async () => {
+    const cases: Case[] = [{ input: 'one' }, { input: 'two' }, { input: 'three' }];
+    const config: Config = {
+      prompts: { baseline: 'ignored', candidate: 'ignored' },
+      dataset: 'ignored',
+      models: ['mock/m1', 'mock/m2'] as ModelId[],
+      judge: { model: 'mock/judge' as ModelId, criteria: 'default' },
+      concurrency: 2,
+      mode: 'compare-models',
+    };
+    const provider = createMockProvider();
+    const judge = createMockJudge({ verdict: 'b' });
+
+    const { cells } = await runEval({
+      config,
+      cases,
+      prompts: { baseline: 'ONE: {{input}}', candidate: 'UNUSED: {{input}}' },
+      providers: [provider],
+      judge,
+    });
+
+    // Fan-out is 1 cell per case (not 1 per (case,model)).
+    expect(cells.length).toBe(3);
+    for (const cell of cells) {
+      expect(cell.model).toBe('mock/m1');
+      expect(cell.modelB).toBe('mock/m2');
+      // Both sides use the baseline prompt — candidate is unused in compare-models.
+      expect(cell.outputA.length).toBeGreaterThan(0);
+      expect(cell.outputB.length).toBeGreaterThan(0);
+    }
+  });
+
   test('mixes wins/losses/ties in summary', async () => {
     const cases: Case[] = [{ input: '1' }, { input: '2' }, { input: '3' }, { input: '4' }];
     const config = makeConfig(['mock/m1'] as ModelId[]);

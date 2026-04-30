@@ -31,16 +31,50 @@ describe('validateConfig', () => {
     expect(cfg.mode).toBe('compare-prompts');
   });
 
-  test('rejects removed compare-models mode with a pointer to the replacement', () => {
+  test('accepts compare-models with exactly 2 models', () => {
+    const cfg = validateConfig({
+      prompts: { baseline: 'a.md', candidate: 'b.md' },
+      dataset: 'data.jsonl',
+      models: ['openai/gpt-5.1', 'openai/gpt-5.2'],
+      judge: { model: 'openai/gpt-4o', criteria: 'default' },
+      mode: 'compare-models',
+    });
+    expect(cfg.mode).toBe('compare-models');
+    expect(cfg.models).toEqual(['openai/gpt-5.1', 'openai/gpt-5.2']);
+  });
+
+  test('rejects compare-models unless exactly 2 models are provided', () => {
+    expect(() =>
+      validateConfig({
+        prompts: { baseline: 'a.md', candidate: 'b.md' },
+        dataset: 'data.jsonl',
+        models: ['openai/gpt-5.1'],
+        judge: { model: 'openai/gpt-4o', criteria: 'default' },
+        mode: 'compare-models',
+      }),
+    ).toThrow(/compare-models.*exactly 2/i);
+
+    expect(() =>
+      validateConfig({
+        prompts: { baseline: 'a.md', candidate: 'b.md' },
+        dataset: 'data.jsonl',
+        models: ['openai/gpt-5.1', 'openai/gpt-5.2', 'openai/gpt-5.3'],
+        judge: { model: 'openai/gpt-4o', criteria: 'default' },
+        mode: 'compare-models',
+      }),
+    ).toThrow(/compare-models.*exactly 2/i);
+  });
+
+  test('rejects unknown mode strings', () => {
     expect(() =>
       validateConfig({
         prompts: { baseline: 'a.md', candidate: 'b.md' },
         dataset: 'data.jsonl',
         models: ['openai/gpt-4o-mini'],
         judge: { model: 'openai/gpt-4o', criteria: 'default' },
-        mode: 'compare-models',
+        mode: 'compare-everything',
       }),
-    ).toThrow(/compare-models.*removed/i);
+    ).toThrow(/compare-prompts.*compare-models/);
   });
 
   test('warns on legacy top-level keys (v2.1 configs load without throwing)', () => {

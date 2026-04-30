@@ -3,6 +3,7 @@ import type { CellResult, RunSummary } from './types.ts';
 const COLUMNS = [
   'caseIndex',
   'model',
+  'modelB',
   'verdict',
   'reason',
   'error',
@@ -44,6 +45,7 @@ export function renderCostCsv(input: CostCsvInput): string {
     const row = [
       cell.caseIndex,
       cell.model,
+      cell.modelB ?? '',
       verdict ?? '',
       reason ?? '',
       error ?? '',
@@ -54,6 +56,7 @@ export function renderCostCsv(input: CostCsvInput): string {
   }
   const totalRow = [
     'TOTAL',
+    '',
     '',
     '',
     `wins=${input.summary.wins} losses=${input.summary.losses} ties=${input.summary.ties} errors=${input.summary.errors}`,

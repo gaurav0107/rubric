@@ -148,9 +148,10 @@ function renderCells(cases: Case[], cells: CellResult[]): string {
     .join('\n');
 }
 
-function verdictLabel(v: Verdict): string {
-  if (v === 'a') return 'A (baseline)';
-  if (v === 'b') return 'B (candidate)';
+function verdictLabel(v: Verdict, cell: CellResult): string {
+  const compareModels = cell.modelB !== undefined && cell.modelB !== cell.model;
+  if (v === 'a') return compareModels ? `A (${cell.model})` : 'A (baseline)';
+  if (v === 'b') return compareModels ? `B (${cell.modelB})` : 'B (candidate)';
   return 'tie';
 }
 
@@ -162,21 +163,29 @@ function renderCell(cell: CellResult): string {
   const judgeBlock = 'error' in cell.judge
     ? `<div class="judge judge-err"><strong>error:</strong> ${escape(cell.judge.error)}</div>`
     : `<div class="judge ${verdictClass(cell.judge.winner)}">
-         <strong>verdict:</strong> ${escape(verdictLabel(cell.judge.winner))}
+         <strong>verdict:</strong> ${escape(verdictLabel(cell.judge.winner, cell))}
          ${cell.judge.reason ? ` — ${escape(cell.judge.reason)}` : ''}
        </div>`;
 
-  const meta: string[] = [`model: ${escape(cell.model)}`];
+  const compareModels = cell.modelB !== undefined && cell.modelB !== cell.model;
+  const meta: string[] = [
+    compareModels
+      ? `models: ${escape(cell.model)} vs ${escape(cell.modelB as string)}`
+      : `model: ${escape(cell.model)}`,
+  ];
   if (typeof cell.latencyMs === 'number') meta.push(`${cell.latencyMs}ms`);
   if (typeof cell.costUsd === 'number') meta.push(`$${cell.costUsd.toFixed(4)}`);
+
+  const labelA = compareModels ? escape(cell.model) : 'baseline';
+  const labelB = compareModels ? escape(cell.modelB as string) : 'candidate';
 
   return `
 <article class="cell">
   <div class="cell-meta">${meta.join(' · ')}</div>
   ${judgeBlock}
   <div class="outputs">
-    <div class="out out-a"><div class="label">baseline</div><pre>${escape(cell.outputA)}</pre></div>
-    <div class="out out-b"><div class="label">candidate</div><pre>${escape(cell.outputB)}</pre></div>
+    <div class="out out-a"><div class="label">${labelA}</div><pre>${escape(cell.outputA)}</pre></div>
+    <div class="out out-b"><div class="label">${labelB}</div><pre>${escape(cell.outputB)}</pre></div>
   </div>
 </article>
 `;

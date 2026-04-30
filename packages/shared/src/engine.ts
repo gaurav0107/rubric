@@ -47,13 +47,27 @@ function pickProvider(providers: Provider[], modelId: ModelId): Provider {
 
 interface Cell {
   caseIndex: number;
+  /** A-side model. */
   model: ModelId;
+  /**
+   * B-side model. In compare-prompts mode this equals `model` (same model,
+   * two prompts). In compare-models mode it's `config.models[1]` while `model`
+   * is `config.models[0]`.
+   */
+  modelB: ModelId;
 }
 
-function planCells(cases: Case[], models: ModelId[]): Cell[] {
+function planCells(cases: Case[], models: ModelId[], mode: Config['mode']): Cell[] {
   const cells: Cell[] = [];
+  if (mode === 'compare-models') {
+    // Validator guaranteed exactly 2 entries; fan-out is one cell per case.
+    const a = models[0] as ModelId;
+    const b = models[1] as ModelId;
+    for (let i = 0; i < cases.length; i++) cells.push({ caseIndex: i, model: a, modelB: b });
+    return cells;
+  }
   for (let i = 0; i < cases.length; i++) {
-    for (const model of models) cells.push({ caseIndex: i, model });
+    for (const model of models) cells.push({ caseIndex: i, model, modelB: model });
   }
   return cells;
 }
@@ -67,23 +81,31 @@ async function runCell(
   criteria: string,
   signal: AbortSignal | undefined,
   evaluators: Evaluator[],
+  mode: Config['mode'],
 ): Promise<CellResult> {
   const c = cases[cell.caseIndex];
   if (!c) throw new Error(`cell references missing case index ${cell.caseIndex}`);
 
+  const compareModels = mode === 'compare-models';
   const started = Date.now();
   try {
-    const provider = pickProvider(providers, cell.model);
+    const providerA = pickProvider(providers, cell.model);
+    const providerB = compareModels ? pickProvider(providers, cell.modelB) : providerA;
+
+    // compare-prompts: same model, two prompts (baseline vs candidate).
+    // compare-models: one prompt (baseline) on two models.
+    const promptA = renderPrompt(prompts.baseline, c);
+    const promptB = compareModels ? promptA : renderPrompt(prompts.candidate, c);
 
     const [outA, outB] = await Promise.all([
-      provider.generate({
+      providerA.generate({
         modelId: cell.model,
-        prompt: renderPrompt(prompts.baseline, c),
+        prompt: promptA,
         ...(signal ? { signal } : {}),
       }),
-      provider.generate({
-        modelId: cell.model,
-        prompt: renderPrompt(prompts.candidate, c),
+      providerB.generate({
+        modelId: cell.modelB,
+        prompt: promptB,
         ...(signal ? { signal } : {}),
       }),
     ]);
@@ -109,6 +131,7 @@ async function runCell(
       judge: verdict,
       latencyMs: Date.now() - started,
     };
+    if (compareModels) result.modelB = cell.modelB;
     const costA = outA.costUsd ?? 0;
     const costB = outB.costUsd ?? 0;
     if (costA || costB) result.costUsd = costA + costB;
@@ -130,6 +153,7 @@ async function runCell(
       judge: { error: err instanceof Error ? err.message : String(err) },
       latencyMs: Date.now() - started,
     };
+    if (compareModels) result.modelB = cell.modelB;
     return result;
   }
 }
@@ -209,11 +233,11 @@ export async function runEval(opts: RunEvalOptions): Promise<RunEvalResult> {
         ? config.judge.criteria.custom
         : (() => { throw new Error('engine received a { file } criteria — caller must resolve with resolveCriteria() first'); })();
 
-  const plan = planCells(cases, config.models);
+  const plan = planCells(cases, config.models, config.mode);
   const evaluators = createEvaluators(config.evaluators);
   let done = 0;
   const cells = await mapWithConcurrency(plan, concurrency, async (cell) => {
-    const result = await runCell(cell, cases, prompts, providers, judge, criteriaString, signal, evaluators);
+    const result = await runCell(cell, cases, prompts, providers, judge, criteriaString, signal, evaluators, config.mode);
     done++;
     opts.onCell?.(result, { done, total: plan.length });
     return result;

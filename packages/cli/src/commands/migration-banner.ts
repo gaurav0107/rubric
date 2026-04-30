@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 const BANNER_MAJOR_MINOR = '2.2';
 const MARKER_FILENAME = '.last-cli-version';
 const BANNER_TEXT =
-  `rubric v${BANNER_MAJOR_MINOR} removed: finetune, calibrate, history, share, pull, failure clustering, compare-models. See CHANGELOG.`;
+  `rubric v${BANNER_MAJOR_MINOR} removed: finetune, calibrate, history, share, pull, failure clustering. See CHANGELOG.`;
 
 /**
  * Resolve the marker path. Honours RUBRIC_HOME for test isolation and for

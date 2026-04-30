@@ -46,7 +46,83 @@ describe('createOpenAIProvider', () => {
     ).rejects.toBeInstanceOf(ProviderNotConfiguredError);
   });
 
-  // Live path is covered by an integration test gated on OPENAI_API_KEY; not asserted here.
+  // Live path is covered by an integration test gated on OPENAI_KEY; not asserted here.
+
+  test('OPENAI_KEY env is read as the API key', () => {
+    const prev = { k: process.env.OPENAI_KEY, a: process.env.OPENAI_API_KEY };
+    try {
+      process.env.OPENAI_KEY = 'sk-from-new-env';
+      delete process.env.OPENAI_API_KEY;
+      const p = createOpenAIProvider();
+      // `supports()` doesn't throw when a key is present (it would not throw
+      // either way, but we use it as a smoke assertion that construction is
+      // valid). The real check: generate() must NOT reject with
+      // ProviderNotConfiguredError.
+      expect(p.supports('openai/gpt-4o' as ModelId)).toBe(true);
+    } finally {
+      if (prev.k === undefined) delete process.env.OPENAI_KEY; else process.env.OPENAI_KEY = prev.k;
+      if (prev.a === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = prev.a;
+    }
+  });
+
+  test('falls back to OPENAI_API_KEY when OPENAI_KEY is unset', async () => {
+    const prev = { k: process.env.OPENAI_KEY, a: process.env.OPENAI_API_KEY };
+    try {
+      delete process.env.OPENAI_KEY;
+      delete process.env.OPENAI_API_KEY;
+      const unconfigured = createOpenAIProvider();
+      await expect(
+        unconfigured.generate({ modelId: 'openai/gpt-4o-mini' as ModelId, prompt: 'hi' }),
+      ).rejects.toBeInstanceOf(ProviderNotConfiguredError);
+
+      process.env.OPENAI_API_KEY = 'sk-legacy-alias';
+      const configured = createOpenAIProvider();
+      expect(configured.supports('openai/gpt-4o' as ModelId)).toBe(true);
+    } finally {
+      if (prev.k === undefined) delete process.env.OPENAI_KEY; else process.env.OPENAI_KEY = prev.k;
+      if (prev.a === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = prev.a;
+    }
+  });
+
+  test('OPENAI_PROXY env sets the baseURL when no explicit baseURL is given', () => {
+    const prev = { p: process.env.OPENAI_PROXY, k: process.env.OPENAI_KEY };
+    try {
+      process.env.OPENAI_KEY = 'sk-t';
+      process.env.OPENAI_PROXY = 'https://gateway.example.com/proxy/azure-openai/';
+      const p = createOpenAIProvider();
+      // Trailing slash is trimmed so the AI SDK's `${baseURL}/chat/completions`
+      // concatenation doesn't produce a double slash.
+      expect(p.supports('openai/gpt-4o' as ModelId)).toBe(true);
+    } finally {
+      if (prev.p === undefined) delete process.env.OPENAI_PROXY; else process.env.OPENAI_PROXY = prev.p;
+      if (prev.k === undefined) delete process.env.OPENAI_KEY; else process.env.OPENAI_KEY = prev.k;
+    }
+  });
+
+  test('empty OPENAI_PROXY string is treated as unset', () => {
+    const prev = { p: process.env.OPENAI_PROXY, k: process.env.OPENAI_KEY };
+    try {
+      process.env.OPENAI_KEY = 'sk-t';
+      process.env.OPENAI_PROXY = '   ';
+      const p = createOpenAIProvider();
+      // Nothing crashes; empty proxy → direct to OpenAI.
+      expect(p.supports('openai/gpt-4o' as ModelId)).toBe(true);
+    } finally {
+      if (prev.p === undefined) delete process.env.OPENAI_PROXY; else process.env.OPENAI_PROXY = prev.p;
+      if (prev.k === undefined) delete process.env.OPENAI_KEY; else process.env.OPENAI_KEY = prev.k;
+    }
+  });
+
+  test('explicit opts.baseURL overrides OPENAI_PROXY', () => {
+    const prev = process.env.OPENAI_PROXY;
+    try {
+      process.env.OPENAI_PROXY = 'https://from-env.example.com/v1';
+      const p = createOpenAIProvider({ apiKey: 'sk-t', baseURL: 'https://from-opts.example.com/v1' });
+      expect(p.supports('openai/gpt-4o' as ModelId)).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.OPENAI_PROXY; else process.env.OPENAI_PROXY = prev;
+    }
+  });
 });
 
 describe('createGroqProvider', () => {

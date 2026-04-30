@@ -2,6 +2,17 @@
 
 All notable changes to rubric. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **`mode: "compare-models"` revived.** v2.2 removed it; early use showed the workaround (`{ baseline: "shared.md", candidate: "shared.md", models: [A, B] }`) gave the wrong fan-out — one cell per model per case instead of one A-vs-B cell per case — so the judge couldn't score "A vs B" directly. Revived with tighter semantics: `models` must have exactly 2 entries; `models[0]` is A, `models[1]` is B; `prompts.baseline` is the single prompt used for both sides; `prompts.candidate` is required by schema but ignored. `CellResult` gains an optional `modelB` field (present only in compare-models), surfaced in the JSON payload, cost CSV, HTML report, and PR comment. Cache keys already distinguished `modelA ≠ modelB`, so no cache bust.
+- **`rubric run --fail-on-regress` in `compare-models`.** Answers "should we upgrade from `models[0]` to `models[1]`?" — exits 2 when B loses more than it wins (same semantics as compare-prompts).
+
+### Changed
+
+- **Migration banner no longer lists `compare-models` as removed.** v2.2 banner text shortened to match what actually shipped removed.
+
 ## [2.2.0] — 2026-04-27
 
 Radical cut. v2.1 sprawled — calibrate, finetune, history, share, pull, failure clustering, steelman, multiple seed adapters, a second rubric type, a second mode, a second finetune provider. The internal-launch audit said none of that was load-bearing on the pairwise-eval wedge. v2.2 rips it all out and refocuses on the override log as the calibration corpus for v2.3.

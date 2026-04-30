@@ -64,8 +64,14 @@ export interface Config {
   models: ModelId[];
   judge: { model: ModelId; criteria: Criteria };
   concurrency?: number;
-  /** Reserved for future modes. v2.2 supports only "compare-prompts" (the default). */
-  mode?: 'compare-prompts';
+  /**
+   * Eval mode.
+   * - `compare-prompts` (default): baseline.md vs candidate.md on each model; judge picks a side per cell.
+   * - `compare-models`: run `prompts.baseline` on both models in `models[]` (exactly 2 required);
+   *   judge picks which model's output wins per case. Answers "should we upgrade from models[0] to models[1]?".
+   *   `prompts.candidate` is unused in this mode but still required by the schema.
+   */
+  mode?: 'compare-prompts' | 'compare-models';
   /** User-declared providers; added on top of the four built-ins (openai/groq/openrouter/ollama). */
   providers?: ProviderConfig[];
   /** Additive metrics that run alongside the pairwise judge. Omit or leave empty for today's behavior. */
@@ -99,8 +105,17 @@ export interface EvaluationRow {
 
 export interface CellResult {
   caseIndex: number;
-  /** The model the cell ran on (both A and B sides in compare-prompts mode). */
+  /**
+   * The A-side model. In compare-prompts mode this is also the B-side model
+   * (same model, two prompts). In compare-models mode it's `config.models[0]`
+   * and `modelB` below holds `config.models[1]`.
+   */
   model: ModelId;
+  /**
+   * The B-side model. Omitted in compare-prompts mode (equals `model`).
+   * Populated in compare-models mode.
+   */
+  modelB?: ModelId;
   outputA: string;
   outputB: string;
   judge: JudgeResult | { error: string };

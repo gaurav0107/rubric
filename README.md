@@ -17,7 +17,9 @@ npm install -g rubric    # not published yet — use `npm link` from packages/cl
 
 rubric init              # scaffolds rubric.config.json, prompts/, data/cases.jsonl
 # edit prompts/baseline.md and prompts/candidate.md
-export OPENAI_API_KEY=sk-...
+export OPENAI_KEY=sk-...      # OPENAI_API_KEY still works as a legacy alias
+# optional: route through a corporate gateway (e.g. Azure OpenAI behind a proxy)
+# export OPENAI_PROXY=https://gateway.example.com/proxy/external/v1/proxy/azure-openai
 rubric run               # runs the eval; prints win/loss/tie summary
 
 # or, iterate with a live-diff three-pane UI:
@@ -96,7 +98,7 @@ Drop `examples/drift-detector.yml` into `.github/workflows/` to run the eval on 
 
 ### Removed in v2.2
 
-`rubric finetune`, `rubric calibrate`, `rubric history`, `rubric share`, `rubric pull`, `rubric run --detach`, `rubric runs wait/resume`, `--badge-out`, failure clustering, Steelman, Together.ai adapter, seed adapters other than `--from-csv`, and `mode: compare-models`. See [`CHANGELOG.md`](CHANGELOG.md) for migration notes.
+`rubric finetune`, `rubric calibrate`, `rubric history`, `rubric share`, `rubric pull`, `rubric run --detach`, `rubric runs wait/resume`, `--badge-out`, failure clustering, Steelman, Together.ai adapter, and seed adapters other than `--from-csv`. See [`CHANGELOG.md`](CHANGELOG.md) for migration notes.
 
 ### Providers
 
@@ -104,7 +106,7 @@ Model ids are `provider/model` strings. Live mode auto-detects the right provide
 
 | Prefix | Provider | Env var | Notes |
 | ------ | -------- | ------- | ----- |
-| `openai/` | OpenAI | `OPENAI_API_KEY` | e.g. `openai/gpt-4o-mini` |
+| `openai/` | OpenAI | `OPENAI_KEY` (or `OPENAI_API_KEY`) | Optional `OPENAI_PROXY` sets the baseURL — corporate / Azure gateways Just Work. |
 | `groq/` | Groq | `GROQ_API_KEY` | OpenAI-compatible at `api.groq.com/openai/v1` |
 | `openrouter/` | OpenRouter | `OPENROUTER_API_KEY` | e.g. `openrouter/anthropic/claude-3.5-sonnet` |
 | `ollama/` | Ollama (local) | — | Expects a local server at `localhost:11434`; no key required |
@@ -132,7 +134,7 @@ rubric init --wizard --describe "triage customer support tickets" --mock
 - `{ "custom": "prose rubric..." }` — inline custom prose for the LLM judge.
 - `{ "file": "rubric.md" }` — load the rubric text from a file (team preset).
 
-`rubric.config.json` accepts `"mode": "compare-prompts"` (the default and only supported mode in v2.2).
+`rubric.config.json` accepts `"mode": "compare-prompts"` (default — same model, baseline vs candidate prompt) or `"mode": "compare-models"` (two models, single baseline prompt — `models` must have exactly 2 entries; `models[0]` is A, `models[1]` is B). The candidate prompt is ignored in `compare-models` but the field is still required by schema.
 
 ## Repository layout
 

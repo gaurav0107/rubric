@@ -149,12 +149,14 @@ export async function runInit(opts: InitOptions = {}): Promise<InitResult> {
 async function generateScaffold(describe: string, mock: boolean): Promise<Scaffold> {
   if (mock) return mockScaffold(describe);
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENAI_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      '--wizard requires OPENAI_API_KEY (or pass --mock for deterministic templates without an LLM call)',
+      '--wizard requires OPENAI_KEY (or OPENAI_API_KEY); pass --mock for deterministic templates without an LLM call',
     );
   }
+  // createOpenAIProvider reads OPENAI_PROXY from env so wizard calls route
+  // through the configured proxy just like `rubric run`.
   const provider = createOpenAIProvider({ apiKey });
   const model = 'openai/gpt-4o-mini' as ModelId;
   return llmScaffold(provider, model, describe);

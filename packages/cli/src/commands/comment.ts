@@ -71,6 +71,7 @@ export function runComment(opts: CommentOptions): CommentResult {
       c.error !== undefined
         ? { error: c.error }
         : { winner: c.winner!, reason: c.reason ?? '' },
+    ...(c.modelB !== undefined ? { modelB: c.modelB } : {}),
     ...(c.latencyMs !== undefined ? { latencyMs: c.latencyMs } : {}),
     ...(c.costUsd !== undefined ? { costUsd: c.costUsd } : {}),
   }));

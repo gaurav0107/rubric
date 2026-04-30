@@ -279,11 +279,14 @@ export function validateConfig(raw: unknown, path?: string, warnings?: string[])
   }
 
   if (raw.mode !== undefined) {
-    if (raw.mode === 'compare-models') {
-      throw new ConfigError('mode "compare-models" was removed in v2.2 — use compare-prompts (the default)', path);
+    if (raw.mode !== 'compare-prompts' && raw.mode !== 'compare-models') {
+      throw new ConfigError('mode must be "compare-prompts" or "compare-models"', path);
     }
-    if (raw.mode !== 'compare-prompts') {
-      throw new ConfigError('mode must be "compare-prompts"', path);
+    if (raw.mode === 'compare-models' && models.length !== 2) {
+      throw new ConfigError(
+        `mode "compare-models" requires exactly 2 entries in models (got ${models.length}) — [A, B] maps to [models[0], models[1]]`,
+        path,
+      );
     }
     out.mode = raw.mode;
   }

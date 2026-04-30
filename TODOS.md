@@ -22,6 +22,7 @@ Operator directive 2026-04-27: ship internal launch to 10-person team. Cut every
 - [x] **Migration banner.** First post-upgrade run writes one stderr line listing removed features + CHANGELOG pointer. Gated on `$RUBRIC_HOME/.last-cli-version` marker — at-most-once per upgrade.
 - [x] **Config back-compat.** Legacy top-level keys (`finetunes`, `share`, `calibrate`, `cluster`) and legacy evaluator types warn-and-drop via `LoadedConfig.warnings` instead of throwing. v2.1 configs load cleanly on first v2.2 run with one warning line per legacy key.
 - [x] **Docs sweep.** README, guide.md, action.yml, examples/drift-detector.yml scrubbed of removed surface. v2.2 surface reflects only what ships.
+- [x] **Serve a11y + polish pass (2026-04-28).** Design review on the v2.1 terminal theme. Shipped: semantic `<h2>` pane titles with `role="region"` + `aria-labelledby`, skip-to-prompts link, `role="alert"` on err-banner, `aria-label` on icon-ish header buttons, phosphor `:focus-visible` outline, header button `min-height: 32px` on desktop (not just coarse pointer), `--muted` lifted `#3e7a4e → #5a9e6a` for AA contrast on 10-11px labels, `font-family: var(--mono)` promoted to `html`. Zero visual regression, tests green. Audit: `~/.gstack/projects/rubric/designs/design-audit-20260427/design-audit-localhost.md`.
 
 ## v2.3 Calibration (next)
 

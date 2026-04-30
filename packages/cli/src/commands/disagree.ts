@@ -150,10 +150,15 @@ export async function runDisagree(opts: DisagreeOptions): Promise<DisagreeResult
     throw new Error(`case-${parsedRef.caseIndex} is out of range (dataset has ${cases.length} cases)`);
   }
   const theCase = cases[parsedRef.caseIndex]!;
+  const compareModels = loaded.config.mode === 'compare-models';
   const promptBaseline = readFileSync(loaded.resolved.baseline, 'utf8');
-  const promptCandidate = readFileSync(loaded.resolved.candidate, 'utf8');
   const promptA = renderPrompt(promptBaseline, theCase);
-  const promptB = renderPrompt(promptCandidate, theCase);
+  // In compare-models both sides send the same (baseline) prompt — reading
+  // candidate.md and rendering it would be wasted work and would desync
+  // contentKey from the watch/cache path.
+  const promptB = compareModels
+    ? promptA
+    : renderPrompt(readFileSync(loaded.resolved.candidate, 'utf8'), theCase);
   const criteriaText = resolveCriteria(loaded.config.judge.criteria, loaded.baseDir);
   const rubricId = judgeRubricId(criteriaText);
 
@@ -169,7 +174,7 @@ export async function runDisagree(opts: DisagreeOptions): Promise<DisagreeResult
     promptB,
     inputText: theCase.input,
     modelA,
-    modelB: cell.model,
+    modelB: cell.modelB ?? cell.model,
     judgeModelId: loaded.config.judge.model,
     judgeRubricId: rubricId,
   });
