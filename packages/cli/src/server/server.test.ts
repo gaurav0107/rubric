@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -328,6 +328,101 @@ describe('/api/overrides', () => {
     } finally {
       rmSync(workCwd, { recursive: true, force: true });
       rmSync(ovrRoot, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('/api/config (live-editable subset)', () => {
+  test('PATCH models + judgeModel + judgeCriteriaCustom persists and round-trips', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-cwd-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-reg-'));
+    const configPath = seedFullWorkspace(workCwd);
+    try {
+      await withServer(registry, workCwd, async (url) => {
+        const res = await fetch(`${url}/api/config`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            models: ['openai/gpt-5.1', 'openai/gpt-5.2'],
+            judgeModel: 'openai/gpt-5.2',
+            judgeCriteriaCustom: 'Prefer the output that reads like a senior engineer wrote it.',
+          }),
+        });
+        expect(res.status).toBe(200);
+
+        // Read the config back from disk — the patch must have persisted.
+        const raw = readFileSync(configPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        expect(parsed.models).toEqual(['openai/gpt-5.1', 'openai/gpt-5.2']);
+        expect(parsed.judge.model).toBe('openai/gpt-5.2');
+        expect(parsed.judge.criteria).toEqual({
+          custom: 'Prefer the output that reads like a senior engineer wrote it.',
+        });
+
+        // GET /api/workspace should now reflect the custom criteria text.
+        const ws = await fetch(`${url}/api/workspace`).then((r) => r.json()) as {
+          judgeCriteriaText: string;
+          judgeCriteriaKind: string;
+          config: { models: string[]; judge: { model: string } };
+        };
+        expect(ws.judgeCriteriaText).toBe('Prefer the output that reads like a senior engineer wrote it.');
+        expect(ws.judgeCriteriaKind).toBe('custom');
+        expect(ws.config.models).toEqual(['openai/gpt-5.1', 'openai/gpt-5.2']);
+      });
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
+
+  test('PATCH with empty judgeCriteriaCustom resets to "default" preset', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-reset-cwd-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-reset-reg-'));
+    const configPath = seedFullWorkspace(workCwd);
+    try {
+      await withServer(registry, workCwd, async (url) => {
+        // First set a custom rubric...
+        await fetch(`${url}/api/config`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ judgeCriteriaCustom: 'custom text' }),
+        });
+        // ...then clear it.
+        const res = await fetch(`${url}/api/config`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ judgeCriteriaCustom: '' }),
+        });
+        expect(res.status).toBe(200);
+        const parsed = JSON.parse(readFileSync(configPath, 'utf8'));
+        expect(parsed.judge.criteria).toBe('default');
+      });
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
+
+  test('PATCH rejects a malformed model id without touching the file', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-bad-cwd-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-bad-reg-'));
+    const configPath = seedFullWorkspace(workCwd);
+    const before = readFileSync(configPath, 'utf8');
+    try {
+      await withServer(registry, workCwd, async (url) => {
+        const res = await fetch(`${url}/api/config`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          // No slash — violates the `provider/model` format.
+          body: JSON.stringify({ models: ['not-a-model-id'] }),
+        });
+        expect(res.status).toBe(400);
+      });
+      // File must be untouched.
+      expect(readFileSync(configPath, 'utf8')).toBe(before);
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
       rmSync(registry, { recursive: true, force: true });
     }
   });

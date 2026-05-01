@@ -7,7 +7,7 @@
  * result grid cell-by-cell as they resolve, instead of waiting for the full
  * sweep to finish.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import {
@@ -26,6 +26,7 @@ import {
   listRuns,
   loadConfig,
   parseCasesJsonl,
+  presetToRubricText,
   readCells,
   readManifest,
   readOverrideLog,
@@ -66,6 +67,15 @@ export interface WorkspaceSnapshot {
   cases: Case[];
   resolved: { baseline: string; candidate: string; dataset: string };
   baseDir: string;
+  /**
+   * Judge criteria rendered to plain text. Whatever shape the config holds
+   * (`"default"` preset, `{custom}`, `{file}`), the UI sees the prompt text the
+   * judge model actually receives. Lets us show + edit the rubric inline
+   * without the UI having to understand the config's polymorphic Criteria type.
+   */
+  judgeCriteriaText: string;
+  /** The raw config shape, so the UI can tell "this was a preset, editing will flip it to {custom}" from "already {custom}". */
+  judgeCriteriaKind: 'preset' | 'custom' | 'file';
 }
 
 function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
@@ -76,7 +86,25 @@ function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
   };
   const datasetText = readFileSync(loaded.resolved.dataset, 'utf8');
   const cases = parseCasesJsonl(datasetText);
-  return { configPath: loaded.path, config: loaded.config, prompts, cases, resolved: loaded.resolved, baseDir: loaded.baseDir };
+  // resolveCriteria() returns the preset *name* ("default", "model-comparison")
+  // when the config is a preset string; expand those to the actual rubric body
+  // the judge receives so the UI shows what's actually prompted.
+  const judgeCriteriaRaw = resolveCriteria(loaded.config.judge.criteria, loaded.baseDir);
+  const judgeCriteriaText = presetToRubricText(judgeCriteriaRaw);
+  let judgeCriteriaKind: 'preset' | 'custom' | 'file';
+  if (typeof loaded.config.judge.criteria === 'string') judgeCriteriaKind = 'preset';
+  else if ('custom' in loaded.config.judge.criteria) judgeCriteriaKind = 'custom';
+  else judgeCriteriaKind = 'file';
+  return {
+    configPath: loaded.path,
+    config: loaded.config,
+    prompts,
+    cases,
+    resolved: loaded.resolved,
+    baseDir: loaded.baseDir,
+    judgeCriteriaText,
+    judgeCriteriaKind,
+  };
 }
 
 function buildProviders(mock: boolean, userProviders: ProviderConfig[] | undefined, baseDir: string): Provider[] {
@@ -166,9 +194,27 @@ export interface ActiveOverrideWire {
   runId?: string;
 }
 
+/**
+ * Live-editable subset of `rubric.config.json`. Only these three fields can be
+ * mutated from the UI — everything else (providers, dataset path, evaluators)
+ * requires editing the file on disk. This is a deliberate safety boundary:
+ * users can iterate on model choice + judge rubric in seconds, but can't
+ * accidentally nuke their provider block through the browser.
+ */
+export interface ConfigPatch {
+  /** Replaces `models[]` wholesale. Must parse as `provider/model` strings. */
+  models?: ModelId[];
+  /** Replaces `judge.model`. */
+  judgeModel?: ModelId;
+  /** Replaces `judge.criteria` with `{ custom: text }`. Pass "" to reset to `"default"`. */
+  judgeCriteriaCustom?: string;
+}
+
 export interface Handlers {
   getWorkspace: () => WorkspaceSnapshot;
   savePrompt: (which: 'baseline' | 'candidate', content: string) => void;
+  /** Mutate the narrow live-editable subset of the config and persist to disk. */
+  saveConfig: (patch: ConfigPatch) => void;
   runSweep: (opts: { mock: boolean }) => Promise<{
     iterate: () => AsyncIterable<{ type: 'cell'; cell: CellResult; progress: { done: number; total: number } } | { type: 'done'; cells: CellResult[] }>;
   }>;
@@ -217,6 +263,67 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
       const ws = loadWorkspace(cwd, configPath);
       const target = which === 'baseline' ? ws.resolved.baseline : ws.resolved.candidate;
       writeFileSync(target, content, 'utf8');
+    },
+    saveConfig(patch) {
+      // Read the raw JSON (not the parsed+validated Config) so we only touch
+      // the keys in the patch — every other field (providers, dataset, mode,
+      // evaluators, comments-as-spacing) round-trips byte-for-byte.
+      const raw = readFileSync(configPath, 'utf8');
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+
+      if (patch.models !== undefined) {
+        if (!Array.isArray(patch.models) || patch.models.length === 0) {
+          throw new Error('models[] must be a non-empty array');
+        }
+        for (const m of patch.models) {
+          if (typeof m !== 'string' || !m.includes('/')) {
+            throw new Error(`model "${m}" must be a "provider/model" string`);
+          }
+        }
+        obj.models = patch.models;
+      }
+
+      const judge = (obj.judge && typeof obj.judge === 'object')
+        ? obj.judge as Record<string, unknown>
+        : {};
+      if (patch.judgeModel !== undefined) {
+        if (typeof patch.judgeModel !== 'string' || !patch.judgeModel.includes('/')) {
+          throw new Error(`judge.model "${patch.judgeModel}" must be a "provider/model" string`);
+        }
+        judge.model = patch.judgeModel;
+        obj.judge = judge;
+      }
+      if (patch.judgeCriteriaCustom !== undefined) {
+        // Empty string → reset to the "default" preset so the UI has an
+        // explicit "restore default" lever. Non-empty → store as {custom} and
+        // leave file:{...} shapes behind (editing lifts the rubric inline).
+        if (patch.judgeCriteriaCustom.length === 0) {
+          judge.criteria = 'default';
+        } else {
+          judge.criteria = { custom: patch.judgeCriteriaCustom };
+        }
+        obj.judge = judge;
+      }
+
+      // Preserve trailing newline, match 2-space indent used by `rubric init`.
+      const serialized = JSON.stringify(obj, null, 2) + (raw.endsWith('\n') ? '\n' : '');
+      // Re-validate by feeding through loadConfig — fail loudly and DO NOT
+      // overwrite the file if the patch would produce an invalid config.
+      // We write to a temp buffer first, run a structural parse against a
+      // throwaway load to catch validation errors, then commit.
+      const tmp = `${configPath}.tmp-${process.pid}-${Date.now()}`;
+      writeFileSync(tmp, serialized, 'utf8');
+      try {
+        loadConfig(tmp); // throws on invalid shape
+      } catch (err) {
+        try { unlinkSync(tmp); } catch { /* best-effort */ }
+        throw err;
+      }
+      // All good — atomic-ish replace. (Not truly atomic on Windows, but Node
+      // has no portable atomic rename; the fail-fast validation above is the
+      // real safety net.)
+      writeFileSync(configPath, serialized, 'utf8');
+      try { unlinkSync(tmp); } catch { /* best-effort */ }
     },
     async runSweep({ mock }) {
       const ws = loadWorkspace(cwd, configPath);
@@ -348,6 +455,8 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
           config: ws.config,
           prompts: ws.prompts,
           cases: ws.cases,
+          judgeCriteriaText: ws.judgeCriteriaText,
+          judgeCriteriaKind: ws.judgeCriteriaKind,
         });
         return;
       }
@@ -463,6 +572,50 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         }
         handlers.savePrompt(parsed.which, parsed.content);
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (method === 'PATCH' && url === '/api/config') {
+        const body = await readBody(req);
+        let parsed: Partial<{
+          models: unknown;
+          judgeModel: unknown;
+          judgeCriteriaCustom: unknown;
+        }>;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          sendJson(res, 400, { error: 'body must be JSON' });
+          return;
+        }
+        const patch: ConfigPatch = {};
+        if (parsed.models !== undefined) {
+          if (!Array.isArray(parsed.models)) {
+            sendJson(res, 400, { error: 'models must be an array of strings' });
+            return;
+          }
+          patch.models = parsed.models as ModelId[];
+        }
+        if (parsed.judgeModel !== undefined) {
+          if (typeof parsed.judgeModel !== 'string') {
+            sendJson(res, 400, { error: 'judgeModel must be a string' });
+            return;
+          }
+          patch.judgeModel = parsed.judgeModel as ModelId;
+        }
+        if (parsed.judgeCriteriaCustom !== undefined) {
+          if (typeof parsed.judgeCriteriaCustom !== 'string') {
+            sendJson(res, 400, { error: 'judgeCriteriaCustom must be a string' });
+            return;
+          }
+          patch.judgeCriteriaCustom = parsed.judgeCriteriaCustom;
+        }
+        try {
+          handlers.saveConfig(patch);
+          sendJson(res, 200, { ok: true });
+        } catch (err) {
+          sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+        }
         return;
       }
 

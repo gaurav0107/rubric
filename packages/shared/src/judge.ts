@@ -9,20 +9,29 @@ export class JudgeParseError extends Error {
   }
 }
 
-const DEFAULT_RUBRIC = `Compare two candidate outputs (A and B) for the same input. \
+export const DEFAULT_RUBRIC = `Compare two candidate outputs (A and B) for the same input. \
 Choose the one that is more correct, concise, and directly answers the input. \
 If they are materially equivalent, return "tie". Be decisive — only return \
 "tie" when the outputs are genuinely interchangeable.`;
 
-const MODEL_COMPARISON_RUBRIC = `Compare two candidate outputs (A and B) produced \
+export const MODEL_COMPARISON_RUBRIC = `Compare two candidate outputs (A and B) produced \
 by different models for the same prompt. Pick the output that would be more useful \
 to a technical user: correct, specific, free of padding. If neither dominates, \
 return "tie".`;
 
+/**
+ * Resolve a preset identifier or arbitrary criteria text into the exact rubric
+ * body the judge will see. Exposed so the serve UI can show users the same
+ * text the judge reads, not just the preset name.
+ */
+export function presetToRubricText(criteria: string): string {
+  if (criteria === 'default') return DEFAULT_RUBRIC;
+  if (criteria === 'model-comparison') return MODEL_COMPARISON_RUBRIC;
+  return criteria;
+}
+
 function systemPrompt(criteria: string): string {
-  const body = criteria === 'default' ? DEFAULT_RUBRIC
-    : criteria === 'model-comparison' ? MODEL_COMPARISON_RUBRIC
-    : criteria;
+  const body = presetToRubricText(criteria);
 
   return [
     'You are a rigorous pairwise output grader.',

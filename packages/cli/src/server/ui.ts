@@ -179,6 +179,34 @@ export const INDEX_HTML = `<!doctype html>
     text-align: center; color: var(--accent); font-weight: 700;
     text-shadow: var(--glow); line-height: 14px;
   }
+  /* Model id inputs in the header. Editable on blur/Enter; flash green on
+     successful save, red on validation failure. Same terminal grammar as the
+     prompt-dirty dot — no surprises. */
+  header label.sel-group {
+    display: inline-flex; align-items: center; gap: 6px; cursor: text;
+  }
+  header label.sel-group .k {
+    font-size: 9px; letter-spacing: .14em; color: var(--muted-2);
+    text-transform: uppercase;
+  }
+  header input.model-input {
+    appearance: none; -webkit-appearance: none;
+    font: 11px/1 var(--mono); color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 0;
+    padding: 5px 8px; min-width: 180px; max-width: 320px;
+    letter-spacing: .02em;
+  }
+  header input.model-input:focus {
+    outline: none; border-color: var(--accent-dim); color: var(--text-hi);
+  }
+  header input.model-input.saved {
+    border-color: var(--accent); box-shadow: 0 0 4px rgba(57,255,20,0.25);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  header input.model-input.err {
+    border-color: var(--err); color: var(--err);
+    box-shadow: 0 0 4px rgba(255,56,96,0.25);
+  }
 
   main {
     display: grid; grid-template-columns: 1fr 320px 1.3fr;
@@ -681,6 +709,14 @@ export const INDEX_HTML = `<!doctype html>
     <h1>rubric</h1>
     <span class="sub" id="config-path">—</span>
     <span class="spacer"></span>
+    <label class="sel-group" title="provider/model ids for the sweep — comma separated; Enter or blur to save">
+      <span class="k">models:</span>
+      <input type="text" id="models-input" class="model-input" spellcheck="false" autocomplete="off" placeholder="provider/model, …">
+    </label>
+    <label class="sel-group" title="judge model id — Enter or blur to save">
+      <span class="k">judge:</span>
+      <input type="text" id="judge-model-input" class="model-input" spellcheck="false" autocomplete="off" placeholder="provider/model">
+    </label>
     <label><input type="checkbox" id="mock-toggle"> mock mode</label>
     <button id="runs-btn" aria-label="browse past runs from the registry" title="Browse past runs from the registry">runs.log</button>
     <button id="run-btn" class="primary" aria-label="run evaluation">&gt; run</button>
@@ -697,6 +733,7 @@ export const INDEX_HTML = `<!doctype html>
       <div class="tabs">
         <button id="tab-baseline" class="active" data-which="baseline">baseline</button>
         <button id="tab-candidate" data-which="candidate">candidate</button>
+        <button id="tab-judge" data-which="judge" title="judge criteria — the rubric text the judge model receives">judge</button>
       </div>
       <textarea id="prompt-editor" spellcheck="false" aria-label="prompt editor"></textarea>
       <div class="footer">
@@ -963,7 +1000,16 @@ export const INDEX_HTML = `<!doctype html>
     for (const btn of document.querySelectorAll('.tabs button')) {
       btn.classList.toggle('active', btn.dataset.which === which);
     }
-    $('prompt-editor').value = state.workspace ? state.workspace.prompts[which] : '';
+    const ta = $('prompt-editor');
+    if (!state.workspace) {
+      ta.value = '';
+    } else if (which === 'judge') {
+      ta.value = state.workspace.judgeCriteriaText || '';
+      ta.setAttribute('aria-label', 'judge criteria editor');
+    } else {
+      ta.value = state.workspace.prompts[which] || '';
+      ta.setAttribute('aria-label', 'prompt editor');
+    }
     setDirty(false);
   }
 
@@ -1206,6 +1252,9 @@ export const INDEX_HTML = `<!doctype html>
       state.workspace = await res.json();
       $('config-path').textContent = state.workspace.configPath;
       $('mock-toggle').checked = false;
+      // Populate the header model inputs from the loaded config.
+      $('models-input').value = (state.workspace.config.models || []).join(', ');
+      $('judge-model-input').value = state.workspace.config.judge?.model || '';
       activateTab(state.active);
       renderCases();
       setError(null);
@@ -1216,18 +1265,98 @@ export const INDEX_HTML = `<!doctype html>
     }
   }
 
+  /** Flash a model-id input green on save, red on failure. Auto-clears after ~1.2s. */
+  function flashInput(el, ok) {
+    el.classList.remove('saved', 'err');
+    el.classList.add(ok ? 'saved' : 'err');
+    setTimeout(() => el.classList.remove('saved', 'err'), 1200);
+  }
+
+  async function saveModelsInput() {
+    const el = $('models-input');
+    const raw = el.value.trim();
+    if (raw.length === 0) {
+      flashInput(el, false);
+      setError('models: must be a non-empty comma-separated list of provider/model ids');
+      return;
+    }
+    const models = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    try {
+      const res = await fetch('/api/config', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ models }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || await res.text());
+      }
+      state.workspace.config.models = models;
+      flashInput(el, true);
+      setError(null);
+    } catch (err) {
+      flashInput(el, false);
+      setError('save failed: ' + (err.message || err));
+    }
+  }
+
+  async function saveJudgeModelInput() {
+    const el = $('judge-model-input');
+    const judgeModel = el.value.trim();
+    if (judgeModel.length === 0 || !judgeModel.includes('/')) {
+      flashInput(el, false);
+      setError('judge: must be a "provider/model" string');
+      return;
+    }
+    try {
+      const res = await fetch('/api/config', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ judgeModel }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || await res.text());
+      }
+      state.workspace.config.judge.model = judgeModel;
+      flashInput(el, true);
+      setError(null);
+    } catch (err) {
+      flashInput(el, false);
+      setError('save failed: ' + (err.message || err));
+    }
+  }
+
   async function savePrompt() {
     if (!state.dirty) return;
     const which = state.active;
     const content = $('prompt-editor').value;
     try {
-      const res = await fetch('/api/prompts', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ which, content }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      state.workspace.prompts[which] = content;
+      if (which === 'judge') {
+        // Judge criteria save goes through /api/config (patches judge.criteria
+        // into { custom: ... }). Baseline/candidate go through the existing
+        // /api/prompts file-write path. Two separate routes because they
+        // mutate different kinds of state — files on disk vs JSON config.
+        const res = await fetch('/api/config', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ judgeCriteriaCustom: content }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || await res.text());
+        }
+        state.workspace.judgeCriteriaText = content;
+        state.workspace.judgeCriteriaKind = content.length > 0 ? 'custom' : 'preset';
+      } else {
+        const res = await fetch('/api/prompts', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ which, content }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        state.workspace.prompts[which] = content;
+      }
       setDirty(false);
       setError(null);
     } catch (err) {
@@ -1297,6 +1426,25 @@ export const INDEX_HTML = `<!doctype html>
   }
   $('prompt-editor').addEventListener('input', () => setDirty(true));
   $('save-btn').addEventListener('click', savePrompt);
+  // Model-id inputs — save on Enter or blur. Keeps the UX fast; the header
+  // doesn't need a save button because the values are tiny and the flash
+  // styling makes success/failure immediately obvious.
+  const modelsIn = $('models-input');
+  modelsIn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); modelsIn.blur(); }
+  });
+  modelsIn.addEventListener('blur', () => {
+    const cur = (state.workspace && state.workspace.config.models || []).join(', ');
+    if (modelsIn.value.trim() !== cur) saveModelsInput();
+  });
+  const judgeIn = $('judge-model-input');
+  judgeIn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); judgeIn.blur(); }
+  });
+  judgeIn.addEventListener('blur', () => {
+    const cur = state.workspace && state.workspace.config.judge ? state.workspace.config.judge.model : '';
+    if (judgeIn.value.trim() !== cur) saveJudgeModelInput();
+  });
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); savePrompt(); }
   });
