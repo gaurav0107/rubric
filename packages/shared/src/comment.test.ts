@@ -197,4 +197,115 @@ describe('renderPrComment', () => {
     expect(md.endsWith('\n')).toBe(true);
     expect(md).toContain('| wins | losses | ties | errors | win rate |');
   });
+
+  describe('top regressions block', () => {
+    const model = 'openai/gpt-4o-mini' as ModelId;
+    function lossCell(idx: number, reason: string, outA = 'baseline output', outB = 'candidate output'): CellResult {
+      return {
+        caseIndex: idx,
+        model,
+        outputA: outA,
+        outputB: outB,
+        judge: { winner: 'a', reason },
+      };
+    }
+
+    test('renders the block when there is at least one loss', () => {
+      const cells = [lossCell(0, 'candidate hallucinated a fact')];
+      const md = renderPrComment({
+        summary: sum({ wins: 0, losses: 1, winRate: 0 }),
+        cells,
+        models: [model],
+        judge: JUDGE,
+        caseInputs: new Map([[0, 'summarize the product launch']]),
+      });
+      expect(md).toContain('<details><summary>Top regressions (1 of 1 losses)</summary>');
+      expect(md).toContain('case-0');
+      expect(md).toContain('summarize the product launch');
+      expect(md).toContain('candidate hallucinated a fact');
+      expect(md).toContain('A (baseline, won)');
+      expect(md).toContain('B (candidate, lost)');
+    });
+
+    test('ranks by reason length then caseIndex and caps at 3', () => {
+      const cells = [
+        lossCell(0, 'short'),
+        lossCell(1, 'this reason is considerably more detailed than the others'),
+        lossCell(2, 'medium length reason here'),
+        lossCell(3, 'another reason of moderate length about why baseline won'),
+        lossCell(4, 'tiny'),
+      ];
+      const md = renderPrComment({
+        summary: sum({ wins: 0, losses: 5, winRate: 0 }),
+        cells,
+        models: [model],
+        judge: JUDGE,
+      });
+      expect(md).toContain('Top regressions (3 of 5 losses)');
+      // Longest reasons (case-1, case-3, case-2 in that order) should render; case-0 + case-4 should not.
+      expect(md).toContain('case-1');
+      expect(md).toContain('case-3');
+      expect(md).toContain('case-2');
+      expect(md).not.toContain('case-0');
+      expect(md).not.toContain('case-4');
+    });
+
+    test('is silent when there are no losses', () => {
+      const cells: CellResult[] = [
+        {
+          caseIndex: 0,
+          model,
+          outputA: 'a',
+          outputB: 'b',
+          judge: { winner: 'b', reason: 'candidate wins' },
+        },
+      ];
+      const md = renderPrComment({
+        summary: sum({ wins: 1, losses: 0, winRate: 1 }),
+        cells,
+        models: [model],
+        judge: JUDGE,
+      });
+      expect(md).not.toContain('Top regressions');
+    });
+
+    test('skips outputs table when outputA/outputB are empty (legacy payload compat)', () => {
+      // Simulates the old comment.ts path where outputs were zeroed out.
+      const cells: CellResult[] = [
+        {
+          caseIndex: 0,
+          model,
+          outputA: '',
+          outputB: '',
+          judge: { winner: 'a', reason: 'candidate missed the main point' },
+        },
+      ];
+      const md = renderPrComment({
+        summary: sum({ wins: 0, losses: 1, winRate: 0 }),
+        cells,
+        models: [model],
+        judge: JUDGE,
+      });
+      expect(md).toContain('case-0');
+      expect(md).toContain('candidate missed the main point');
+      // No side-by-side outputs table in legacy mode — just input + reason.
+      expect(md).not.toContain('A (baseline, won)');
+    });
+
+    test('truncates long reasons and outputs with an ellipsis', () => {
+      const longReason = 'r'.repeat(500);
+      const longOutput = 'x'.repeat(500);
+      const cells = [lossCell(0, longReason, longOutput, 'short')];
+      const md = renderPrComment({
+        summary: sum({ wins: 0, losses: 1, winRate: 0 }),
+        cells,
+        models: [model],
+        judge: JUDGE,
+      });
+      // Body should contain the cap prefix but not the full 500 chars on one line.
+      expect(md).toContain('…');
+      expect(md).not.toContain('r'.repeat(500));
+      expect(md).not.toContain('x'.repeat(500));
+    });
+  });
 });

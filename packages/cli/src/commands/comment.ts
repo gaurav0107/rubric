@@ -65,8 +65,11 @@ export function runComment(opts: CommentOptions): CommentResult {
   const cells = payload.cells.map((c) => ({
     caseIndex: c.caseIndex,
     model: c.model,
-    outputA: '',
-    outputB: '',
+    // Use the carried outputs when the payload supplied them (new format);
+    // fall back to empty for older payloads. Empty outputs simply skip regression
+    // rendering — old payloads keep rendering the rest of the comment fine.
+    outputA: c.outputA ?? '',
+    outputB: c.outputB ?? '',
     judge:
       c.error !== undefined
         ? { error: c.error }
@@ -79,6 +82,16 @@ export function runComment(opts: CommentOptions): CommentResult {
   const summary: RunSummary = payload.summary;
   const models: ModelId[] = payload.models;
 
+  // caseInputs keyed by caseIndex — used by the renderer to show case input
+  // text in the top-regressions block. Only populated when the JSON payload
+  // carried inputText per cell (new format, otherwise skipped).
+  const caseInputs = new Map<number, string>();
+  for (const c of payload.cells) {
+    if (typeof c.inputText === 'string' && !caseInputs.has(c.caseIndex)) {
+      caseInputs.set(c.caseIndex, c.inputText);
+    }
+  }
+
   const renderInput: Parameters<typeof renderPrComment>[0] = {
     summary,
     cells,
@@ -89,6 +102,7 @@ export function runComment(opts: CommentOptions): CommentResult {
   if (opts.title) renderInput.title = opts.title;
   if (payload.metrics && payload.metrics.length > 0) renderInput.metrics = payload.metrics;
   if (payload.gateBreaches && payload.gateBreaches.length > 0) renderInput.gateBreaches = payload.gateBreaches;
+  if (caseInputs.size > 0) renderInput.caseInputs = caseInputs;
 
   const markdown = renderPrComment(renderInput);
   write(markdown);

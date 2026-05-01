@@ -15,6 +15,8 @@ export interface PrCommentInput {
   metrics?: MetricSummary[];
   /** failOn breaches — highlighted as a bold line above the metrics table when present. */
   gateBreaches?: EvaluatorGateBreach[];
+  /** caseIndex → case input text. Enables the "top regressions" block to show WHICH case regressed, not just that one did. */
+  caseInputs?: Map<number, string>;
 }
 
 export type PrVerdict = 'pass' | 'regress' | 'tie' | 'error';
@@ -140,6 +142,76 @@ function metricsSection(
   return out.join('\n');
 }
 
+/** Max chars to show per case input / model output inside the regressions block. Keeps the comment scannable on GitHub. */
+const REGRESSION_TEXT_CAP = 280;
+
+function trim(text: string, cap: number): string {
+  if (text.length <= cap) return text;
+  return text.slice(0, cap - 1).trimEnd() + '…';
+}
+
+/**
+ * Surface the 3 most impactful losses so the PR reader can triage without
+ * leaving the comment. Ranking: losses first (errors and ties ignored), then
+ * by judge.reason length (longer ≈ judge had more to say ≈ more load-bearing),
+ * then by caseIndex ascending (stable for repeatable snapshots).
+ */
+function topRegressionsSection(cells: CellResult[] | undefined, caseInputs: Map<number, string> | undefined): string {
+  if (!cells || cells.length === 0) return '';
+  const losses = cells.filter((c) => !('error' in c.judge) && c.judge.winner === 'a');
+  if (losses.length === 0) return '';
+  const ranked = [...losses].sort((x, y) => {
+    const xr = 'reason' in x.judge ? (x.judge.reason?.length ?? 0) : 0;
+    const yr = 'reason' in y.judge ? (y.judge.reason?.length ?? 0) : 0;
+    if (yr !== xr) return yr - xr;
+    return x.caseIndex - y.caseIndex;
+  });
+  const top = ranked.slice(0, 3);
+
+  const lines: string[] = [];
+  lines.push(`<details><summary>Top regressions (${top.length} of ${losses.length} losses)</summary>`);
+  lines.push('');
+  for (const c of top) {
+    const inputText = caseInputs?.get(c.caseIndex);
+    const reason = 'reason' in c.judge ? (c.judge.reason ?? '') : '';
+    const modelLabel = c.modelB && c.modelB !== c.model ? `${c.model} vs ${c.modelB}` : c.model;
+    lines.push(`#### case-${c.caseIndex} — \`${modelLabel}\``);
+    if (inputText && inputText.length > 0) {
+      lines.push('');
+      lines.push('**Input**');
+      lines.push('');
+      lines.push('```');
+      lines.push(trim(inputText, REGRESSION_TEXT_CAP));
+      lines.push('```');
+    }
+    if (reason.length > 0) {
+      lines.push('');
+      lines.push(`**Why baseline won:** ${trim(reason, REGRESSION_TEXT_CAP)}`);
+    }
+    // Only render outputs when we actually captured them (new JSON payload
+    // format; legacy callers that pass empty strings stay silent here).
+    if (c.outputA.length > 0 || c.outputB.length > 0) {
+      lines.push('');
+      lines.push('<table><tr><th>A (baseline, won)</th><th>B (candidate, lost)</th></tr><tr><td>');
+      lines.push('');
+      lines.push('```');
+      lines.push(trim(c.outputA || '(empty)', REGRESSION_TEXT_CAP));
+      lines.push('```');
+      lines.push('');
+      lines.push('</td><td>');
+      lines.push('');
+      lines.push('```');
+      lines.push(trim(c.outputB || '(empty)', REGRESSION_TEXT_CAP));
+      lines.push('```');
+      lines.push('');
+      lines.push('</td></tr></table>');
+    }
+    lines.push('');
+  }
+  lines.push('</details>');
+  return lines.join('\n');
+}
+
 function modelTable(tallies: ModelTally[]): string {
   if (tallies.length === 0) return '';
   const rows = tallies.map((t) => {
@@ -179,6 +251,9 @@ export function renderPrComment(input: PrCommentInput): string {
       parts.push('', modelTable(tallies));
     }
   }
+
+  const regressionsBlock = topRegressionsSection(input.cells, input.caseInputs);
+  if (regressionsBlock) parts.push('', regressionsBlock);
 
   const metricsBlock = metricsSection(input.metrics, input.gateBreaches);
   if (metricsBlock) parts.push('', metricsBlock);

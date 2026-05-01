@@ -95,6 +95,8 @@ describe('buildJsonPayload', () => {
       costUsd: 0.0012,
       winner: 'b',
       reason: 'clearer',
+      outputA: 'a',
+      outputB: 'b',
     });
     expect(payload.cells[1]).toEqual({
       caseIndex: 1,

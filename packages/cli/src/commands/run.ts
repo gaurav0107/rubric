@@ -20,6 +20,7 @@ import {
   summarizeEvaluations,
   updateManifest,
   validateRunInputs,
+  type Case,
   type CellResult,
   type Config,
   type Criteria,
@@ -222,6 +223,26 @@ export interface JsonCell {
   winner?: Verdict;
   reason?: string;
   error?: string;
+  /** Case input text, truncated to keep the payload compact. Lets `rubric comment` show WHY a cell regressed without re-reading the dataset. */
+  inputText?: string;
+  /** A-side model output, truncated. Enables "top regressions" rendering in the PR comment. */
+  outputA?: string;
+  /** B-side model output, truncated. */
+  outputB?: string;
+}
+
+/**
+ * Max characters per case input or model output in the JSON payload. 600 keeps
+ * a 50-cell payload under ~200KB even with heavy text, which fits comfortably
+ * in a GitHub PR comment body and a CI artifact without surprises.
+ */
+export const JSON_PAYLOAD_TEXT_CAP = 600;
+
+function capText(s: string | undefined, cap = JSON_PAYLOAD_TEXT_CAP): string | undefined {
+  if (s === undefined) return undefined;
+  if (s.length <= cap) return s;
+  // Leave a 1-char safety margin on the head so the marker is unambiguous.
+  return s.slice(0, cap) + ' […]';
 }
 
 export interface JsonPayload {
@@ -273,6 +294,8 @@ export function buildJsonPayload(args: {
   exitCode: number;
   metrics?: MetricSummary[];
   gateBreaches?: EvaluatorGateBreach[];
+  /** Optional — when provided, each JsonCell gets a truncated inputText + outputs so `rubric comment` can render "top regressions". */
+  cases?: Case[];
 }): JsonPayload {
   const cells: JsonCell[] = args.cells.map((c) => {
     const out: JsonCell = {
@@ -288,6 +311,19 @@ export function buildJsonPayload(args: {
       out.winner = c.judge.winner;
       out.reason = c.judge.reason;
     }
+    // Carry text for regression rendering. Cells without outputs (e.g. judge
+    // errored before outputs were produced) safely skip.
+    if (args.cases) {
+      const caseRec = args.cases[c.caseIndex];
+      if (caseRec && typeof caseRec.input === 'string') {
+        const capped = capText(caseRec.input);
+        if (capped !== undefined) out.inputText = capped;
+      }
+    }
+    const oa = capText(c.outputA);
+    const ob = capText(c.outputB);
+    if (oa !== undefined && oa.length > 0) out.outputA = oa;
+    if (ob !== undefined && ob.length > 0) out.outputB = ob;
     return out;
   });
   const payload: JsonPayload = {
@@ -477,6 +513,7 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
       exitCode,
       metrics: metricSummary.metrics,
       gateBreaches,
+      cases,
     });
     const serialized = JSON.stringify(payload) + '\n';
     if (json) writeJson(serialized);
