@@ -469,6 +469,30 @@ export async function runRun(opts: RunOptions = {}): Promise<RunResult> {
     write(`  time:    ${fmtDuration(summary.totalLatencyMs)} wall-sum\n`);
   }
 
+  // Surface error messages when the sweep produced any — the #1 silent failure
+  // mode for new users is "I forgot to set OPENAI_KEY, tool says errors: 1,
+  // I think the tool is broken." Showing the distinct error text closes that
+  // loop. Cap at 3 distinct messages so long sweeps stay readable.
+  if (summary.errors > 0) {
+    const errorCounts = new Map<string, number>();
+    for (const c of cells) {
+      if ('error' in c.judge) {
+        const msg = c.judge.error;
+        errorCounts.set(msg, (errorCounts.get(msg) ?? 0) + 1);
+      }
+    }
+    if (errorCounts.size > 0) {
+      write(`\nErrors:\n`);
+      const top = [...errorCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+      for (const [msg, count] of top) {
+        write(`  ×${count}  ${msg}\n`);
+      }
+      if (errorCounts.size > 3) {
+        write(`  (${errorCounts.size - 3} more distinct error${errorCounts.size - 3 === 1 ? '' : 's'}; see --json-out or --report for full detail)\n`);
+      }
+    }
+  }
+
   const metricSummary = summarizeEvaluations(cells);
   const gateBreaches = checkEvaluatorGates(loaded.config.evaluators, metricSummary);
   if (metricSummary.metrics.length > 0) {

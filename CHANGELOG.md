@@ -4,6 +4,10 @@ All notable changes to rubric. Format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Fixed
+
+- **`rubric run` now surfaces error messages, not just counts.** Previously a sweep that errored on every cell (e.g. missing `OPENAI_KEY`) printed `errors: N` and nothing else, leaving first-time users thinking the tool was broken when really their env was. The new `Errors:` block shows the top 3 distinct error messages with counts, so "you forgot to set `OPENAI_KEY`" is the first thing they see.
+
 ### Changed
 
 - **Action installs from the release binary, not npm.** `action.yml` and `examples/drift-detector.yml` previously called `npm install --global rubric`, which didn't work (the package isn't published). Now the composite Action resolves the release tag (`version: latest` by default, overridable via `version: v2.2.1` etc.), downloads the platform-matched binary from the GitHub release assets, and runs it directly. Install time drops from ~45s (npm + deps) to ~15s (single binary download). Unblocks CI adoption — the README's copy-paste snippet now actually runs.
