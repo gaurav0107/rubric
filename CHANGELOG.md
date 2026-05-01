@@ -4,6 +4,10 @@ All notable changes to rubric. Format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+## [2.2.1] — 2026-05-02
+
+Internal-launch completeness pass. Three features shipped on top of the v2.2 cut to make the tool actually usable on a real 10-person team without dropping into the CLI for every override.
+
 ### Added
 
 - **Top-regressions block in the PR comment.** Every PR comment with ≥1 loss now collapses open to a `Top regressions` section showing the 3 most impactful losses: case input, judge reason, and A/B outputs side-by-side in a Markdown table. Ranked by judge.reason length (longer ≈ judge had more to say) then caseIndex. This makes the comment the best artifact in the tool — reviewers can triage without opening the HTML report or the serve UI. JSON payload (`rubric run --json-out`) gains `inputText` / `outputA` / `outputB` per cell (truncated to 600 chars each to keep payloads compact). `rubric comment` renders them when present and falls back silently on legacy payloads.

@@ -1,6 +1,6 @@
 {
   "name": "rubric",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Pairwise prompt evaluation framework — CLI and local server.",
   "license": "MIT",
   "type": "module",
