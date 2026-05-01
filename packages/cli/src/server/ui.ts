@@ -207,6 +207,43 @@ export const INDEX_HTML = `<!doctype html>
     border-color: var(--err); color: var(--err);
     box-shadow: 0 0 4px rgba(255,56,96,0.25);
   }
+  /* Model dropdowns. Same palette as the free-text fallback. The multi-select
+     variant (models:) stays compact by using size="1" and letting the browser
+     pop a native list on click; this keeps the header slim instead of
+     consuming three lines of vertical space. */
+  header select.model-select {
+    appearance: none; -webkit-appearance: none;
+    font: 11px/1 var(--mono); color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 0;
+    padding: 5px 24px 5px 8px; min-width: 180px; max-width: 320px;
+    letter-spacing: .02em; cursor: pointer;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+      linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+    background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  header select.model-select:focus {
+    outline: none; border-color: var(--accent-dim); color: var(--text-hi);
+  }
+  header select.model-select.saved {
+    border-color: var(--accent); box-shadow: 0 0 4px rgba(57,255,20,0.25);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  header select.model-select.err {
+    border-color: var(--err); color: var(--err);
+  }
+  /* Option styling inside native dropdowns is heavily restricted across
+     browsers — these properties apply in Firefox and the few Chromes that
+     honor them; elsewhere the OS theme wins. Good enough for a dev tool. */
+  header select.model-select option {
+    background: var(--panel); color: var(--text);
+    font-family: var(--mono); padding: 2px 4px;
+  }
+  header select.model-select option.custom {
+    color: var(--tie); /* amber signals "not in allowlist; preserved from config" */
+  }
 
   main {
     display: grid; grid-template-columns: 1fr 320px 1.3fr;
@@ -709,12 +746,16 @@ export const INDEX_HTML = `<!doctype html>
     <h1>rubric</h1>
     <span class="sub" id="config-path">—</span>
     <span class="spacer"></span>
-    <label class="sel-group" title="provider/model ids for the sweep — comma separated; Enter or blur to save">
+    <label class="sel-group" title="models the sweep will run — Cmd/Ctrl-click to multi-select">
       <span class="k">models:</span>
+      <!-- Rendered as a multi-select when .secrets/available_models has entries,
+           otherwise falls back to the free-text #models-input below. -->
+      <select id="models-select" class="model-select" multiple size="1" style="display:none"></select>
       <input type="text" id="models-input" class="model-input" spellcheck="false" autocomplete="off" placeholder="provider/model, …">
     </label>
-    <label class="sel-group" title="judge model id — Enter or blur to save">
+    <label class="sel-group" title="judge model — the LLM that picks a verdict per cell">
       <span class="k">judge:</span>
+      <select id="judge-model-select" class="model-select" style="display:none"></select>
       <input type="text" id="judge-model-input" class="model-input" spellcheck="false" autocomplete="off" placeholder="provider/model">
     </label>
     <label><input type="checkbox" id="mock-toggle"> mock mode</label>
@@ -807,6 +848,8 @@ export const INDEX_HTML = `<!doctype html>
     active: 'baseline',
     dirty: false,
     running: false,
+    /* Curated allowlist from .secrets/available_models; empty → free-text inputs. */
+    availableModels: [],
     /* Map<string, {verdict, reason?, ts}>. Key = caseIndex + '|' + model ('|' + modelB when set).
        Populated from GET /api/overrides at load and after every POST. */
     overrides: new Map(),
@@ -1252,17 +1295,90 @@ export const INDEX_HTML = `<!doctype html>
       state.workspace = await res.json();
       $('config-path').textContent = state.workspace.configPath;
       $('mock-toggle').checked = false;
-      // Populate the header model inputs from the loaded config.
-      $('models-input').value = (state.workspace.config.models || []).join(', ');
-      $('judge-model-input').value = state.workspace.config.judge?.model || '';
       activateTab(state.active);
       renderCases();
       setError(null);
-      // Pull overrides in parallel — non-blocking for the initial render.
+      // Pull overrides + available-models in parallel — the header picker
+      // rehydrates once the allowlist lands. Both calls are non-blocking
+      // for the initial render.
       loadOverrides();
+      loadAvailableModels();
     } catch (err) {
       setError('failed to load workspace: ' + (err.message || err));
     }
+  }
+
+  async function loadAvailableModels() {
+    let available = [];
+    try {
+      const res = await fetch('/api/available-models');
+      if (res.ok) {
+        const body = await res.json();
+        available = Array.isArray(body.available) ? body.available : [];
+      }
+    } catch {
+      /* non-fatal — just fall back to free-text inputs. */
+    }
+    state.availableModels = available;
+    renderModelPickers();
+  }
+
+  /**
+   * Swap between dropdown and text-input based on whether we have a curated
+   * allowlist. Config values not in the list stay selectable — preserved as
+   * amber "(custom)" entries so existing configs don't get silently nuked.
+   */
+  function renderModelPickers() {
+    const ws = state.workspace;
+    if (!ws) return;
+    const configured = ws.config.models || [];
+    const judgeConfigured = ws.config.judge ? ws.config.judge.model : '';
+    const allow = state.availableModels || [];
+
+    const modelsSel = $('models-select');
+    const modelsIn = $('models-input');
+    const judgeSel = $('judge-model-select');
+    const judgeIn = $('judge-model-input');
+
+    if (allow.length === 0) {
+      // No curated list → show free-text inputs, hide selects.
+      modelsSel.style.display = 'none';
+      judgeSel.style.display = 'none';
+      modelsIn.style.display = '';
+      judgeIn.style.display = '';
+      modelsIn.value = configured.join(', ');
+      judgeIn.value = judgeConfigured;
+      return;
+    }
+
+    // Curated list available → populate and show selects, hide free-text.
+    const unionModels = [...allow];
+    for (const m of configured) if (!unionModels.includes(m)) unionModels.push(m);
+    const unionJudge = [...allow];
+    if (judgeConfigured && !unionJudge.includes(judgeConfigured)) unionJudge.push(judgeConfigured);
+
+    const buildOptions = (sel, list, selectedSet) => {
+      sel.innerHTML = '';
+      for (const m of list) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m + (allow.includes(m) ? '' : ' (custom)');
+        if (!allow.includes(m)) opt.className = 'custom';
+        if (selectedSet.has(m)) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    };
+
+    buildOptions(modelsSel, unionModels, new Set(configured));
+    // Size the multi-select to show ~6 rows without dominating the header.
+    modelsSel.size = Math.min(6, Math.max(1, unionModels.length));
+
+    buildOptions(judgeSel, unionJudge, new Set([judgeConfigured]));
+
+    modelsSel.style.display = '';
+    judgeSel.style.display = '';
+    modelsIn.style.display = 'none';
+    judgeIn.style.display = 'none';
   }
 
   /** Flash a model-id input green on save, red on failure. Auto-clears after ~1.2s. */
@@ -1273,14 +1389,22 @@ export const INDEX_HTML = `<!doctype html>
   }
 
   async function saveModelsInput() {
-    const el = $('models-input');
-    const raw = el.value.trim();
-    if (raw.length === 0) {
+    const sel = $('models-select');
+    const txt = $('models-input');
+    const useSelect = sel.style.display !== 'none';
+    const el = useSelect ? sel : txt;
+    let models;
+    if (useSelect) {
+      models = Array.from(sel.selectedOptions).map((o) => o.value);
+    } else {
+      const raw = txt.value.trim();
+      models = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    if (models.length === 0) {
       flashInput(el, false);
-      setError('models: must be a non-empty comma-separated list of provider/model ids');
+      setError('models: must be a non-empty list of provider/model ids');
       return;
     }
-    const models = raw.split(',').map((s) => s.trim()).filter(Boolean);
     try {
       const res = await fetch('/api/config', {
         method: 'PATCH',
@@ -1301,8 +1425,11 @@ export const INDEX_HTML = `<!doctype html>
   }
 
   async function saveJudgeModelInput() {
-    const el = $('judge-model-input');
-    const judgeModel = el.value.trim();
+    const sel = $('judge-model-select');
+    const txt = $('judge-model-input');
+    const useSelect = sel.style.display !== 'none';
+    const el = useSelect ? sel : txt;
+    const judgeModel = (useSelect ? sel.value : txt.value).trim();
     if (judgeModel.length === 0 || !judgeModel.includes('/')) {
       flashInput(el, false);
       setError('judge: must be a "provider/model" string');
@@ -1426,10 +1553,13 @@ export const INDEX_HTML = `<!doctype html>
   }
   $('prompt-editor').addEventListener('input', () => setDirty(true));
   $('save-btn').addEventListener('click', savePrompt);
-  // Model-id inputs — save on Enter or blur. Keeps the UX fast; the header
-  // doesn't need a save button because the values are tiny and the flash
-  // styling makes success/failure immediately obvious.
+  // Model selectors — save on select-change when the dropdown is visible,
+  // or on Enter/blur when falling back to the free-text input. Either way
+  // the flash style makes success/failure immediately obvious without a
+  // dedicated save button.
   const modelsIn = $('models-input');
+  const modelsSel = $('models-select');
+  modelsSel.addEventListener('change', saveModelsInput);
   modelsIn.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); modelsIn.blur(); }
   });
@@ -1438,6 +1568,8 @@ export const INDEX_HTML = `<!doctype html>
     if (modelsIn.value.trim() !== cur) saveModelsInput();
   });
   const judgeIn = $('judge-model-input');
+  const judgeSel = $('judge-model-select');
+  judgeSel.addEventListener('change', saveJudgeModelInput);
   judgeIn.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); judgeIn.blur(); }
   });

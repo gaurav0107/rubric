@@ -404,6 +404,54 @@ describe('/api/config (live-editable subset)', () => {
     }
   });
 
+  test('GET /api/available-models reads the allowlist file', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-avail-cwd-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-avail-reg-'));
+    seedFullWorkspace(workCwd);
+    const secretsDir = join(workCwd, '.secrets');
+    mkdirSync(secretsDir, { recursive: true });
+    writeFileSync(
+      join(secretsDir, 'available_models'),
+      [
+        '# Starter allowlist for the demo proxy',
+        'efr-proxy/gpt-5.2',
+        'efr-proxy/gpt-4o-mini',
+        '',
+        'efr-proxy/gpt-5.2', // duplicate — should dedupe
+        'not-a-model', // malformed — should drop
+      ].join('\n'),
+      'utf8',
+    );
+    try {
+      await withServer(registry, workCwd, async (url) => {
+        const res = await fetch(`${url}/api/available-models`);
+        expect(res.status).toBe(200);
+        const body = await res.json() as { available: string[] };
+        expect(body.available).toEqual(['efr-proxy/gpt-5.2', 'efr-proxy/gpt-4o-mini']);
+      });
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
+
+  test('GET /api/available-models returns [] when file is missing', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-avail-miss-cwd-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-avail-miss-reg-'));
+    seedFullWorkspace(workCwd);
+    try {
+      await withServer(registry, workCwd, async (url) => {
+        const res = await fetch(`${url}/api/available-models`);
+        expect(res.status).toBe(200);
+        const body = await res.json() as { available: unknown[] };
+        expect(body.available).toEqual([]);
+      });
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
+
   test('PATCH rejects a malformed model id without touching the file', async () => {
     const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-bad-cwd-'));
     const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-cfg-bad-reg-'));

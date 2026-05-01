@@ -58,6 +58,16 @@ export interface ServerOptions {
   registryRoot?: string;
   /** Override the overrides root used by the `/api/overrides` routes. Defaults to `defaultOverridesRoot()` (`~/.rubric/overrides`). */
   overridesRoot?: string;
+  /**
+   * Absolute path to a newline-delimited file of allowed `provider/model` ids.
+   * Surfaced to the UI so the header selectors can be dropdowns, not free-text.
+   * Defaults to `<baseDir>/.secrets/available_models` — gitignored by the
+   * default `.secrets/` rule, matching how bearer tokens are stored.
+   * Empty/missing file → `/api/available-models` returns `{ available: [] }`
+   * and the UI falls back to free-text entry. One id per line; lines starting
+   * with `#` are comments; blanks ignored.
+   */
+  availableModelsPath?: string;
 }
 
 export interface WorkspaceSnapshot {
@@ -226,6 +236,8 @@ export interface Handlers {
   submitOverride: (input: OverrideSubmission) => OverrideSubmissionResult;
   /** List currently-active overrides (latest-wins collapse) for this project. */
   listOverrides: () => ActiveOverrideWire[];
+  /** Read the newline-delimited allowed-models file. Missing/empty returns []. */
+  listAvailableModels: () => string[];
 }
 
 export function makeHandlers(opts: ServerOptions = {}): Handlers {
@@ -233,6 +245,9 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
   const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
   const registryRoot = opts.registryRoot ?? defaultRegistryRoot();
   const overridesRoot = opts.overridesRoot ?? defaultOverridesRoot();
+  // Default lives under the workspace dir so it rides `.secrets/` gitignore
+  // without any extra config. Users can override for shared team files.
+  const availableModelsPath = opts.availableModelsPath ?? resolve(cwd, '.secrets', 'available_models');
 
   function toWire(a: ActiveOverride): ActiveOverrideWire {
     const out: ActiveOverrideWire = {
@@ -434,6 +449,30 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
       const actives = activeOverrides(records);
       return Array.from(actives.values()).map(toWire);
     },
+    listAvailableModels() {
+      let raw: string;
+      try {
+        raw = readFileSync(availableModelsPath, 'utf8');
+      } catch {
+        // Missing file is the expected state for a fresh workspace — the UI
+        // treats [] as "no curated list, fall back to free-text entry". Not
+        // an error worth logging.
+        return [];
+      }
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const line of raw.split('\n')) {
+        const s = line.trim();
+        if (s.length === 0 || s.startsWith('#')) continue;
+        // Only accept provider/model shape; silently drop malformed lines so a
+        // stray typo doesn't nuke the whole picker.
+        if (!s.includes('/')) continue;
+        if (seen.has(s)) continue;
+        seen.add(s);
+        out.push(s);
+      }
+      return out;
+    },
   };
 }
 
@@ -504,6 +543,16 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         try {
           const overrides = handlers.listOverrides();
           sendJson(res, 200, { overrides });
+        } catch (err) {
+          sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
+        return;
+      }
+
+      if (method === 'GET' && url === '/api/available-models') {
+        try {
+          const available = handlers.listAvailableModels();
+          sendJson(res, 200, { available });
         } catch (err) {
           sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
         }
