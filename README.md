@@ -51,7 +51,7 @@ The judge is just another LLM. When you disagree with a verdict, say so:
 rubric disagree case-3/openai/gpt-4o-mini --verdict A --reason "judge missed the factual error in B"
 ```
 
-Every override is appended to `~/.rubric/runs/<id>/overrides.jsonl` and surfaces in the PR comment footer. The override log is the calibration corpus — in v2.3 it will train a small residual classifier that scores the *judge*, not the outputs. (In-UI override buttons in `rubric serve` are a v2.3 follow-up; drive disagreements from the CLI for now.)
+Every override is appended to `~/.rubric/overrides/<project>.jsonl` and surfaces in the PR comment footer. The override log is the calibration corpus — in v2.3 it will train a small residual classifier that scores the *judge*, not the outputs. In `rubric serve` each grid cell's detail pane has `[a] [b] [=]` verdict buttons and an optional reason field, so you can disagree without leaving the UI; CLI and UI share the same log.
 
 ## GitHub Action
 

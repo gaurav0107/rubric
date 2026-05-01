@@ -19,9 +19,13 @@ async function withServer<T>(
   registryRoot: string,
   workspaceCwd: string,
   body: (url: string) => Promise<T>,
+  overridesRoot?: string,
 ): Promise<T> {
-  const handlers = makeHandlers({ cwd: workspaceCwd, registryRoot });
-  const server = createHttpServer({ cwd: workspaceCwd, registryRoot }, handlers, '<html></html>');
+  const serverOpts = overridesRoot
+    ? { cwd: workspaceCwd, registryRoot, overridesRoot }
+    : { cwd: workspaceCwd, registryRoot };
+  const handlers = makeHandlers(serverOpts);
+  const server = createHttpServer(serverOpts, handlers, '<html></html>');
   await new Promise<void>((r, rej) => {
     server.once('error', rej);
     server.listen(0, '127.0.0.1', () => r());
@@ -158,4 +162,173 @@ describe('/api/runs', () => {
     }
   });
 
+});
+
+/**
+ * Seed a minimal real workspace on disk so /api/overrides can resolve the
+ * config, prompts, and dataset. We need actual files here — the override
+ * handler re-loads the workspace to derive the contentKey, matching the
+ * behavior of `rubric disagree`.
+ */
+function seedFullWorkspace(root: string): string {
+  mkdirSync(root, { recursive: true });
+  mkdirSync(join(root, 'prompts'), { recursive: true });
+  mkdirSync(join(root, 'data'), { recursive: true });
+  writeFileSync(join(root, 'prompts', 'baseline.md'), 'Baseline: {{input}}', 'utf8');
+  writeFileSync(join(root, 'prompts', 'candidate.md'), 'Candidate: {{input}}', 'utf8');
+  writeFileSync(
+    join(root, 'data', 'cases.jsonl'),
+    ['{"input":"one"}', '{"input":"two"}'].join('\n') + '\n',
+    'utf8',
+  );
+  const configPath = join(root, 'rubric.config.json');
+  writeFileSync(
+    configPath,
+    JSON.stringify(
+      {
+        prompts: { baseline: 'prompts/baseline.md', candidate: 'prompts/candidate.md' },
+        dataset: 'data/cases.jsonl',
+        models: ['openai/gpt-4o-mini'],
+        judge: { model: 'openai/gpt-4o', criteria: 'default' },
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+  return configPath;
+}
+
+describe('/api/overrides', () => {
+  test('POST + GET round-trip: appending an override surfaces it in the active list', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-cwd-'));
+    const ovrRoot = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-root-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-reg-'));
+    seedFullWorkspace(workCwd);
+    try {
+      await withServer(
+        registry,
+        workCwd,
+        async (url) => {
+          // Starts empty.
+          const pre = await fetch(`${url}/api/overrides`);
+          expect(pre.status).toBe(200);
+          const preBody = await pre.json() as { overrides: unknown[] };
+          expect(preBody.overrides).toEqual([]);
+
+          // Append one override.
+          const post = await fetch(`${url}/api/overrides`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              caseIndex: 0,
+              model: 'openai/gpt-4o-mini',
+              verdict: 'a',
+              reason: 'judge missed the regression',
+            }),
+          });
+          expect(post.status).toBe(200);
+          const postBody = await post.json() as { op: string; verdict: string; cellRef: string; contentKey: string };
+          expect(postBody.op).toBe('override');
+          expect(postBody.verdict).toBe('a');
+          expect(postBody.cellRef).toBe('case-0/openai/gpt-4o-mini');
+          expect(postBody.contentKey.length).toBe(64);
+
+          // GET surfaces it.
+          const after = await fetch(`${url}/api/overrides`);
+          const afterBody = await after.json() as { overrides: Array<{ verdict: string; reason?: string; cellRef: string }> };
+          expect(afterBody.overrides.length).toBe(1);
+          expect(afterBody.overrides[0]!.verdict).toBe('a');
+          expect(afterBody.overrides[0]!.reason).toBe('judge missed the regression');
+          expect(afterBody.overrides[0]!.cellRef).toBe('case-0/openai/gpt-4o-mini');
+        },
+        ovrRoot,
+      );
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
+      rmSync(ovrRoot, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
+
+  test('POST with undo=true removes the active override (latest-wins)', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-undo-cwd-'));
+    const ovrRoot = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-undo-root-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-undo-reg-'));
+    seedFullWorkspace(workCwd);
+    try {
+      await withServer(
+        registry,
+        workCwd,
+        async (url) => {
+          // Override, then undo.
+          await fetch(`${url}/api/overrides`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ caseIndex: 1, model: 'openai/gpt-4o-mini', verdict: 'b' }),
+          });
+          const undo = await fetch(`${url}/api/overrides`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ caseIndex: 1, model: 'openai/gpt-4o-mini', undo: true }),
+          });
+          expect(undo.status).toBe(200);
+          const undoBody = await undo.json() as { op: string };
+          expect(undoBody.op).toBe('undo');
+
+          const after = await fetch(`${url}/api/overrides`);
+          const afterBody = await after.json() as { overrides: unknown[] };
+          expect(afterBody.overrides).toEqual([]);
+        },
+        ovrRoot,
+      );
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
+      rmSync(ovrRoot, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
+
+  test('POST rejects bad payloads with a 400', async () => {
+    const workCwd = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-bad-cwd-'));
+    const ovrRoot = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-bad-root-'));
+    const registry = mkdtempSync(join(tmpdir(), 'rubric-serve-ovr-bad-reg-'));
+    seedFullWorkspace(workCwd);
+    try {
+      await withServer(
+        registry,
+        workCwd,
+        async (url) => {
+          // Missing caseIndex.
+          const r1 = await fetch(`${url}/api/overrides`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ model: 'openai/gpt-4o-mini', verdict: 'a' }),
+          });
+          expect(r1.status).toBe(400);
+
+          // Bogus verdict.
+          const r2 = await fetch(`${url}/api/overrides`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ caseIndex: 0, model: 'openai/gpt-4o-mini', verdict: 'nope' }),
+          });
+          expect(r2.status).toBe(400);
+
+          // caseIndex out of range (only 2 cases in seed).
+          const r3 = await fetch(`${url}/api/overrides`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ caseIndex: 99, model: 'openai/gpt-4o-mini', verdict: 'a' }),
+          });
+          expect(r3.status).toBe(400);
+        },
+        ovrRoot,
+      );
+    } finally {
+      rmSync(workCwd, { recursive: true, force: true });
+      rmSync(ovrRoot, { recursive: true, force: true });
+      rmSync(registry, { recursive: true, force: true });
+    }
+  });
 });

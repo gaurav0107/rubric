@@ -11,27 +11,38 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import {
+  activeOverrides,
+  appendOverride,
+  computeContentKey,
   createConfiguredProviders,
   createMockJudge,
   createMockProvider,
   createOpenAIJudge,
   createStructuralJudge,
+  defaultOverridesRoot,
   defaultRegistryRoot,
+  formatCellRef,
+  judgeRubricId,
   listRuns,
   loadConfig,
   parseCasesJsonl,
   readCells,
   readManifest,
+  readOverrideLog,
+  renderPrompt,
   resolveCriteria,
   runEval,
+  type ActiveOverride,
   type Case,
   type CellResult,
   type Config,
   type Criteria,
   type Judge,
+  type ModelId,
   type Provider,
   type ProviderConfig,
   type RunManifest,
+  type Verdict,
 } from '../../../shared/src/index.ts';
 
 export interface ServerOptions {
@@ -44,6 +55,8 @@ export interface ServerOptions {
   indexHtml?: string;
   /** Override the registry root used by the `/api/runs` routes. Defaults to `defaultRegistryRoot()` (`~/.rubric/runs`). */
   registryRoot?: string;
+  /** Override the overrides root used by the `/api/overrides` routes. Defaults to `defaultOverridesRoot()` (`~/.rubric/overrides`). */
+  overridesRoot?: string;
 }
 
 export interface WorkspaceSnapshot {
@@ -124,6 +137,35 @@ function openSse(res: ServerResponse): { send: (event: string, data: unknown) =>
   };
 }
 
+export interface OverrideSubmission {
+  caseIndex: number;
+  /** A-side model (matches CellResult.model). */
+  model: ModelId;
+  /** B-side model. Omit in compare-prompts mode; required when modelB !== model on the cell. */
+  modelB?: ModelId;
+  verdict?: Verdict;
+  reason?: string;
+  undo?: boolean;
+}
+
+export interface OverrideSubmissionResult {
+  cellRef: string;
+  contentKey: string;
+  op: 'override' | 'undo';
+  verdict?: Verdict;
+  ts: string;
+}
+
+/** Payload shape returned by GET /api/overrides and used by the UI to paint ✎ markers. */
+export interface ActiveOverrideWire {
+  contentKey: string;
+  cellRef: string;
+  verdict: Verdict;
+  ts: string;
+  reason?: string;
+  runId?: string;
+}
+
 export interface Handlers {
   getWorkspace: () => WorkspaceSnapshot;
   savePrompt: (which: 'baseline' | 'candidate', content: string) => void;
@@ -134,12 +176,29 @@ export interface Handlers {
   listRuns: (opts?: { limit?: number }) => RunManifest[];
   /** Fetch a run's manifest + all cells. 404 when the id is unknown. */
   loadRun: (id: string) => { manifest: RunManifest; cells: CellResult[] };
+  /** Append an override/undo record to the project's override log. */
+  submitOverride: (input: OverrideSubmission) => OverrideSubmissionResult;
+  /** List currently-active overrides (latest-wins collapse) for this project. */
+  listOverrides: () => ActiveOverrideWire[];
 }
 
 export function makeHandlers(opts: ServerOptions = {}): Handlers {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const configPath = opts.configPath ?? resolve(cwd, 'rubric.config.json');
   const registryRoot = opts.registryRoot ?? defaultRegistryRoot();
+  const overridesRoot = opts.overridesRoot ?? defaultOverridesRoot();
+
+  function toWire(a: ActiveOverride): ActiveOverrideWire {
+    const out: ActiveOverrideWire = {
+      contentKey: a.contentKey,
+      cellRef: a.cellRef,
+      verdict: a.verdict,
+      ts: a.ts,
+    };
+    if (a.reason !== undefined) out.reason = a.reason;
+    if (a.runId !== undefined) out.runId = a.runId;
+    return out;
+  }
 
   return {
     getWorkspace: () => loadWorkspace(cwd, configPath),
@@ -218,6 +277,56 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
         },
       };
     },
+    submitOverride(input) {
+      // Same contentKey derivation as `rubric disagree` — the two writers must
+      // produce byte-identical keys or overrides log through the CLI are invisible
+      // in the UI and vice-versa.
+      const ws = loadWorkspace(cwd, configPath);
+      if (input.caseIndex < 0 || input.caseIndex >= ws.cases.length) {
+        throw new Error(`caseIndex ${input.caseIndex} out of range (dataset has ${ws.cases.length} cases)`);
+      }
+      const theCase = ws.cases[input.caseIndex]!;
+      const compareModels = ws.config.mode === 'compare-models';
+      const modelA = input.model;
+      const modelB = input.modelB ?? modelA;
+      const promptA = renderPrompt(ws.prompts.baseline, theCase);
+      const promptB = compareModels ? promptA : renderPrompt(ws.prompts.candidate, theCase);
+      const criteriaText = resolveCriteria(ws.config.judge.criteria, ws.baseDir);
+      const rubricId = judgeRubricId(criteriaText);
+      const contentKey = computeContentKey({
+        promptA,
+        promptB,
+        inputText: theCase.input,
+        modelA,
+        modelB,
+        judgeModelId: ws.config.judge.model,
+        judgeRubricId: rubricId,
+      });
+      const cellRef = formatCellRef(input.caseIndex, modelA);
+
+      if (input.undo === true) {
+        const record = appendOverride(ws.configPath, { op: 'undo', cellRef, contentKey }, overridesRoot);
+        return { cellRef, contentKey, op: 'undo', ts: record.ts };
+      }
+
+      if (input.verdict === undefined) {
+        throw new Error('verdict is required unless undo=true');
+      }
+      const appendInput: Parameters<typeof appendOverride>[1] = {
+        op: 'override',
+        cellRef,
+        contentKey,
+        verdict: input.verdict,
+      };
+      if (input.reason !== undefined && input.reason.length > 0) appendInput.reason = input.reason;
+      const record = appendOverride(ws.configPath, appendInput, overridesRoot);
+      return { cellRef, contentKey, op: 'override', verdict: input.verdict, ts: record.ts };
+    },
+    listOverrides() {
+      const records = readOverrideLog(configPath, overridesRoot);
+      const actives = activeOverrides(records);
+      return Array.from(actives.values()).map(toWire);
+    },
   };
 }
 
@@ -276,6 +385,68 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
           return;
         }
         sendJson(res, 404, { error: `no route for ${method} ${url}` });
+        return;
+      }
+
+      // Overrides — read or write the append-only log. The same contentKey
+      // algebra drives both the CLI (`rubric disagree`) and the UI, so overrides
+      // entered through either surface round-trip.
+      if (method === 'GET' && url === '/api/overrides') {
+        try {
+          const overrides = handlers.listOverrides();
+          sendJson(res, 200, { overrides });
+        } catch (err) {
+          sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        }
+        return;
+      }
+      if (method === 'POST' && url === '/api/overrides') {
+        const body = await readBody(req);
+        let parsed: Partial<{
+          caseIndex: number;
+          model: string;
+          modelB: string;
+          verdict: string;
+          reason: string;
+          undo: boolean;
+        }>;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          sendJson(res, 400, { error: 'body must be JSON' });
+          return;
+        }
+        if (typeof parsed.caseIndex !== 'number' || !Number.isInteger(parsed.caseIndex) || parsed.caseIndex < 0) {
+          sendJson(res, 400, { error: 'caseIndex must be a non-negative integer' });
+          return;
+        }
+        if (typeof parsed.model !== 'string' || !parsed.model.includes('/')) {
+          sendJson(res, 400, { error: 'model must be a "provider/model" string' });
+          return;
+        }
+        const undo = parsed.undo === true;
+        let verdict: Verdict | undefined;
+        if (!undo) {
+          if (parsed.verdict !== 'a' && parsed.verdict !== 'b' && parsed.verdict !== 'tie') {
+            sendJson(res, 400, { error: 'verdict must be "a" | "b" | "tie" (or pass undo=true)' });
+            return;
+          }
+          verdict = parsed.verdict;
+        }
+        const submission: OverrideSubmission = {
+          caseIndex: parsed.caseIndex,
+          model: parsed.model as ModelId,
+        };
+        if (typeof parsed.modelB === 'string' && parsed.modelB.length > 0) submission.modelB = parsed.modelB as ModelId;
+        if (verdict !== undefined) submission.verdict = verdict;
+        if (typeof parsed.reason === 'string' && parsed.reason.length > 0) submission.reason = parsed.reason;
+        if (undo) submission.undo = true;
+        try {
+          const result = handlers.submitOverride(submission);
+          sendJson(res, 200, result);
+        } catch (err) {
+          sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+        }
         return;
       }
 

@@ -392,6 +392,55 @@ export const INDEX_HTML = `<!doctype html>
     color: var(--text); font-family: var(--mono); font-size: 11px;
     white-space: pre-wrap; word-break: break-word;
   }
+  /* Override widget — three buttons + reason field + undo. Terminal grammar,
+     same phosphor palette, sharp edges. This is the seed corpus for v2.3
+     calibration, surfaced so users can disagree without leaving the UI. */
+  .override-row {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 8px 0 2px 0; border-top: 1px dashed var(--border);
+    margin-top: 6px;
+  }
+  .override-row .label {
+    font-family: var(--mono); font-size: 9px; color: var(--muted-2);
+    text-transform: uppercase; letter-spacing: .14em;
+  }
+  .override-row button.v-btn {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    padding: 4px 10px; background: var(--panel-3); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 0; cursor: pointer;
+    text-transform: uppercase; min-width: 38px;
+  }
+  .override-row button.v-btn:hover { color: var(--text-hi); border-color: var(--border-hi); }
+  .override-row button.v-btn.active {
+    color: var(--accent); border-color: var(--accent);
+    background: var(--accent-weak); text-shadow: 0 0 4px rgba(57,255,20,0.4);
+  }
+  .override-row button.v-btn.active[data-v="a"] { color: var(--loss); border-color: var(--loss); background: rgba(255,56,96,0.1); text-shadow: 0 0 4px rgba(255,56,96,0.4); }
+  .override-row button.v-btn.active[data-v="tie"] { color: var(--tie); border-color: var(--tie); background: rgba(255,176,0,0.1); text-shadow: 0 0 4px rgba(255,176,0,0.4); }
+  .override-row input.reason-in {
+    flex: 1; min-width: 160px;
+    font-family: var(--mono); font-size: 11px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 0;
+    padding: 5px 8px;
+  }
+  .override-row input.reason-in:focus { border-color: var(--accent-dim); outline: none; }
+  .override-row button.undo-btn {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    padding: 4px 8px; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 0; cursor: pointer;
+    text-transform: uppercase;
+  }
+  .override-row button.undo-btn:hover { color: var(--text-hi); border-color: var(--border-hi); }
+  .override-row .ovr-status {
+    font-family: var(--mono); font-size: 10px; color: var(--muted-2);
+  }
+  .override-row .ovr-status.on { color: var(--accent); text-shadow: 0 0 3px rgba(57,255,20,0.3); }
+  /* Row-level ✎ glyph — renders on the idx column when a cell has an active override. */
+  table.grid tr.header-row td.idx .ovr-glyph {
+    color: var(--accent); margin-left: 4px;
+    text-shadow: 0 0 4px rgba(57,255,20,0.4);
+  }
   .detail-box {
     display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
     background: var(--border);
@@ -674,6 +723,7 @@ export const INDEX_HTML = `<!doctype html>
         <div class="cell"><div class="n dim" id="sum-rate">--</div><div class="k">win rate</div></div>
         <div class="cell"><div class="n dim" id="sum-cost">--</div><div class="k">cost</div></div>
         <div class="cell"><div class="n dim" id="sum-time">--</div><div class="k">wall sum</div></div>
+        <div class="cell"><div class="n dim" id="sum-overrides">0</div><div class="k">overrides</div></div>
       </div>
       <div class="grid-wrap">
         <table class="grid">
@@ -720,7 +770,181 @@ export const INDEX_HTML = `<!doctype html>
     active: 'baseline',
     dirty: false,
     running: false,
+    /* Map<string, {verdict, reason?, ts}>. Key = caseIndex + '|' + model ('|' + modelB when set).
+       Populated from GET /api/overrides at load and after every POST. */
+    overrides: new Map(),
+    /* Cells currently rendered in the grid, keyed by the same index-key so
+       individual rows can be repainted (glyph, active button, reason field)
+       without replaying the whole sweep. */
+    cellRows: new Map(),
   };
+
+  function overrideKey(cell) {
+    return cell.caseIndex + '|' + cell.model + (cell.modelB ? '|' + cell.modelB : '');
+  }
+
+  function updateOverrideCounter() {
+    const el = $('sum-overrides');
+    if (!el) return;
+    const n = state.overrides.size;
+    el.textContent = String(n);
+    if (n > 0) el.classList.remove('dim'); else el.classList.add('dim');
+  }
+
+  async function loadOverrides() {
+    try {
+      const res = await fetch('/api/overrides');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const body = await res.json();
+      state.overrides.clear();
+      for (const o of body.overrides || []) {
+        // We can't re-derive the index key without (caseIndex, model) — the
+        // cellRef (case-N/provider/model) carries both. Parse it.
+        const m = /^case-(\\d+)\\/(.+)$/.exec(o.cellRef);
+        if (!m) continue;
+        const caseIndex = Number(m[1]);
+        const model = m[2];
+        // modelB is not in the cellRef today — overrides.jsonl keys by contentKey;
+        // we use the no-modelB form for lookup and fall back to matching modelA
+        // when iterating the grid (which is fine: compare-models has one cell per case).
+        state.overrides.set(caseIndex + '|' + model, { verdict: o.verdict, reason: o.reason, ts: o.ts });
+      }
+      updateOverrideCounter();
+      // Repaint any visible rows so the ✎ glyph and button-active state follow the log.
+      for (const [key, entry] of state.cellRows) {
+        const { cell, headRow, detailRow } = entry;
+        const active = state.overrides.get(overrideKey(cell)) || null;
+        paintRowOverride(headRow, cell, active);
+        if (detailRow && detailRow.__ovrRow) repaintOverrideRow(detailRow.__ovrRow, cell, active);
+      }
+    } catch (err) {
+      /* non-fatal — the UI keeps working even if the log read fails. */
+    }
+  }
+
+  function paintRowOverride(row, cell, active) {
+    const idxTd = row.querySelector('td.idx');
+    if (!idxTd) return;
+    let glyph = idxTd.querySelector('.ovr-glyph');
+    if (active) {
+      if (!glyph) {
+        glyph = document.createElement('span');
+        glyph.className = 'ovr-glyph';
+        glyph.title = 'you overrode this cell — see details';
+        glyph.textContent = '✎';
+        idxTd.appendChild(glyph);
+      }
+    } else if (glyph) {
+      glyph.remove();
+    }
+  }
+
+  async function submitOverride(cell, body) {
+    const payload = {
+      caseIndex: cell.caseIndex,
+      model: cell.model,
+      ...body,
+    };
+    if (cell.modelB) payload.modelB = cell.modelB;
+    try {
+      const res = await fetch('/api/overrides', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setError('override failed: ' + (err.error || res.status));
+        return false;
+      }
+      await loadOverrides();
+      setError(null);
+      return true;
+    } catch (err) {
+      setError('override failed: ' + (err.message || err));
+      return false;
+    }
+  }
+
+  function repaintOverrideRow(row, cell, active) {
+    const verdictBtns = row.querySelectorAll('button.v-btn');
+    verdictBtns.forEach((b) => {
+      b.classList.toggle('active', Boolean(active) && active.verdict === b.dataset.v);
+    });
+    const status = row.querySelector('.ovr-status');
+    if (status) {
+      if (active) {
+        status.classList.add('on');
+        const v = active.verdict === 'a' ? 'A' : active.verdict === 'b' ? 'B' : 'TIE';
+        status.textContent = '✎ you → ' + v + (active.reason ? ' · "' + active.reason + '"' : '');
+      } else {
+        status.classList.remove('on');
+        status.textContent = 'no override';
+      }
+    }
+    const undoBtn = row.querySelector('button.undo-btn');
+    if (undoBtn) undoBtn.style.display = active ? 'inline-block' : 'none';
+    const reasonIn = row.querySelector('input.reason-in');
+    if (reasonIn && active && active.reason && reasonIn.value === '') reasonIn.value = active.reason;
+  }
+
+  function buildOverrideRow(cell) {
+    const row = document.createElement('div');
+    row.className = 'override-row';
+    row.addEventListener('click', (e) => e.stopPropagation());
+
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = 'disagree:';
+    row.appendChild(label);
+
+    const verdicts = [
+      { v: 'a', text: '[a]' },
+      { v: 'b', text: '[b]' },
+      { v: 'tie', text: '[=]' },
+    ];
+    for (const opt of verdicts) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'v-btn';
+      btn.dataset.v = opt.v;
+      btn.textContent = opt.text;
+      btn.title = 'override verdict: ' + opt.v.toUpperCase();
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const reason = reasonIn.value.trim();
+        const body = { verdict: opt.v };
+        if (reason) body.reason = reason;
+        await submitOverride(cell, body);
+      });
+      row.appendChild(btn);
+    }
+
+    const reasonIn = document.createElement('input');
+    reasonIn.type = 'text';
+    reasonIn.className = 'reason-in';
+    reasonIn.placeholder = 'reason (optional)';
+    reasonIn.maxLength = 400;
+    row.appendChild(reasonIn);
+
+    const undoBtn = document.createElement('button');
+    undoBtn.type = 'button';
+    undoBtn.className = 'undo-btn';
+    undoBtn.textContent = 'undo';
+    undoBtn.style.display = 'none';
+    undoBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await submitOverride(cell, { undo: true });
+    });
+    row.appendChild(undoBtn);
+
+    const status = document.createElement('span');
+    status.className = 'ovr-status';
+    status.textContent = 'no override';
+    row.appendChild(status);
+
+    return row;
+  }
 
   function setError(msg) {
     const el = $('err');
@@ -773,6 +997,7 @@ export const INDEX_HTML = `<!doctype html>
 
   function resetGrid() {
     $('grid-body').innerHTML = '';
+    state.cellRows.clear();
     $('sum-wins').textContent = '0';
     $('sum-losses').textContent = '0';
     $('sum-ties').textContent = '0';
@@ -836,15 +1061,26 @@ export const INDEX_HTML = `<!doctype html>
     const detailRow = document.createElement('tr');
     detailRow.className = 'detail-row';
     detailRow.style.display = 'none';
-    detailRow.appendChild(buildDetailCell(cell, caseExpected));
+    const { td, overrideRow } = buildDetailCell(cell, caseExpected);
+    detailRow.appendChild(td);
+    detailRow.__ovrRow = overrideRow;
     row.addEventListener('click', () => {
       const open = detailRow.style.display !== 'none';
       detailRow.style.display = open ? 'none' : '';
-      row.firstChild.innerHTML = (open ? '▸ ' : '▾ ') + cell.caseIndex;
+      // Preserve any ✎ glyph on the idx cell when toggling open/closed.
+      const idxTd = row.querySelector('td.idx');
+      const glyph = idxTd ? idxTd.querySelector('.ovr-glyph') : null;
+      idxTd.innerHTML = (open ? '▸ ' : '▾ ') + cell.caseIndex;
+      if (glyph) idxTd.appendChild(glyph);
     });
     const body = $('grid-body');
     body.appendChild(row);
     body.appendChild(detailRow);
+    // Apply any already-known override to this freshly-added row.
+    const active = state.overrides.get(overrideKey(cell)) || null;
+    paintRowOverride(row, cell, active);
+    if (overrideRow) repaintOverrideRow(overrideRow, cell, active);
+    state.cellRows.set(overrideKey(cell), { cell, headRow: row, detailRow });
 
     $('sum-wins').textContent = counts.wins;
     $('sum-losses').textContent = counts.losses;
@@ -877,7 +1113,10 @@ export const INDEX_HTML = `<!doctype html>
     const td = document.createElement('td');
     td.colSpan = 5;
 
-    td.appendChild(buildVerdictBanner(cell, caseExpected));
+    const banner = buildVerdictBanner(cell, caseExpected);
+    const overrideRow = buildOverrideRow(cell);
+    banner.appendChild(overrideRow);
+    td.appendChild(banner);
 
     const box = document.createElement('div');
     box.className = 'detail-box';
@@ -885,7 +1124,7 @@ export const INDEX_HTML = `<!doctype html>
     box.appendChild(detailSide('A', 'A (baseline)', cell.outputA));
     box.appendChild(detailSide('B', 'B (candidate)', cell.outputB));
     td.appendChild(box);
-    return td;
+    return { td, overrideRow };
   }
 
   function buildVerdictBanner(cell, caseExpected) {
@@ -970,6 +1209,8 @@ export const INDEX_HTML = `<!doctype html>
       activateTab(state.active);
       renderCases();
       setError(null);
+      // Pull overrides in parallel — non-blocking for the initial render.
+      loadOverrides();
     } catch (err) {
       setError('failed to load workspace: ' + (err.message || err));
     }
