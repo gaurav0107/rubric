@@ -13,754 +13,1030 @@ export const INDEX_HTML = `<!doctype html>
 <meta charset="utf-8">
 <title>rubric</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap">
 <style>
   /* ============================================================
-     rubric — hacker terminal theme
-     mono-only, phosphor green on near-black, sharp edges, scanlines
+     rubric · "graphite"
+     Warm slate dark theme with a single ochre accent.
+     Geist for chrome, JetBrains Mono for data.
      ============================================================ */
   :root {
-    --bg:         #030603;
-    --panel:      #070b07;
-    --panel-2:    #0a100a;
-    --panel-3:    #0d150d;
-    --border:     #1a3a1a;
-    --border-hi:  #2c5a2c;
-    --text:       #c4ffd1;
-    --text-hi:    #e6ffe9;
-    --muted:      #5a9e6a;
-    --muted-2:    #2a4a32;
-    --accent:     #39ff14;
-    --accent-dim: #1aa30b;
-    --accent-weak:#0a1f0a;
-    --win:        #39ff14;
-    --loss:       #ff3860;
-    --tie:        #ffb000;
-    --err:        #ff3860;
-    --mono: ui-monospace, "JetBrains Mono", "Fira Code", "IBM Plex Mono", "Berkeley Mono", SFMono-Regular, Menlo, Consolas, monospace;
-    --sans: var(--mono);
-    --glow: 0 0 1px currentColor, 0 0 6px rgba(57,255,20,.35);
+    /* Surfaces — warm slate, never pure black. Each level is ~3% lighter
+       than the one below it, which keeps depth readable without lines. */
+    --bg-0:        #0f1113;      /* page background */
+    --bg-1:        #15181b;      /* primary panel surface */
+    --bg-2:        #1b1f23;      /* raised surface (hover, header, tab-strip) */
+    --bg-3:        #23282d;      /* pressed / selected / code blocks */
+    --bg-4:        #2d3339;      /* dividers that need to feel like borders */
+
+    /* Borders — hairlines at low alpha so stacked panels don't compound. */
+    --line:        rgba(255,255,255,0.06);
+    --line-hi:     rgba(255,255,255,0.10);
+
+    /* Text */
+    --fg:          #e6e8eb;      /* primary */
+    --fg-hi:       #ffffff;      /* emphasis / hover text */
+    --fg-mut:      #9aa0a6;      /* secondary labels */
+    --fg-dim:      #6b7177;      /* tertiary, hints, placeholders */
+    --fg-faint:    #4a4f55;      /* disabled, dim stats */
+
+    /* Accent — ochre. Chosen deliberately: Linear uses purple, Vercel is
+       monochrome, GitHub is blue. Ochre reads as "editorial" and "careful",
+       which matches the eval-tool vibe better than any saturated primary. */
+    --accent:      #d4a056;
+    --accent-hi:   #e7b36a;
+    --accent-soft: rgba(212,160,86,0.12);
+    --accent-line: rgba(212,160,86,0.35);
+
+    /* Semantic — muted so they don't scream. */
+    --win:         #7fb685;      /* sage green */
+    --win-soft:    rgba(127,182,133,0.14);
+    --loss:        #d96c6c;      /* brick red */
+    --loss-soft:   rgba(217,108,108,0.14);
+    --tie:         #d4a056;      /* same ochre as accent — verdict=neutral reads as accent */
+    --tie-soft:    rgba(212,160,86,0.12);
+    --err:         #d96c6c;
+    --err-soft:    rgba(217,108,108,0.10);
+
+    /* Typography */
+    --sans: "Geist", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* Shape */
+    --radius:      6px;
+    --radius-sm:   4px;
+    --shadow-1:    0 1px 0 rgba(255,255,255,0.03) inset, 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-2:    0 4px 12px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset;
+    --shadow-drawer: -32px 0 80px rgba(0,0,0,0.55);
   }
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; font-family: var(--mono); }
+  html, body { height: 100%; margin: 0; font-family: var(--sans); }
 
-  /* Keyboard focus — high-contrast phosphor ring. Only on keyboard nav
-     so mouse clicks stay clean. */
+  /* Keyboard focus — subtle ochre ring. Only shows on keyboard nav. */
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 
-  /* Skip link — visually hidden until focused. Lets keyboard users jump
-     past the header into editable content. */
+  /* Skip link — visually hidden until focused. */
   .skip-link {
-    position: absolute; left: 8px; top: -40px;
-    background: var(--accent-weak); color: var(--accent);
-    padding: 8px 12px; border: 1px solid var(--accent-dim);
-    font: 12px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.1em;
+    position: absolute; left: 12px; top: -48px;
+    background: var(--bg-3); color: var(--fg-hi);
+    padding: 8px 14px; border: 1px solid var(--line-hi);
+    border-radius: var(--radius);
+    font: 500 13px/1 var(--sans);
     z-index: 50; text-decoration: none;
-    transition: top .1s;
+    transition: top .12s;
+    box-shadow: var(--shadow-1);
   }
-  .skip-link:focus { top: 8px; }
+  .skip-link:focus { top: 12px; }
 
   body {
-    background: var(--bg); color: var(--text);
-    font: 13px/1.5 var(--mono);
-    font-feature-settings: "zero", "ss01";
+    background: var(--bg-0); color: var(--fg);
+    font: 13.5px/1.55 var(--sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     display: flex; flex-direction: column;
     position: relative;
-    /* subtle vignette so the center glows */
-    background-image:
-      radial-gradient(ellipse at 50% 0%, rgba(57,255,20,0.04) 0%, transparent 50%),
-      radial-gradient(ellipse at 50% 100%, rgba(57,255,20,0.02) 0%, transparent 60%);
-  }
-  /* CRT scanlines — fixed overlay, non-interactive */
-  body::before {
-    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1000;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(0,0,0,0) 0px,
-      rgba(0,0,0,0) 2px,
-      rgba(0,0,0,0.18) 3px,
-      rgba(0,0,0,0) 4px
-    );
-    mix-blend-mode: multiply;
-  }
-  /* faint green grid on the bg so the surface feels like a terminal graph */
-  body::after {
-    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background-image:
-      linear-gradient(rgba(57,255,20,0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(57,255,20,0.025) 1px, transparent 1px);
-    background-size: 24px 24px;
-    mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.9), transparent 70%);
+    letter-spacing: -0.003em;
   }
 
   /* Selection */
-  ::selection { background: var(--accent); color: #000; }
+  ::selection { background: var(--accent-soft); color: var(--fg-hi); }
 
-  /* Scrollbars */
+  /* Scrollbars — thin, understated, no "terminal" look. */
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-track { background: var(--panel); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border: 1px solid var(--panel); }
-  ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg-4);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: #3a4148; background-clip: padding-box; }
+  * { scrollbar-width: thin; scrollbar-color: var(--bg-4) transparent; }
+
+  /* Code-like text helper, used for model ids, case inputs, timestamps. */
+  .mono, code, kbd {
+    font-family: var(--mono);
+    font-feature-settings: "zero", "ss02";
+    letter-spacing: 0;
+  }
+  kbd {
+    display: inline-block;
+    padding: 1px 6px 2px;
+    font-size: 11px; line-height: 1;
+    color: var(--fg); background: var(--bg-3);
+    border: 1px solid var(--line-hi);
+    border-bottom-width: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Small-caps label — the one piece of terminal DNA we keep from the old UI. */
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-mut);
+  }
 
   header {
-    display: flex; align-items: center; gap: 14px;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-1);
     position: relative; z-index: 2;
-  }
-  /* bottom hairline glow */
-  header::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
-    opacity: .5;
+    min-height: 52px;
   }
   header h1 {
-    margin: 0; font-size: 16px; font-weight: 700;
-    letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--accent); text-shadow: var(--glow);
-    font-family: var(--mono);
-    position: relative; padding-right: 10px;
+    margin: 0;
+    font-family: var(--sans);
+    font-size: 15px; font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--fg-hi);
+    display: inline-flex; align-items: center; gap: 10px;
   }
-  header h1::before { content: ">_ "; color: var(--accent-dim); }
-  header h1::after {
-    content: "█"; display: inline-block; margin-left: 6px; color: var(--accent);
-    animation: cursor-blink 1.06s steps(2, start) infinite;
+  /* Brand mark — small filled square that echoes the results-grid cells. Uses
+     the ochre accent as the one splash of color in the header. Subtle, not a
+     logo, but unmistakably "this app". */
+  header h1::before {
+    content: "";
+    display: inline-block; width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 2px;
+    box-shadow: 0 0 0 3px rgba(212,160,86,0.14);
   }
-  @keyframes cursor-blink { to { visibility: hidden; } }
-
   header .sub {
-    color: var(--muted); font-size: 11px; font-family: var(--mono);
-    letter-spacing: 0.02em;
+    color: var(--fg-dim);
+    font: 500 12px/1.4 var(--mono);
+    letter-spacing: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 420px;
+    max-width: 360px;
+    padding: 3px 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
   }
-  header .sub::before { content: "cfg:"; color: var(--muted-2); margin-right: 6px; }
   header .spacer { flex: 1; }
 
-  header button, header label {
-    background: var(--panel-3); color: var(--text);
-    border: 1px solid var(--border); border-radius: 0;
-    padding: 6px 12px; min-height: 32px;
-    display: inline-flex; align-items: center;
-    font: 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  /* Generic header button — ghost style. The primary button is the only one
+     with color. */
+  header button, header > label {
+    background: transparent; color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 6px 12px; height: 32px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 500 13px/1 var(--sans);
     cursor: pointer;
-    transition: color .08s, border-color .08s, background .08s, box-shadow .08s;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
   }
-  header button:hover, header label:hover {
-    color: var(--accent); border-color: var(--accent-dim);
-    box-shadow: inset 0 0 0 1px var(--accent-dim), 0 0 8px rgba(57,255,20,0.15);
+  header button:hover, header > label:hover {
+    background: var(--bg-2); border-color: var(--line-hi); color: var(--fg-hi);
   }
+  header button:active { background: var(--bg-3); }
   header button.primary {
-    background: var(--accent-weak); color: var(--accent);
-    border-color: var(--accent-dim);
-    text-shadow: 0 0 4px rgba(57,255,20,0.5);
+    background: var(--accent); color: #1a1410;
+    border-color: transparent;
+    font-weight: 600;
+    padding: 6px 14px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset, 0 1px 2px rgba(0,0,0,0.35);
   }
-  header button.primary:hover {
-    background: var(--accent); color: #000;
-    text-shadow: none;
-    box-shadow: 0 0 12px rgba(57,255,20,0.6);
+  header button.primary:hover { background: var(--accent-hi); color: #1a1410; }
+  header button.primary:active { background: #c18f46; }
+  header button:disabled {
+    opacity: .45; cursor: not-allowed;
+    background: transparent; color: var(--fg-dim);
+    border-color: var(--line);
   }
-  header button:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; color: var(--muted); border-color: var(--border); background: var(--panel-3); }
-  header label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
-  header input[type=checkbox] {
-    appearance: none; -webkit-appearance: none;
-    width: 14px; height: 14px; margin: 0;
-    border: 1px solid var(--border-hi); background: var(--panel);
-    position: relative; cursor: pointer;
-  }
-  header input[type=checkbox]:checked {
-    background: var(--accent-weak); border-color: var(--accent);
-  }
-  header input[type=checkbox]:checked::after {
-    content: "×"; position: absolute; inset: -2px 0 0 0;
-    text-align: center; color: var(--accent); font-weight: 700;
-    text-shadow: var(--glow); line-height: 14px;
-  }
-  /* Model id inputs in the header. Editable on blur/Enter; flash green on
-     successful save, red on validation failure. Same terminal grammar as the
-     prompt-dirty dot — no surprises. */
-  header label.sel-group {
-    display: inline-flex; align-items: center; gap: 6px; cursor: text;
-  }
-  header label.sel-group .k {
-    font-size: 9px; letter-spacing: .14em; color: var(--muted-2);
-    text-transform: uppercase;
-  }
-  header input.model-input {
-    appearance: none; -webkit-appearance: none;
-    font: 11px/1 var(--mono); color: var(--text);
-    background: var(--bg); border: 1px solid var(--border); border-radius: 0;
-    padding: 5px 8px; min-width: 180px; max-width: 320px;
-    letter-spacing: .02em;
-  }
-  header input.model-input:focus {
-    outline: none; border-color: var(--accent-dim); color: var(--text-hi);
-  }
-  header input.model-input.saved {
-    border-color: var(--accent); box-shadow: 0 0 4px rgba(57,255,20,0.25);
-    transition: border-color .15s, box-shadow .15s;
-  }
-  header input.model-input.err {
-    border-color: var(--err); color: var(--err);
-    box-shadow: 0 0 4px rgba(255,56,96,0.25);
-  }
-  /* Model dropdowns. Same palette as the free-text fallback. The multi-select
-     variant (models:) stays compact by using size="1" and letting the browser
-     pop a native list on click; this keeps the header slim instead of
-     consuming three lines of vertical space. */
-  header select.model-select {
-    appearance: none; -webkit-appearance: none;
-    font: 11px/1 var(--mono); color: var(--text);
-    background: var(--bg); border: 1px solid var(--border); border-radius: 0;
-    padding: 5px 24px 5px 8px; min-width: 180px; max-width: 320px;
-    letter-spacing: .02em; cursor: pointer;
-    background-image:
-      linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-      linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
-  }
-  header select.model-select:focus {
-    outline: none; border-color: var(--accent-dim); color: var(--text-hi);
-  }
-  header select.model-select.saved {
-    border-color: var(--accent); box-shadow: 0 0 4px rgba(57,255,20,0.25);
-    transition: border-color .15s, box-shadow .15s;
-  }
-  header select.model-select.err {
-    border-color: var(--err); color: var(--err);
-  }
-  /* Option styling inside native dropdowns is heavily restricted across
-     browsers — these properties apply in Firefox and the few Chromes that
-     honor them; elsewhere the OS theme wins. Good enough for a dev tool. */
-  header select.model-select option {
-    background: var(--panel); color: var(--text);
-    font-family: var(--mono); padding: 2px 4px;
-  }
-  header select.model-select option.custom {
-    color: var(--tie); /* amber signals "not in allowlist; preserved from config" */
+  header button.primary:disabled {
+    background: var(--bg-3); color: var(--fg-faint); box-shadow: none;
   }
 
+  /* Mock-mode checkbox — pill-shaped toggle instead of the terminal × box. */
+  header label.mock {
+    gap: 8px; padding-right: 10px;
+    color: var(--fg-mut);
+  }
+  header input[type=checkbox] {
+    appearance: none; -webkit-appearance: none;
+    width: 28px; height: 16px; margin: 0;
+    border: 1px solid var(--line-hi); background: var(--bg-2);
+    border-radius: 999px;
+    position: relative; cursor: pointer;
+    transition: background .14s ease, border-color .14s ease;
+  }
+  header input[type=checkbox]::after {
+    content: ""; position: absolute;
+    top: 1px; left: 1px; width: 12px; height: 12px;
+    background: var(--fg-dim); border-radius: 50%;
+    transition: transform .16s ease, background .16s ease;
+  }
+  header input[type=checkbox]:checked {
+    background: var(--accent-soft); border-color: var(--accent-line);
+  }
+  header input[type=checkbox]:checked::after {
+    transform: translateX(12px);
+    background: var(--accent);
+  }
+
+  /* Model-selector groups. Label on one line, input/select on the next line
+     might be nicer, but horizontal keeps the header slim. */
+  header label.sel-group {
+    gap: 8px; padding: 0 12px; cursor: default;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    height: 32px;
+    transition: border-color .12s ease;
+  }
+  header label.sel-group:hover { border-color: var(--line-hi); background: var(--bg-2); color: inherit; }
+  header label.sel-group:focus-within { border-color: var(--accent-line); background: var(--bg-2); }
+  header label.sel-group .k {
+    font: 500 11px/1 var(--sans);
+    letter-spacing: 0;
+    color: var(--fg-dim);
+  }
+
+  /* Free-text fallback inputs. */
+  header input.model-input {
+    appearance: none; -webkit-appearance: none;
+    font: 500 12.5px/1 var(--mono);
+    color: var(--fg-hi);
+    background: transparent; border: 0;
+    padding: 0; height: 28px;
+    min-width: 190px; max-width: 340px;
+    outline: none;
+  }
+  header input.model-input::placeholder { color: var(--fg-dim); }
+  header input.model-input.saved + * ~ *,
+  header label.sel-group:has(input.model-input.saved),
+  header label.sel-group:has(select.model-select.saved) {
+    border-color: var(--win); background: rgba(127,182,133,0.06);
+    transition: border-color .2s ease, background .2s ease;
+  }
+  header label.sel-group:has(input.model-input.err),
+  header label.sel-group:has(select.model-select.err) {
+    border-color: var(--loss); background: var(--loss-soft);
+  }
+
+  /* Custom dropdown. Native <select> that we restyle; the chevron is an inline
+     SVG data URI so no extra assets. */
+  header select.model-select {
+    appearance: none; -webkit-appearance: none;
+    font: 500 12.5px/1 var(--mono); color: var(--fg-hi);
+    background: transparent;
+    border: 0; outline: none;
+    padding: 0 22px 0 0; min-width: 190px; max-width: 340px;
+    height: 28px;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat: no-repeat;
+    background-position: right 2px center;
+  }
+  header select.model-select[multiple] {
+    background-image: none; padding-right: 0;
+  }
+  header select.model-select option {
+    background: var(--bg-2); color: var(--fg);
+    font-family: var(--mono); padding: 4px 6px;
+  }
+  header select.model-select option.custom { color: var(--tie); font-style: italic; }
+
   main {
-    display: grid; grid-template-columns: 1fr 320px 1.3fr;
+    display: grid; grid-template-columns: minmax(360px, 1fr) 320px minmax(420px, 1.3fr);
     gap: 0; flex: 1; min-height: 0;
     position: relative; z-index: 2;
+    background: var(--bg-1);
   }
   section {
     display: flex; flex-direction: column;
-    border-right: 1px solid var(--border); min-width: 0; min-height: 0;
-    background: var(--panel);
+    border-right: 1px solid var(--line); min-width: 0; min-height: 0;
+    background: var(--bg-1);
   }
   section:last-child { border-right: none; }
 
   .pane-title {
     margin: 0;
-    padding: 7px 14px; font-size: 10px; text-transform: uppercase; letter-spacing: .22em;
-    color: var(--muted); border-bottom: 1px solid var(--border);
-    background: var(--panel-2);
+    padding: 11px 18px;
+    font: 600 11px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-mut);
+    border-bottom: 1px solid var(--line);
     display: flex; align-items: center; gap: 10px;
-    font-family: var(--mono); font-weight: 600;
+    height: 40px;
+    background: var(--bg-1);
   }
-  .pane-title::before { content: "[ "; color: var(--border-hi); }
-  .pane-title > span:first-child, .pane-title > :not(.dot):first-child {}
   .pane-title .dot {
-    width: 8px; height: 8px; border-radius: 0; background: var(--muted-2);
-    box-shadow: inset 0 0 0 1px var(--muted-2);
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--fg-faint);
+    transition: background .18s ease, box-shadow .18s ease;
   }
-  .pane-title .dot.dirty { background: var(--tie); box-shadow: 0 0 6px var(--tie); }
-  .pane-title .dot.saved { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .pane-title .dot.dirty { background: var(--tie); box-shadow: 0 0 0 3px var(--tie-soft); }
+  .pane-title .dot.saved { background: var(--win); }
 
+  /* Prompts pane */
   .prompts-pane { display: flex; flex-direction: column; }
   .prompts-pane .tabs {
-    display: flex; border-bottom: 1px solid var(--border); background: var(--panel);
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-1);
+    padding: 0 12px;
+    gap: 2px;
   }
   .prompts-pane .tabs button {
-    flex: 1; background: transparent; border: 0;
-    padding: 9px 12px;
-    color: var(--muted); font: 12px/1 var(--mono); letter-spacing: 0.08em;
-    text-transform: uppercase; cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: color .1s, border-color .1s;
-  }
-  .prompts-pane .tabs button.active {
-    color: var(--accent); border-bottom-color: var(--accent);
-    text-shadow: 0 0 4px rgba(57,255,20,0.4);
-    background: var(--accent-weak);
-  }
-  .prompts-pane .tabs button:hover:not(.active) { color: var(--text); }
-
-  .prompts-pane textarea {
-    flex: 1; width: 100%; resize: none; padding: 14px 16px; border: 0;
-    background: var(--panel); color: var(--text-hi);
-    font-family: var(--mono); font-size: 13px; line-height: 1.6;
-    outline: none; caret-color: var(--accent);
-    text-shadow: 0 0 1px currentColor;
-  }
-  .prompts-pane textarea::placeholder { color: var(--muted-2); }
-
-  .prompts-pane .footer {
-    padding: 8px 12px; border-top: 1px solid var(--border);
-    display: flex; gap: 8px; align-items: center; background: var(--panel-2);
-  }
-  .prompts-pane .footer button {
-    background: var(--panel-3); color: var(--text);
-    border: 1px solid var(--border); border-radius: 0;
-    padding: 6px 11px;
-    font: 11px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+    background: transparent; border: 0;
+    padding: 9px 14px;
+    color: var(--fg-mut);
+    font: 500 13px/1 var(--sans);
+    letter-spacing: -0.005em;
     cursor: pointer;
-    transition: color .08s, border-color .08s, box-shadow .08s;
-  }
-  .prompts-pane .footer button:hover {
-    color: var(--accent); border-color: var(--accent-dim);
-    box-shadow: 0 0 8px rgba(57,255,20,0.15);
-  }
-  .prompts-pane .footer .hint {
-    color: var(--muted); font-size: 11px;
-    font-family: var(--mono); letter-spacing: 0.02em;
-  }
-  .prompts-pane .footer .hint::before { content: "// "; color: var(--muted-2); }
-
-  .cases-pane .list { overflow-y: auto; }
-  .case-row {
-    padding: 9px 14px; border-bottom: 1px solid var(--border);
-    cursor: default;
-    transition: background .08s, border-color .08s;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color .12s ease, border-color .12s ease;
     position: relative;
   }
-  .case-row:hover { background: var(--panel-2); }
-  .case-row::before {
-    content: "$ "; color: var(--muted-2); font-family: var(--mono); font-size: 11px;
-    position: absolute; left: 3px; top: 9px;
+  .prompts-pane .tabs button:hover:not(.active) { color: var(--fg); }
+  .prompts-pane .tabs button.active {
+    color: var(--fg-hi);
+    border-bottom-color: var(--accent);
   }
+
+  .prompts-pane textarea {
+    flex: 1; width: 100%; resize: none;
+    padding: 18px 20px;
+    border: 0; background: var(--bg-1); color: var(--fg-hi);
+    font-family: var(--mono); font-size: 13px; line-height: 1.65;
+    outline: none;
+    caret-color: var(--accent);
+  }
+  .prompts-pane textarea::placeholder { color: var(--fg-dim); }
+
+  .prompts-pane .footer {
+    padding: 10px 16px; border-top: 1px solid var(--line);
+    display: flex; gap: 12px; align-items: center;
+    background: var(--bg-1);
+  }
+  .prompts-pane .footer button {
+    background: var(--bg-3); color: var(--fg);
+    border: 1px solid var(--line-hi);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font: 500 12.5px/1 var(--sans);
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .prompts-pane .footer button:hover {
+    background: var(--bg-4); color: var(--fg-hi); border-color: var(--line-hi);
+  }
+  .prompts-pane .footer .hint {
+    color: var(--fg-dim); font-size: 12px;
+    font-family: var(--sans);
+  }
+
+  /* Cases pane */
+  .cases-pane .list {
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .case-row {
+    padding: 10px 18px 11px;
+    border-bottom: 1px solid var(--line);
+    cursor: default;
+    transition: background .1s ease;
+    position: relative;
+  }
+  .case-row:last-child { border-bottom: 0; }
+  .case-row:hover { background: var(--bg-2); }
   .case-row .meta {
-    display: flex; gap: 6px; font-size: 10px; color: var(--muted); margin-bottom: 4px;
-    text-transform: uppercase; letter-spacing: 0.08em;
+    display: flex; gap: 6px; margin-bottom: 6px;
+    font: 500 10.5px/1 var(--sans);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--fg-dim);
+    align-items: center;
   }
   .case-row .meta .tag {
-    background: var(--accent-weak); color: var(--accent-dim);
-    padding: 1px 7px; border-radius: 0; border: 1px solid var(--muted-2);
     font-family: var(--mono);
+    background: var(--bg-3);
+    color: var(--fg-mut);
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .case-row .meta .tag:first-child {
+    background: transparent; color: var(--fg-dim); padding-left: 0;
   }
   .case-row .input {
-    font-size: 12px; color: var(--text);
+    font-size: 13px; color: var(--fg);
+    line-height: 1.45;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     font-family: var(--mono);
   }
 
+  /* Results pane */
   .results-pane { display: flex; flex-direction: column; }
   .results-pane .summary {
-    display: grid; grid-template-columns: repeat(7, 1fr);
-    gap: 1px; background: var(--border);
-    border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(8, 1fr);
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-1);
   }
   .results-pane .summary .cell {
-    background: var(--panel); padding: 12px 10px; text-align: center;
+    padding: 14px 12px 12px;
+    text-align: left;
     position: relative;
-    transition: background .1s;
+    transition: background .12s ease;
+    border-right: 1px solid var(--line);
   }
-  .results-pane .summary .cell:hover { background: var(--panel-2); }
+  .results-pane .summary .cell:last-child { border-right: 0; }
   .results-pane .summary .cell .n {
-    font-size: 22px; font-weight: 700;
+    font: 600 22px/1 var(--sans);
     font-variant-numeric: tabular-nums;
-    font-family: var(--mono);
-    line-height: 1.1;
-    color: var(--text-hi);
+    letter-spacing: -0.02em;
+    color: var(--fg-hi);
   }
+  .results-pane .summary .cell .n.dim { color: var(--fg-faint); }
   .results-pane .summary .cell .k {
-    font-size: 9px; text-transform: uppercase; letter-spacing: .18em;
-    color: var(--muted); margin-top: 4px;
-    font-family: var(--mono);
+    margin-top: 6px;
+    font: 500 10.5px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-dim);
   }
-  .results-pane .summary .cell.win  .n { color: var(--win);  text-shadow: 0 0 6px rgba(57,255,20,0.45); }
-  .results-pane .summary .cell.loss .n { color: var(--loss); text-shadow: 0 0 6px rgba(255,56,96,0.45); }
-  .results-pane .summary .cell.tie  .n { color: var(--tie);  text-shadow: 0 0 6px rgba(255,176,0,0.35); }
-  .results-pane .summary .cell.err  .n { color: var(--err);  text-shadow: 0 0 6px rgba(255,56,96,0.45); }
+  .results-pane .summary .cell.win  .n { color: var(--win); }
+  .results-pane .summary .cell.loss .n { color: var(--loss); }
+  .results-pane .summary .cell.tie  .n { color: var(--tie); }
+  .results-pane .summary .cell.err  .n { color: var(--err); }
 
-  .grid-wrap { flex: 1; overflow: auto; }
+  .grid-wrap { flex: 1; overflow: auto; background: var(--bg-1); }
   table.grid {
-    width: 100%; border-collapse: collapse; font-size: 12px;
-    font-family: var(--mono);
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    font-family: var(--sans);
   }
   table.grid th, table.grid td {
-    border-bottom: 1px solid var(--border); padding: 8px 12px; text-align: left;
+    padding: 11px 14px; text-align: left;
     vertical-align: top;
+    border-bottom: 1px solid var(--line);
   }
   table.grid th {
-    position: sticky; top: 0; background: var(--panel-2);
-    font-weight: 600; color: var(--muted); text-transform: uppercase;
-    font-size: 10px; letter-spacing: .18em;
-    border-bottom: 1px solid var(--border-hi);
+    position: sticky; top: 0;
+    background: var(--bg-1);
+    font: 600 10.5px/1 var(--sans);
+    color: var(--fg-dim);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding-top: 10px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-hi);
+    z-index: 1;
   }
   table.grid td.idx {
-    color: var(--accent-dim); font-family: var(--mono); width: 40px;
-    font-weight: 600;
+    color: var(--fg-mut);
+    font-family: var(--mono);
+    width: 60px;
+    font-weight: 500;
+    font-size: 12px;
   }
-  table.grid td.model { font-family: var(--mono); color: var(--muted); width: 140px; }
+  table.grid td.model {
+    font-family: var(--mono);
+    color: var(--fg-mut);
+    width: 180px;
+    font-size: 12px;
+  }
   table.grid td.input {
-    max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    color: var(--text);
+    max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--fg);
+    font-family: var(--mono); font-size: 12.5px;
   }
+  /* Verdict "pill" — small rounded rect with muted tint. Reads at a glance
+     without screaming. */
   table.grid td.verdict {
-    width: 80px; font-weight: 700; font-family: var(--mono);
-    text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px;
+    width: 90px;
   }
-  table.grid td.verdict.win  { color: var(--win);  text-shadow: 0 0 4px rgba(57,255,20,0.4); }
-  table.grid td.verdict.loss { color: var(--loss); }
-  table.grid td.verdict.tie  { color: var(--tie); }
-  table.grid td.verdict.err  { color: var(--err); }
-  table.grid td.reason { color: var(--muted); font-size: 11px; line-height: 1.5; }
-  table.grid tr.header-row { cursor: pointer; transition: background .08s; }
-  table.grid tr.header-row:hover { background: var(--accent-weak); }
-  table.grid tr.header-row:hover td.idx { color: var(--accent); text-shadow: 0 0 4px rgba(57,255,20,0.5); }
+  table.grid td.verdict::before {
+    content: attr(data-label);
+    display: inline-block;
+    padding: 3px 9px;
+    font: 600 10.5px/1.2 var(--sans);
+    letter-spacing: 0.04em;
+    border-radius: 999px;
+    border: 1px solid transparent;
+  }
+  table.grid td.verdict.win   { color: var(--win); }
+  table.grid td.verdict.win::before   { background: var(--win-soft);  color: var(--win);   border-color: rgba(127,182,133,0.25); }
+  table.grid td.verdict.loss::before  { background: var(--loss-soft); color: var(--loss);  border-color: rgba(217,108,108,0.25); }
+  table.grid td.verdict.tie::before   { background: var(--tie-soft);  color: var(--tie);   border-color: rgba(212,160,86,0.25); }
+  table.grid td.verdict.err::before   { background: var(--err-soft);  color: var(--err);   border-color: rgba(217,108,108,0.25); }
+
+  table.grid td.reason {
+    color: var(--fg-mut); font-size: 12.5px; line-height: 1.5;
+    font-family: var(--sans);
+  }
+  table.grid tr.header-row {
+    cursor: pointer;
+    transition: background .1s ease;
+  }
+  table.grid tr.header-row:hover { background: var(--bg-2); }
+  table.grid tr.header-row:hover td.idx { color: var(--fg); }
   table.grid tr.detail-row td {
-    padding: 0; background: var(--panel-2);
-    border-bottom: 1px solid var(--border);
-    border-left: 2px solid var(--accent-dim);
+    padding: 0;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    border-left: 2px solid var(--accent);
   }
+  /* Detail block — expanded state for a cell. */
   .detail-verdict {
-    padding: 12px 16px; background: var(--panel-2);
-    border-bottom: 1px solid var(--border);
-    display: flex; flex-direction: column; gap: 8px; font-size: 12px;
+    padding: 16px 20px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 12px;
   }
   .detail-verdict .headline {
     display: flex; align-items: center; gap: 10px;
-    font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .14em;
-    color: var(--muted);
+    font: 500 12px/1.2 var(--sans);
+    color: var(--fg-mut);
   }
   .detail-verdict .headline .pill {
-    padding: 3px 10px; border-radius: 0; font-weight: 700;
-    background: var(--panel-3); border: 1px solid var(--border);
-    font-family: var(--mono); letter-spacing: 0.1em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font: 600 10.5px/1.2 var(--sans);
+    letter-spacing: 0.04em;
+    border: 1px solid transparent;
   }
-  .detail-verdict.winner-a .pill   { color: var(--loss); border-color: var(--loss); background: rgba(255,56,96,0.08); }
-  .detail-verdict.winner-b .pill   { color: var(--win);  border-color: var(--win);  background: var(--accent-weak); text-shadow: 0 0 4px rgba(57,255,20,0.4); }
-  .detail-verdict.winner-tie .pill { color: var(--tie);  border-color: var(--tie);  background: rgba(255,176,0,0.08); }
-  .detail-verdict.err .pill        { color: var(--err);  border-color: var(--err);  background: rgba(255,56,96,0.08); }
+  .detail-verdict.winner-a .pill   { color: var(--loss); background: var(--loss-soft); border-color: rgba(217,108,108,0.25); }
+  .detail-verdict.winner-b .pill   { color: var(--win);  background: var(--win-soft);  border-color: rgba(127,182,133,0.25); }
+  .detail-verdict.winner-tie .pill { color: var(--tie);  background: var(--tie-soft);  border-color: rgba(212,160,86,0.25); }
+  .detail-verdict.err .pill        { color: var(--err);  background: var(--err-soft);  border-color: rgba(217,108,108,0.25); }
+
   .detail-verdict .reason {
-    color: var(--text); font-size: 12px; line-height: 1.55;
-    padding: 4px 0; white-space: pre-wrap; word-break: break-word;
-    font-family: var(--mono);
-    padding-left: 10px; border-left: 2px solid var(--border);
+    color: var(--fg); font-size: 13px; line-height: 1.6;
+    padding: 10px 14px;
+    white-space: pre-wrap; word-break: break-word;
+    font-family: var(--sans);
+    background: var(--bg-2);
+    border-left: 2px solid var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   }
   .detail-verdict .expected {
-    font-size: 11px; color: var(--muted); display: flex; gap: 8px; align-items: baseline;
+    font-size: 12px; color: var(--fg-mut);
+    display: flex; gap: 10px; align-items: baseline;
   }
   .detail-verdict .expected .k {
-    font-family: var(--mono); text-transform: uppercase; letter-spacing: .14em; font-size: 9px;
-    color: var(--muted-2);
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-dim);
+    flex-shrink: 0;
   }
   .detail-verdict .expected .v {
-    color: var(--text); font-family: var(--mono); font-size: 11px;
+    color: var(--fg); font-family: var(--mono); font-size: 12px;
     white-space: pre-wrap; word-break: break-word;
   }
-  /* Override widget — three buttons + reason field + undo. Terminal grammar,
-     same phosphor palette, sharp edges. This is the seed corpus for v2.3
-     calibration, surfaced so users can disagree without leaving the UI. */
+
+  /* Override widget — refined pill-buttons. Still reads as power-user
+     territory; still fast to click. */
   .override-row {
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
-    padding: 8px 0 2px 0; border-top: 1px dashed var(--border);
-    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+    margin-top: 4px;
   }
   .override-row .label {
-    font-family: var(--mono); font-size: 9px; color: var(--muted-2);
-    text-transform: uppercase; letter-spacing: .14em;
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-dim);
+    margin-right: 2px;
   }
   .override-row button.v-btn {
-    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
-    padding: 4px 10px; background: var(--panel-3); color: var(--muted);
-    border: 1px solid var(--border); border-radius: 0; cursor: pointer;
-    text-transform: uppercase; min-width: 38px;
+    font: 500 12px/1 var(--mono);
+    padding: 6px 10px;
+    background: var(--bg-2); color: var(--fg-mut);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    min-width: 36px;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
   }
-  .override-row button.v-btn:hover { color: var(--text-hi); border-color: var(--border-hi); }
+  .override-row button.v-btn:hover {
+    background: var(--bg-3); color: var(--fg-hi); border-color: var(--line-hi);
+  }
   .override-row button.v-btn.active {
-    color: var(--accent); border-color: var(--accent);
-    background: var(--accent-weak); text-shadow: 0 0 4px rgba(57,255,20,0.4);
+    background: var(--accent-soft); color: var(--accent-hi);
+    border-color: var(--accent-line);
   }
-  .override-row button.v-btn.active[data-v="a"] { color: var(--loss); border-color: var(--loss); background: rgba(255,56,96,0.1); text-shadow: 0 0 4px rgba(255,56,96,0.4); }
-  .override-row button.v-btn.active[data-v="tie"] { color: var(--tie); border-color: var(--tie); background: rgba(255,176,0,0.1); text-shadow: 0 0 4px rgba(255,176,0,0.4); }
+  .override-row button.v-btn.active[data-v="a"] {
+    background: var(--loss-soft); color: var(--loss); border-color: rgba(217,108,108,0.35);
+  }
+  .override-row button.v-btn.active[data-v="b"] {
+    background: var(--win-soft); color: var(--win); border-color: rgba(127,182,133,0.35);
+  }
+  .override-row button.v-btn.active[data-v="tie"] {
+    background: var(--tie-soft); color: var(--tie); border-color: var(--accent-line);
+  }
   .override-row input.reason-in {
-    flex: 1; min-width: 160px;
-    font-family: var(--mono); font-size: 11px;
-    background: var(--bg); color: var(--text);
-    border: 1px solid var(--border); border-radius: 0;
-    padding: 5px 8px;
+    flex: 1; min-width: 180px;
+    font-family: var(--sans); font-size: 12.5px;
+    background: var(--bg-2); color: var(--fg-hi);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px; height: 30px;
+    transition: border-color .12s ease;
   }
-  .override-row input.reason-in:focus { border-color: var(--accent-dim); outline: none; }
+  .override-row input.reason-in::placeholder { color: var(--fg-dim); }
+  .override-row input.reason-in:focus {
+    border-color: var(--accent-line); outline: none;
+    background: var(--bg-2);
+  }
   .override-row button.undo-btn {
-    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
-    padding: 4px 8px; background: transparent; color: var(--muted);
-    border: 1px solid var(--border); border-radius: 0; cursor: pointer;
-    text-transform: uppercase;
+    font: 500 12px/1 var(--sans);
+    padding: 6px 10px; background: transparent; color: var(--fg-mut);
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
   }
-  .override-row button.undo-btn:hover { color: var(--text-hi); border-color: var(--border-hi); }
+  .override-row button.undo-btn:hover {
+    background: var(--bg-2); color: var(--fg); border-color: var(--line-hi);
+  }
   .override-row .ovr-status {
-    font-family: var(--mono); font-size: 10px; color: var(--muted-2);
+    font: 500 11.5px/1.2 var(--sans);
+    color: var(--fg-dim);
   }
-  .override-row .ovr-status.on { color: var(--accent); text-shadow: 0 0 3px rgba(57,255,20,0.3); }
-  /* Row-level ✎ glyph — renders on the idx column when a cell has an active override. */
+  .override-row .ovr-status.on { color: var(--accent); }
+  /* Row-level pencil glyph — renders on the idx column when a cell has an
+     active override. Small dot, not a screaming badge. */
   table.grid tr.header-row td.idx .ovr-glyph {
-    color: var(--accent); margin-left: 4px;
-    text-shadow: 0 0 4px rgba(57,255,20,0.4);
+    color: var(--accent); margin-left: 6px;
+    font-size: 11px;
   }
+
   .detail-box {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
-    background: var(--border);
+    display: grid; grid-template-columns: 1fr 1fr;
+    background: var(--bg-1);
+    border-top: 1px solid var(--line);
   }
   .detail-side {
-    padding: 12px 14px; background: var(--panel);
-    display: flex; flex-direction: column; gap: 8px;
+    padding: 14px 18px;
+    background: var(--bg-1);
+    display: flex; flex-direction: column; gap: 10px;
+    border-right: 1px solid var(--line);
   }
+  .detail-side:last-child { border-right: 0; }
   .detail-side .side-title {
-    font-size: 10px; text-transform: uppercase; letter-spacing: .18em; color: var(--muted);
-    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-weight: 600;
+    display: flex; align-items: center; gap: 10px;
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-mut);
   }
-  .detail-side .side-title::before { content: "▎"; color: var(--accent-dim); }
   .detail-side .side-title .model-tag {
-    font-family: var(--mono); color: var(--accent); text-transform: none; letter-spacing: 0;
-    background: var(--accent-weak); padding: 2px 7px; border-radius: 0;
-    font-size: 10px; border: 1px solid var(--muted-2);
+    font-family: var(--mono);
+    background: var(--bg-3); color: var(--fg);
+    padding: 3px 8px; border-radius: 3px;
+    font-size: 10.5px; letter-spacing: 0; text-transform: none;
+    font-weight: 500;
+    border: 1px solid var(--line);
   }
   .detail-side pre {
     margin: 0; white-space: pre-wrap; word-break: break-word;
-    font-family: var(--mono); font-size: 12px; color: var(--text);
-    max-height: 220px; overflow: auto;
-    background: var(--panel-2); padding: 10px 12px;
-    border: 1px solid var(--border); border-left: 2px solid var(--accent-dim);
-    line-height: 1.55;
+    font-family: var(--mono); font-size: 12.5px; color: var(--fg);
+    max-height: 260px; overflow: auto;
+    background: var(--bg-2);
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    line-height: 1.6;
   }
   .empty {
-    padding: 40px 16px; color: var(--muted); text-align: center;
-    font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+    padding: 44px 20px;
+    color: var(--fg-dim);
+    text-align: center;
+    font: 500 13px/1.5 var(--sans);
   }
-  .empty::before { content: "// "; color: var(--muted-2); }
 
+  /* Idle state — a calm, centered panel inviting the first run. Replaces the
+     ASCII banner with a single focus: a cell-shaped placeholder and one CTA.
+     Feels like the empty state in a well-designed SaaS product, not like a
+     BBS login screen. */
   .idle-banner {
-    padding: 34px 16px 42px; text-align: center;
-    font-family: var(--mono); color: var(--muted-2);
-    font-size: 10px; line-height: 1.55; letter-spacing: 0.04em;
+    padding: 64px 24px;
+    text-align: center;
+    color: var(--fg-mut);
     user-select: none;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
   }
-  .idle-banner pre {
-    margin: 0 auto; display: inline-block; text-align: left;
-    color: #1f5a18; font-size: 10px; line-height: 1.0;
-    letter-spacing: 0; font-family: ui-monospace, "JetBrains Mono", "Fira Code", Menlo, monospace;
-    white-space: pre;
-    text-shadow: 0 0 8px rgba(57,255,20,0.15);
+  .idle-banner .mark {
+    width: 48px; height: 48px;
+    border-radius: 10px;
+    background: var(--bg-2);
+    border: 1px solid var(--line-hi);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--accent);
+    box-shadow: var(--shadow-1);
+    position: relative;
+    overflow: hidden;
   }
-  .idle-banner .sub-hint {
-    margin-top: 10px; color: var(--muted-2); font-size: 10px;
-    letter-spacing: 0.08em; font-family: var(--mono);
+  .idle-banner .mark::before {
+    content: ""; position: absolute; inset: -1px;
+    background: radial-gradient(circle at 30% 30%, rgba(212,160,86,0.25), transparent 60%);
+  }
+  .idle-banner .mark svg { position: relative; z-index: 1; }
+  .idle-banner h3 {
+    margin: 0;
+    font: 600 16px/1.4 var(--sans);
+    color: var(--fg-hi);
+    letter-spacing: -0.015em;
+  }
+  .idle-banner .sub {
+    font: 400 13px/1.55 var(--sans);
+    color: var(--fg-mut);
+    max-width: 380px;
   }
   .idle-banner .hint {
-    margin-top: 16px; color: var(--muted); font-size: 11px;
-    letter-spacing: 0.14em; text-transform: uppercase;
+    font: 500 12.5px/1 var(--sans);
+    color: var(--fg-mut);
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 6px;
   }
-  .idle-banner .hint .k {
-    color: var(--accent); text-shadow: var(--glow);
-    padding: 1px 6px; border: 1px solid var(--border-hi);
-    background: var(--accent-weak);
-  }
-  .idle-banner .blink { animation: cursor-blink 1.1s steps(1) infinite; color: var(--accent); }
 
-  .dim { color: var(--muted-2); font-family: var(--mono); }
+  .dim { color: var(--fg-faint); }
 
+  /* Error banner — subtle, not frightening. */
   .err-banner {
-    padding: 10px 16px; background: rgba(255,56,96,0.08);
-    color: var(--loss); border-bottom: 1px solid var(--loss);
-    font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em;
+    padding: 10px 18px;
+    background: var(--err-soft);
+    color: var(--loss);
+    border-bottom: 1px solid rgba(217,108,108,0.3);
+    font: 500 13px/1.5 var(--sans);
     position: relative; z-index: 3;
+    display: flex; align-items: center; gap: 10px;
   }
   .err-banner::before {
-    content: "ERROR:: "; font-weight: 700; letter-spacing: 0.14em;
-    text-shadow: 0 0 4px rgba(255,56,96,0.5);
+    content: ""; flex-shrink: 0;
+    width: 14px; height: 14px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23d96c6c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>");
+    background-repeat: no-repeat; background-position: center;
   }
 
-  /* Runs drawer — slides in from the right when RUNS is clicked. */
+  /* Runs drawer — slides in from the right. */
   .runs-drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; width: 540px;
-    background: var(--panel); border-left: 2px solid var(--accent-dim);
+    position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 100vw;
+    background: var(--bg-1);
+    border-left: 1px solid var(--line);
     display: flex; flex-direction: column;
-    transform: translateX(100%); transition: transform .18s ease-out;
-    z-index: 40; box-shadow: -8px 0 32px rgba(0,0,0,.7), -1px 0 0 var(--accent-dim);
+    transform: translateX(100%);
+    transition: transform .22s cubic-bezier(.2, .8, .2, 1);
+    z-index: 40;
+    box-shadow: var(--shadow-drawer);
   }
   .runs-drawer.open { transform: translateX(0); }
   .runs-drawer .title {
-    padding: 10px 16px;
-    font-size: 12px; font-weight: 700; font-family: var(--mono);
-    letter-spacing: 0.2em; text-transform: uppercase;
-    color: var(--accent); text-shadow: var(--glow);
-    border-bottom: 1px solid var(--border);
-    background: var(--panel-2);
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-1);
     display: flex; align-items: center; gap: 10px;
+    min-height: 52px;
   }
-  .runs-drawer .title strong::before { content: "[ "; color: var(--border-hi); font-weight: 400; }
-  .runs-drawer .title strong::after  { content: " ]"; color: var(--border-hi); font-weight: 400; }
+  .runs-drawer .title strong {
+    font: 600 14px/1 var(--sans);
+    color: var(--fg-hi);
+    letter-spacing: -0.01em;
+  }
   .runs-drawer .title .spacer { flex: 1; }
   .runs-drawer .title button {
-    background: var(--panel-3); color: var(--text); border: 1px solid var(--border);
-    border-radius: 0; padding: 5px 11px;
-    font: 10px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+    background: transparent; color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 6px 12px; height: 30px;
+    font: 500 12.5px/1 var(--sans);
     cursor: pointer;
-    transition: all .08s;
+    transition: background .12s ease, border-color .12s ease, color .12s ease;
   }
-  .runs-drawer .title button:hover { color: var(--accent); border-color: var(--accent-dim); }
+  .runs-drawer .title button:hover {
+    background: var(--bg-2); color: var(--fg-hi); border-color: var(--line-hi);
+  }
   .runs-drawer .title button.primary {
-    border-color: var(--accent); color: var(--accent);
-    background: var(--accent-weak);
+    background: var(--accent); color: #1a1410;
+    border-color: transparent; font-weight: 600;
   }
-  .runs-drawer .title button.primary:hover { background: var(--accent); color: #000; box-shadow: 0 0 8px rgba(57,255,20,0.5); }
-  .runs-drawer .title button:disabled { opacity: .3; cursor: not-allowed; box-shadow: none; }
+  .runs-drawer .title button.primary:hover { background: var(--accent-hi); }
+  .runs-drawer .title button:disabled {
+    opacity: .45; cursor: not-allowed;
+    background: transparent; border-color: var(--line);
+    color: var(--fg-dim);
+  }
+  .runs-drawer .title button.primary:disabled {
+    background: var(--bg-3); color: var(--fg-faint);
+  }
 
-  .runs-drawer .body { flex: 1; overflow: auto; padding: 14px 16px; }
+  .runs-drawer .body { flex: 1; overflow: auto; padding: 16px 20px; }
   .runs-drawer .empty {
-    color: var(--muted); font-size: 11px; padding: 24px 0; text-align: center;
-    font-family: var(--mono); letter-spacing: 0.12em;
+    color: var(--fg-dim); padding: 32px 0;
+    text-align: center;
+    font: 500 13px/1.5 var(--sans);
   }
-  .runs-drawer .runs-list { display: flex; flex-direction: column; gap: 6px; }
+  .runs-drawer .runs-list {
+    display: flex; flex-direction: column; gap: 6px;
+  }
   .runs-drawer .run-row {
-    display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
-    padding: 9px 11px; border: 1px solid var(--border); border-radius: 0;
-    background: var(--panel-2); cursor: pointer; font-size: 12px;
-    transition: all .08s;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 12px;
+    align-items: center;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-2);
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
   }
   .runs-drawer .run-row:hover {
-    border-color: var(--accent-dim);
-    background: var(--accent-weak);
+    background: var(--bg-3);
+    border-color: var(--line-hi);
   }
   .runs-drawer .run-row.selected {
-    border-color: var(--accent);
-    background: var(--accent-weak);
-    box-shadow: inset 0 0 0 1px var(--accent-dim), 0 0 8px rgba(57,255,20,0.2);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
   }
   .runs-drawer .run-row input[type=checkbox] {
     appearance: none; -webkit-appearance: none;
-    width: 14px; height: 14px; margin: 0;
-    border: 1px solid var(--border-hi); background: var(--panel);
+    width: 16px; height: 16px; margin: 0;
+    border: 1px solid var(--line-hi);
+    background: var(--bg-1);
+    border-radius: 3px;
     position: relative; cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
   }
   .runs-drawer .run-row input[type=checkbox]:checked {
-    background: var(--accent-weak); border-color: var(--accent);
+    background: var(--accent); border-color: var(--accent);
   }
   .runs-drawer .run-row input[type=checkbox]:checked::after {
-    content: "×"; position: absolute; inset: -3px 0 0 0;
-    text-align: center; color: var(--accent); font-weight: 700; line-height: 14px;
-    text-shadow: var(--glow);
+    content: ""; position: absolute;
+    left: 4px; top: 1px; width: 5px; height: 9px;
+    border: solid #1a1410;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
   }
   .runs-drawer .run-row .rid {
-    font-family: var(--mono); font-size: 11px; color: var(--text-hi);
-    letter-spacing: 0.04em;
+    font-family: var(--mono); font-size: 12.5px;
+    color: var(--fg-hi);
+    font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .runs-drawer .run-row .meta {
-    color: var(--muted); font-family: var(--mono); font-size: 10px;
-    letter-spacing: 0.04em;
+    color: var(--fg-dim);
+    font: 500 11.5px/1.3 var(--sans);
+    margin-top: 3px;
   }
   .runs-drawer .run-row .status {
-    padding: 2px 8px; border-radius: 0;
-    font-size: 9px; text-transform: uppercase; letter-spacing: .18em;
-    font-family: var(--mono); font-weight: 600;
-    border: 1px solid currentColor;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font: 600 10.5px/1.2 var(--sans);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
   }
-  .runs-drawer .run-row .status.complete  { color: var(--accent); text-shadow: 0 0 4px rgba(57,255,20,0.4); }
-  .runs-drawer .run-row .status.running   { color: var(--tie); }
-  .runs-drawer .run-row .status.failed    { color: var(--loss); }
+  .runs-drawer .run-row .status.complete  { color: var(--win);  background: var(--win-soft);  border: 1px solid rgba(127,182,133,0.25); }
+  .runs-drawer .run-row .status.running   { color: var(--tie);  background: var(--tie-soft);  border: 1px solid var(--accent-line); }
+  .runs-drawer .run-row .status.failed    { color: var(--loss); background: var(--loss-soft); border: 1px solid rgba(217,108,108,0.25); }
   .runs-drawer .run-row .status.pending,
-  .runs-drawer .run-row .status.abandoned { color: var(--muted); border-color: var(--border); }
+  .runs-drawer .run-row .status.abandoned { color: var(--fg-mut); background: var(--bg-3); border: 1px solid var(--line); }
 
   .runs-drawer .run-detail {
-    margin-top: 16px; padding: 14px;
-    border: 1px solid var(--border); border-left: 2px solid var(--accent-dim);
-    background: var(--panel-2); font-size: 12px;
+    margin-top: 16px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-2);
   }
   .runs-drawer .run-detail h4 {
-    margin: 0 0 10px 0; font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: .2em; color: var(--accent);
-    font-family: var(--mono); text-shadow: var(--glow);
+    margin: 0 0 12px 0;
+    font: 600 13px/1 var(--sans);
+    letter-spacing: -0.01em;
+    color: var(--fg-hi);
+    font-family: var(--mono);
   }
-  .runs-drawer .run-detail h4::before { content: "▸ "; color: var(--accent-dim); }
   .runs-drawer .run-detail dl {
-    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0;
-    font-family: var(--mono); font-size: 11px;
+    display: grid; grid-template-columns: 100px 1fr;
+    gap: 6px 16px; margin: 0;
+    font-size: 12.5px;
   }
   .runs-drawer .run-detail dt {
-    color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px;
+    color: var(--fg-dim);
+    font: 500 11.5px/1.3 var(--sans);
+    letter-spacing: 0.02em; text-transform: uppercase;
   }
-  .runs-drawer .run-detail dd { margin: 0; color: var(--text); }
+  .runs-drawer .run-detail dd {
+    margin: 0; color: var(--fg);
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .runs-drawer .run-detail table.grid-table {
+    width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 12px;
+  }
+  .runs-drawer .run-detail table.grid-table th,
+  .runs-drawer .run-detail table.grid-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+  }
+  .runs-drawer .run-detail table.grid-table th {
+    font: 600 10.5px/1 var(--sans); color: var(--fg-dim);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    background: transparent;
+  }
+  .runs-drawer .run-detail table.grid-table td.mono,
+  .runs-drawer .run-detail table.grid-table td:first-child {
+    font-family: var(--mono); color: var(--fg-mut);
+  }
 
   .runs-drawer .diff-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;
   }
   .runs-drawer .diff-col {
-    border: 1px solid var(--border); border-radius: 0;
-    padding: 10px 12px; background: var(--panel-3);
-    border-top: 2px solid var(--accent-dim);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    background: var(--bg-1);
   }
   .runs-drawer .diff-col h5 {
-    margin: 0 0 8px 0; font-size: 10px; font-family: var(--mono); color: var(--accent);
-    text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700;
+    margin: 0 0 10px 0;
+    font: 500 12px/1 var(--mono);
+    color: var(--fg-hi);
+    letter-spacing: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
   .runs-drawer-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 35;
+    position: fixed; inset: 0;
+    background: rgba(10,12,14,0.55);
+    z-index: 35;
     display: none;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
-  .runs-drawer-backdrop.open { display: block; }
+  .runs-drawer-backdrop.open { display: block; animation: fade-in .2s ease; }
+  @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
 
-  @media (max-width: 768px) {
+  @media (max-width: 960px) {
     header {
-      flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px;
+      flex-wrap: wrap; gap: 8px 10px;
+      padding: 10px 14px; min-height: 0;
     }
-    header .sub { order: 10; flex-basis: 100%; font-size: 11px; }
-    main {
-      grid-template-columns: 1fr; grid-auto-rows: minmax(220px, auto);
-    }
-    section { border-right: none; border-bottom: 1px solid var(--border); }
+    header .sub { order: 10; flex-basis: 100%; max-width: none; }
+    header label.sel-group { flex: 1 1 200px; min-width: 160px; }
+    main { grid-template-columns: 1fr; grid-auto-rows: minmax(240px, auto); }
+    section { border-right: none; border-bottom: 1px solid var(--line); }
     section:last-child { border-bottom: none; }
     .results-pane .summary {
       grid-template-columns: repeat(4, 1fr);
     }
-    .results-pane .summary .cell:nth-child(n+5) {
-      border-top: 1px solid var(--border);
+    .results-pane .summary .cell {
+      border-bottom: 1px solid var(--line);
     }
-    .runs-drawer { width: 100%; max-width: 100%; }
+    .results-pane .summary .cell:nth-last-child(-n+4) {
+      border-bottom: 0;
+    }
+    .detail-box { grid-template-columns: 1fr; }
+    .detail-side { border-right: 0; border-bottom: 1px solid var(--line); }
+    .detail-side:last-child { border-bottom: 0; }
+    .runs-drawer { width: 100%; }
   }
 
   @media (pointer: coarse) {
-    header button, header label,
+    header button, header > label,
     .prompts-pane .tabs button,
     .prompts-pane .footer button,
-    .runs-drawer-header button,
-    .runs-drawer-row button {
-      min-height: 44px;
+    .runs-drawer .title button {
+      min-height: 40px;
     }
+  }
+
+  /* Reduce motion — honor the system preference. */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   }
 </style>
 </head>
 <body>
-  <a href="#prompts-pane" class="skip-link">skip to prompts</a>
+  <a href="#prompts-pane" class="skip-link">Skip to prompts</a>
   <header>
-    <h1>rubric</h1>
+    <h1>Rubric</h1>
     <span class="sub" id="config-path">—</span>
     <span class="spacer"></span>
-    <label class="sel-group" title="models the sweep will run — Cmd/Ctrl-click to multi-select">
-      <span class="k">models:</span>
+    <label class="sel-group" title="Models the sweep will run. Cmd or Ctrl-click to pick more than one.">
+      <span class="k">Models</span>
       <!-- Rendered as a multi-select when .secrets/available_models has entries,
            otherwise falls back to the free-text #models-input below. -->
       <select id="models-select" class="model-select" multiple size="1" style="display:none"></select>
       <input type="text" id="models-input" class="model-input" spellcheck="false" autocomplete="off" placeholder="provider/model, …">
     </label>
-    <label class="sel-group" title="judge model — the LLM that picks a verdict per cell">
-      <span class="k">judge:</span>
+    <label class="sel-group" title="Judge model — the LLM that picks a verdict per cell.">
+      <span class="k">Judge</span>
       <select id="judge-model-select" class="model-select" style="display:none"></select>
       <input type="text" id="judge-model-input" class="model-input" spellcheck="false" autocomplete="off" placeholder="provider/model">
     </label>
-    <label><input type="checkbox" id="mock-toggle"> mock mode</label>
-    <button id="runs-btn" aria-label="browse past runs from the registry" title="Browse past runs from the registry">runs.log</button>
-    <button id="run-btn" class="primary" aria-label="run evaluation">&gt; run</button>
+    <label class="mock" title="Run against deterministic mock provider + judge. No tokens spent."><input type="checkbox" id="mock-toggle"> Mock</label>
+    <button id="runs-btn" aria-label="Browse past runs from the registry" title="Browse past runs from the registry">Runs</button>
+    <button id="run-btn" class="primary" aria-label="Run evaluation">Run</button>
   </header>
 
   <div id="err" class="err-banner" role="alert" aria-live="assertive" style="display:none"></div>
@@ -769,56 +1045,56 @@ export const INDEX_HTML = `<!doctype html>
     <section class="prompts-pane" id="prompts-pane" role="region" aria-labelledby="prompts-pane-title">
       <h2 class="pane-title" id="prompts-pane-title">
         <span class="dot saved" id="prompt-dot" aria-hidden="true"></span>
-        <span id="prompts-title">prompts</span>
+        <span id="prompts-title">Prompts</span>
       </h2>
       <div class="tabs">
-        <button id="tab-baseline" class="active" data-which="baseline">baseline</button>
-        <button id="tab-candidate" data-which="candidate">candidate</button>
-        <button id="tab-judge" data-which="judge" title="judge criteria — the rubric text the judge model receives">judge</button>
+        <button id="tab-baseline" class="active" data-which="baseline">Baseline</button>
+        <button id="tab-candidate" data-which="candidate">Candidate</button>
+        <button id="tab-judge" data-which="judge" title="Judge criteria — the rubric text the judge model receives.">Judge</button>
       </div>
-      <textarea id="prompt-editor" spellcheck="false" aria-label="prompt editor"></textarea>
+      <textarea id="prompt-editor" spellcheck="false" aria-label="Prompt editor"></textarea>
       <div class="footer">
-        <button id="save-btn" aria-label="save prompt">:w (⌘S)</button>
-        <span class="hint" id="save-hint">editor is clean</span>
+        <button id="save-btn" aria-label="Save prompt">Save <kbd>⌘S</kbd></button>
+        <span class="hint" id="save-hint">No changes</span>
       </div>
     </section>
 
     <section class="cases-pane" role="region" aria-labelledby="cases-pane-title">
-      <h2 class="pane-title" id="cases-pane-title">cases <span id="case-count" style="color:var(--muted);margin-left:auto"></span></h2>
+      <h2 class="pane-title" id="cases-pane-title">Cases <span id="case-count" style="color:var(--fg-dim);margin-left:auto;font-weight:500;text-transform:none;letter-spacing:0"></span></h2>
       <div class="list" id="cases-list"></div>
     </section>
 
     <section class="results-pane" role="region" aria-labelledby="results-pane-title">
       <h2 class="pane-title" id="results-pane-title">
-        results
-        <span id="progress" style="color:var(--muted);margin-left:auto;font-family:var(--mono);font-size:11px"></span>
+        Results
+        <span id="progress" style="color:var(--fg-dim);margin-left:auto;font-family:var(--mono);font-size:12px;letter-spacing:0;text-transform:none;font-weight:500"></span>
       </h2>
       <div class="summary" id="summary">
-        <div class="cell win"><div class="n" id="sum-wins">0</div><div class="k">wins</div></div>
-        <div class="cell loss"><div class="n" id="sum-losses">0</div><div class="k">losses</div></div>
-        <div class="cell tie"><div class="n" id="sum-ties">0</div><div class="k">ties</div></div>
-        <div class="cell err"><div class="n" id="sum-errors">0</div><div class="k">errors</div></div>
-        <div class="cell"><div class="n dim" id="sum-rate">--</div><div class="k">win rate</div></div>
-        <div class="cell"><div class="n dim" id="sum-cost">--</div><div class="k">cost</div></div>
-        <div class="cell"><div class="n dim" id="sum-time">--</div><div class="k">wall sum</div></div>
-        <div class="cell"><div class="n dim" id="sum-overrides">0</div><div class="k">overrides</div></div>
+        <div class="cell win"><div class="n" id="sum-wins">0</div><div class="k">Wins</div></div>
+        <div class="cell loss"><div class="n" id="sum-losses">0</div><div class="k">Losses</div></div>
+        <div class="cell tie"><div class="n" id="sum-ties">0</div><div class="k">Ties</div></div>
+        <div class="cell err"><div class="n" id="sum-errors">0</div><div class="k">Errors</div></div>
+        <div class="cell"><div class="n dim" id="sum-rate">—</div><div class="k">Win rate</div></div>
+        <div class="cell"><div class="n dim" id="sum-cost">—</div><div class="k">Cost</div></div>
+        <div class="cell"><div class="n dim" id="sum-time">—</div><div class="k">Wall time</div></div>
+        <div class="cell"><div class="n dim" id="sum-overrides">0</div><div class="k">Overrides</div></div>
       </div>
       <div class="grid-wrap">
         <table class="grid">
           <thead>
-            <tr><th>#</th><th>model</th><th>input</th><th>winner</th><th>reason</th></tr>
+            <tr><th>#</th><th>Model</th><th>Input</th><th>Winner</th><th>Reason</th></tr>
           </thead>
           <tbody id="grid-body">
             <tr><td colspan="5">
               <div class="idle-banner">
-                <pre>  ██████  ██    ██ ██████  ██████  ██  ██████
-  ██   ██ ██    ██ ██   ██ ██   ██ ██ ██
-  ██████  ██    ██ ██████  ██████  ██ ██
-  ██   ██ ██    ██ ██   ██ ██   ██ ██ ██
-  ██   ██  ██████  ██████  ██   ██ ██  ██████
-</pre>
-                <div class="hint">awaiting input <span class="blink">█</span> &nbsp;press <span class="k">&gt; run</span> to populate grid</div>
-                <div class="sub-hint">// no runs yet &middot; prompts and cases are ready</div>
+                <div class="mark" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                  </svg>
+                </div>
+                <h3>No run yet</h3>
+                <div class="sub">Prompts and cases are loaded. Click <strong style="color:var(--fg-hi);font-weight:600">Run</strong> to sweep them through the judge.</div>
+                <div class="hint">Shortcut <kbd>R</kbd> &nbsp;or&nbsp; <kbd>⌘⏎</kbd></div>
               </div>
             </td></tr>
           </tbody>
@@ -830,13 +1106,13 @@ export const INDEX_HTML = `<!doctype html>
   <div id="runs-backdrop" class="runs-drawer-backdrop"></div>
   <aside id="runs-drawer" class="runs-drawer" aria-hidden="true">
     <div class="title">
-      <strong>runs.log</strong>
+      <strong>Run history</strong>
       <span class="spacer"></span>
-      <button id="runs-diff-btn" class="primary" disabled title="Select two runs to compare">diff &lt;2&gt;</button>
-      <button id="runs-close-btn">[esc]</button>
+      <button id="runs-diff-btn" class="primary" disabled title="Select two runs to compare">Compare</button>
+      <button id="runs-close-btn" title="Close (Esc)">Close</button>
     </div>
     <div class="body" id="runs-body">
-      <div class="empty">loading...</div>
+      <div class="empty">Loading…</div>
     </div>
   </aside>
 
@@ -955,11 +1231,11 @@ export const INDEX_HTML = `<!doctype html>
     if (status) {
       if (active) {
         status.classList.add('on');
-        const v = active.verdict === 'a' ? 'A' : active.verdict === 'b' ? 'B' : 'TIE';
-        status.textContent = '✎ you → ' + v + (active.reason ? ' · "' + active.reason + '"' : '');
+        const v = active.verdict === 'a' ? 'Baseline' : active.verdict === 'b' ? 'Candidate' : 'Tie';
+        status.textContent = 'You → ' + v + (active.reason ? ' · "' + active.reason + '"' : '');
       } else {
         status.classList.remove('on');
-        status.textContent = 'no override';
+        status.textContent = 'No override';
       }
     }
     const undoBtn = row.querySelector('button.undo-btn');
@@ -975,13 +1251,13 @@ export const INDEX_HTML = `<!doctype html>
 
     const label = document.createElement('span');
     label.className = 'label';
-    label.textContent = 'disagree:';
+    label.textContent = 'Your verdict';
     row.appendChild(label);
 
     const verdicts = [
-      { v: 'a', text: '[a]' },
-      { v: 'b', text: '[b]' },
-      { v: 'tie', text: '[=]' },
+      { v: 'a', text: 'Baseline' },
+      { v: 'b', text: 'Candidate' },
+      { v: 'tie', text: 'Tie' },
     ];
     for (const opt of verdicts) {
       const btn = document.createElement('button');
@@ -1003,14 +1279,14 @@ export const INDEX_HTML = `<!doctype html>
     const reasonIn = document.createElement('input');
     reasonIn.type = 'text';
     reasonIn.className = 'reason-in';
-    reasonIn.placeholder = 'reason (optional)';
+    reasonIn.placeholder = 'Why? (optional)';
     reasonIn.maxLength = 400;
     row.appendChild(reasonIn);
 
     const undoBtn = document.createElement('button');
     undoBtn.type = 'button';
     undoBtn.className = 'undo-btn';
-    undoBtn.textContent = 'undo';
+    undoBtn.textContent = 'Clear';
     undoBtn.style.display = 'none';
     undoBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -1020,7 +1296,7 @@ export const INDEX_HTML = `<!doctype html>
 
     const status = document.createElement('span');
     status.className = 'ovr-status';
-    status.textContent = 'no override';
+    status.textContent = 'No override';
     row.appendChild(status);
 
     return row;
@@ -1035,7 +1311,7 @@ export const INDEX_HTML = `<!doctype html>
   function setDirty(d) {
     state.dirty = d;
     $('prompt-dot').className = 'dot ' + (d ? 'dirty' : 'saved');
-    $('save-hint').textContent = d ? 'unsaved changes' : 'editor is clean';
+    $('save-hint').textContent = d ? 'Unsaved changes' : 'No changes';
   }
 
   function activateTab(which) {
@@ -1119,10 +1395,12 @@ export const INDEX_HTML = `<!doctype html>
   }
 
   function verdictLabel(j) {
-    if (j.error) return { cls: 'err', label: 'ERR' };
-    if (j.winner === 'b') return { cls: 'win', label: 'CAND' };
-    if (j.winner === 'a') return { cls: 'loss', label: 'BASE' };
-    return { cls: 'tie', label: 'TIE' };
+    // Shorter labels now that each verdict renders as a pill — 3-4 chars
+    // reads cleanly at the small pill size.
+    if (j.error) return { cls: 'err', label: 'Error' };
+    if (j.winner === 'b') return { cls: 'win', label: 'Cand' };
+    if (j.winner === 'a') return { cls: 'loss', label: 'Base' };
+    return { cls: 'tie', label: 'Tie' };
   }
 
   const counts = { wins: 0, losses: 0, ties: 0, errors: 0 };
@@ -1145,7 +1423,7 @@ export const INDEX_HTML = `<!doctype html>
       '<td class="idx">▸ ' + cell.caseIndex + '</td>' +
       '<td class="model">' + escapeHtml(cell.model) + '</td>' +
       '<td class="input" title="' + escapeHtml(caseInput) + '">' + escapeHtml(caseInput) + '</td>' +
-      '<td class="verdict ' + v.cls + '">' + v.label + '</td>' +
+      '<td class="verdict ' + v.cls + '" data-label="' + escapeHtml(v.label) + '"></td>' +
       '<td class="reason">' + escapeHtml(reason) + '</td>';
     const detailRow = document.createElement('tr');
     detailRow.className = 'detail-row';
@@ -1210,8 +1488,8 @@ export const INDEX_HTML = `<!doctype html>
     const box = document.createElement('div');
     box.className = 'detail-box';
 
-    box.appendChild(detailSide('A', 'A (baseline)', cell.outputA));
-    box.appendChild(detailSide('B', 'B (candidate)', cell.outputB));
+    box.appendChild(detailSide('A', 'Baseline', cell.outputA));
+    box.appendChild(detailSide('B', 'Candidate', cell.outputB));
     td.appendChild(box);
     return { td, overrideRow };
   }
@@ -1224,19 +1502,19 @@ export const INDEX_HTML = `<!doctype html>
     let pillLabel, headline;
     if (j.error) {
       block.classList.add('err');
-      pillLabel = 'ERROR';
+      pillLabel = 'Error';
       headline = 'Judge errored before returning a verdict';
     } else if (j.winner === 'b') {
       block.classList.add('winner-b');
-      pillLabel = 'CAND WINS';
-      headline = 'Why this side won';
+      pillLabel = 'Candidate';
+      headline = 'Why the candidate won';
     } else if (j.winner === 'a') {
       block.classList.add('winner-a');
-      pillLabel = 'BASE WINS';
+      pillLabel = 'Baseline';
       headline = 'Why the candidate lost';
     } else {
       block.classList.add('winner-tie');
-      pillLabel = 'TIE';
+      pillLabel = 'Tie';
       headline = 'Judge called this a tie';
     }
 
@@ -1277,7 +1555,9 @@ export const INDEX_HTML = `<!doctype html>
 
     const title = document.createElement('div');
     title.className = 'side-title';
-    title.innerHTML = side + ' <span class="model-tag">' + escapeHtml(modelName) + '</span>';
+    // The side arg (A or B) is kept as a tiny prefix because the judge's
+    // verdict uses those letters; users scanning see which side won at once.
+    title.innerHTML = side + ' · <span class="model-tag">' + escapeHtml(modelName) + '</span>';
     wrap.appendChild(title);
 
     const pre = document.createElement('pre');
@@ -1495,7 +1775,7 @@ export const INDEX_HTML = `<!doctype html>
     if (state.running) return;
     state.running = true;
     $('run-btn').disabled = true;
-    $('run-btn').textContent = '> running...';
+    $('run-btn').textContent = 'Running…';
     setError(null);
     resetGrid();
     counts.wins = 0; counts.losses = 0; counts.ties = 0; counts.errors = 0;
@@ -1540,7 +1820,7 @@ export const INDEX_HTML = `<!doctype html>
     } finally {
       state.running = false;
       $('run-btn').disabled = false;
-      $('run-btn').textContent = '> run';
+      $('run-btn').textContent = 'Run';
     }
   }
 
@@ -1579,6 +1859,15 @@ export const INDEX_HTML = `<!doctype html>
   });
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); savePrompt(); }
+    // Run shortcuts: R or ⌘/Ctrl+Enter. Skip when a text field owns the
+    // keystroke so users can still type the letter "r" inside the editor.
+    const t = e.target;
+    const typing = t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT');
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault(); runSweep();
+    } else if (!typing && e.key === 'r' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault(); runSweep();
+    }
   });
   $('run-btn').addEventListener('click', runSweep);
 
@@ -1649,15 +1938,16 @@ export const INDEX_HTML = `<!doctype html>
     if (runsState.runs.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = 'No runs in registry yet. Run rubric run to create one.';
+      empty.textContent = 'No runs in registry yet. Click Run to create one.';
       body.appendChild(empty);
       return;
     }
     const hint = document.createElement('div');
     hint.className = 'empty';
     hint.style.textAlign = 'left';
-    hint.style.padding = '0 0 8px 0';
-    hint.textContent = 'Click a row to inspect. Check two rows and "Diff 2" to compare.';
+    hint.style.padding = '0 2px 10px';
+    hint.style.fontSize = '12.5px';
+    hint.textContent = 'Click a row to inspect. Check two rows, then Compare.';
     body.appendChild(hint);
 
     const list = document.createElement('div');
@@ -1774,13 +2064,13 @@ export const INDEX_HTML = `<!doctype html>
 
     if (cells && cells.length > 0) {
       const h2 = document.createElement('h4');
-      h2.style.marginTop = '10px';
-      h2.textContent = 'cells (' + cells.length + ')';
+      h2.style.marginTop = '14px';
+      h2.textContent = 'Cells (' + cells.length + ')';
       container.appendChild(h2);
       const table = document.createElement('table');
       table.className = 'grid-table';
       table.innerHTML =
-        '<thead><tr><th>#</th><th>model</th><th>winner</th><th>reason</th></tr></thead>';
+        '<thead><tr><th>#</th><th>Model</th><th>Winner</th><th>Reason</th></tr></thead>';
       const tbody = document.createElement('tbody');
       for (const c of cells.slice(0, 20)) {
         const tr = document.createElement('tr');
@@ -1833,7 +2123,7 @@ export const INDEX_HTML = `<!doctype html>
   function renderRunDiff(container, A, B) {
     container.innerHTML = '';
     const h = document.createElement('h4');
-    h.textContent = 'diff · ' + A.manifest.id.slice(-8) + ' vs ' + B.manifest.id.slice(-8);
+    h.textContent = 'Comparison · ' + A.manifest.id.slice(-8) + ' vs ' + B.manifest.id.slice(-8);
     container.appendChild(h);
 
     const grid = document.createElement('div');
