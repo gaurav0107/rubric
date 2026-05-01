@@ -32,12 +32,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
+      # Installs the release binary (no npm). Same path used by the PR-comment
+      # action, so the two workflows stay in lockstep.
       - name: Install rubric
-        run: npm install --global rubric
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=$(gh release list --repo rubric/rubric --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null \
+            || gh api repos/rubric/rubric/releases/latest --jq .tag_name)
+          ASSET="rubric-linux-x64"
+          BIN="${RUNNER_TEMP}/rubric"
+          gh release download "${TAG}" --repo rubric/rubric --pattern "${ASSET}" --output "${BIN}"
+          chmod +x "${BIN}"
+          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+          echo "rubric: installed ${TAG}"
 
       - name: Run eval (baseline frozen)
         id: run
@@ -58,6 +68,17 @@ jobs:
             --title "drift check — $(date -u +%Y-%m-%d)" \
             > drift-body.md
 
+      # The drift poster lives in packages/action/src/bin.ts. We check out the
+      # rubric repo into a side path to invoke it with tsx, rather than bundling
+      # a second binary. Same pattern as the PR-comment action.
+      - name: Check out rubric for the drift poster
+        if: steps.run.outputs.exit == '2'
+        uses: actions/checkout@v4
+        with:
+          repository: rubric/rubric
+          path: .rubric-tools
+          ref: ${{ env.RUBRIC_TOOLS_REF || 'main' }}
+
       - name: Upsert drift issue
         if: steps.run.outputs.exit == '2'
         env:
@@ -65,7 +86,7 @@ jobs:
           RUBRIC_DRIFT_MARKER: rubric-bot:drift-issue
         run: |
           npx --yes tsx@4 \
-            node_modules/rubric-action/src/bin.ts \
+            .rubric-tools/packages/action/src/bin.ts \
             --drift \
             --title "rubric drift — candidate regressed on scheduled check" \
             --labels "drift,rubric" \

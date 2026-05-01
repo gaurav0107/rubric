@@ -11,9 +11,11 @@ Prompt changes ship with almost no safety net. "Looks better" usually means "I t
 ## Quickstart
 
 ```bash
-npm install -g rubric    # not published yet — use `npm link` from packages/cli for now
-# or download the single-file binary for your platform from a GitHub release:
-#   rubric-{linux,darwin,windows}-{x64,arm64}
+# Download the single-file binary for your platform from the latest release:
+#   https://github.com/rubric/rubric/releases/latest
+# Binaries available: rubric-{linux,darwin,windows}-{x64,arm64}
+# One-liner for macOS/Linux (pulls linux-x64 or darwin-arm64 automatically):
+#   curl -L https://github.com/rubric/rubric/releases/latest/download/rubric-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') -o rubric && chmod +x rubric && sudo mv rubric /usr/local/bin/
 
 rubric init              # scaffolds rubric.config.json, prompts/, data/cases.jsonl
 # edit prompts/baseline.md and prompts/candidate.md
@@ -69,9 +71,12 @@ jobs:
       - uses: rubric/rubric@v2
         with:
           fail-on-regress: true
+          # version: v2.2.1    # pin a specific release; defaults to "latest"
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
+
+The Action downloads the prebuilt binary from the matching GitHub release — no `npm install`, ~15s install time. `version: "latest"` (the default) resolves to the most recent release; pin to `v2.2.1` (or later) to lock.
 
 Comments are idempotent — subsequent runs update the same comment via a hidden HTML marker instead of stacking.
 

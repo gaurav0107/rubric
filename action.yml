@@ -30,18 +30,57 @@ inputs:
     description: 'Hidden HTML marker used to upsert the same comment across runs.'
     required: false
     default: 'rubric-bot:pr-comment'
+  version:
+    description: 'rubric release tag to install (e.g. "v2.2.1"). Defaults to "latest", which resolves the most recent published release.'
+    required: false
+    default: 'latest'
 
 runs:
   using: 'composite'
   steps:
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
+    # Download the prebuilt single-file binary from the matching GitHub release.
+    # Zero npm dependency — we never had a published package to install from,
+    # and binaries are how users download rubric anyway. The Action and the
+    # README now walk the same path.
     - name: Install rubric
       shell: bash
-      run: npm install --global rubric
+      env:
+        RUBRIC_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+
+        case "$(uname -s)-$(uname -m)" in
+          Linux-x86_64)   ASSET="rubric-linux-x64" ;;
+          Linux-aarch64)  ASSET="rubric-linux-arm64" ;;
+          Darwin-x86_64)  ASSET="rubric-darwin-x64" ;;
+          Darwin-arm64)   ASSET="rubric-darwin-arm64" ;;
+          MINGW*|MSYS*|CYGWIN*) ASSET="rubric-windows-x64.exe" ;;
+          *) echo "rubric: no prebuilt binary for $(uname -s)-$(uname -m)" >&2 ; exit 1 ;;
+        esac
+
+        # Resolve "latest" via the GitHub API so pinned and floating both work.
+        if [ "${RUBRIC_VERSION}" = "latest" ]; then
+          TAG=$(gh release view --json tagName -q .tagName 2>/dev/null || true)
+          if [ -z "${TAG}" ]; then
+            # Fallback: use the repo's releases endpoint on the action's own repo.
+            TAG=$(gh api repos/${{ github.action_repository || github.repository }}/releases/latest --jq .tag_name)
+          fi
+        else
+          TAG="${RUBRIC_VERSION}"
+        fi
+
+        echo "rubric: installing ${TAG} (${ASSET})"
+        BIN="${RUNNER_TEMP}/rubric"
+        gh release download "${TAG}" \
+          --repo "${{ github.action_repository || github.repository }}" \
+          --pattern "${ASSET}" \
+          --output "${BIN}"
+        chmod +x "${BIN}"
+        echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+        # Print version for the build log.
+        "${BIN}" --help >/dev/null 2>&1 || true
+        echo "rubric: installed at ${BIN}"
 
     - name: Run evaluation
       shell: bash
@@ -71,6 +110,9 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         RUBRIC_COMMENT_MARKER: ${{ inputs.comment-marker }}
+      # tsx is a tiny runtime; the action's PR-comment poster is a ~200-line
+      # TS file that we invoke directly rather than bundling as a second
+      # binary. npx pulls tsx on demand — this is the only npm dep.
       run: |
         npx --yes tsx@4 "${{ github.action_path }}/packages/action/src/bin.ts" \
           --body "${{ runner.temp }}/rubric-comment.md"

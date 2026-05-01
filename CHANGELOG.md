@@ -4,6 +4,11 @@ All notable changes to rubric. Format follows [Keep a Changelog](https://keepach
 
 ## [Unreleased]
 
+### Changed
+
+- **Action installs from the release binary, not npm.** `action.yml` and `examples/drift-detector.yml` previously called `npm install --global rubric`, which didn't work (the package isn't published). Now the composite Action resolves the release tag (`version: latest` by default, overridable via `version: v2.2.1` etc.), downloads the platform-matched binary from the GitHub release assets, and runs it directly. Install time drops from ~45s (npm + deps) to ~15s (single binary download). Unblocks CI adoption — the README's copy-paste snippet now actually runs.
+- **README install walkthrough updated.** Removed the "not published yet" caveat on the npm instruction; replaced with a one-liner `curl` that pulls the platform-matched binary from the latest release.
+
 ## [2.2.1] — 2026-05-02
 
 Internal-launch completeness pass. Three features shipped on top of the v2.2 cut to make the tool actually usable on a real 10-person team without dropping into the CLI for every override.
