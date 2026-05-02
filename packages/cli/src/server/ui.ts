@@ -444,7 +444,8 @@ export const INDEX_HTML = `<!doctype html>
   /* Results pane */
   .results-pane { display: flex; flex-direction: column; }
   .results-pane .summary {
-    display: grid; grid-template-columns: repeat(8, 1fr);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
     border-bottom: 1px solid var(--line);
     background: var(--bg-1);
   }
@@ -671,6 +672,72 @@ export const INDEX_HTML = `<!doctype html>
     color: var(--accent); margin-left: 6px;
     font-size: 11px;
   }
+  /* Delta glyph — per-case diff vs. the previous run. Lives in its own
+     column so rows align cleanly; color carries meaning (green up, red
+     down), neutral dot for unchanged or first-seen. */
+  table.grid td.delta {
+    width: 28px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-faint);
+    text-align: center;
+    padding-left: 0; padding-right: 0;
+  }
+  table.grid td.delta.delta-up   { color: var(--win);  }
+  table.grid td.delta.delta-down { color: var(--loss); }
+  table.grid td.delta.delta-new  { color: var(--fg-dim); }
+  table.grid td.delta.delta-same { color: var(--fg-faint); }
+  /* Summary cells for the delta stats get the same neutral palette as the
+     rest of the strip; they're additive context, not a primary signal. */
+  .results-pane .summary .cell.delta-up   .n { color: var(--win); }
+  .results-pane .summary .cell.delta-down .n { color: var(--loss); }
+  /* Prior-run chip in the header-ish area inside the detail pane. Tells the
+     user what they're diffing against without asking. */
+  .prev-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px;
+    background: var(--bg-2); color: var(--fg-mut);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font: 500 11px/1.3 var(--sans);
+  }
+  .prev-tag .k { color: var(--fg-dim); font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .prev-tag .v { font-family: var(--mono); color: var(--fg); }
+  /* "Then / Now" stack inside a regressed-or-improved detail pane. Shows
+     the prior verdict + reason above the current one, so the user can see
+     exactly what the edit changed. */
+  .compare-stack {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px 14px;
+    margin-top: 4px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    font-size: 12.5px;
+  }
+  .compare-stack .row { display: flex; align-items: baseline; gap: 10px; }
+  .compare-stack .row .k {
+    font: 600 10.5px/1.2 var(--sans);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--fg-dim); width: 42px; flex-shrink: 0;
+  }
+  .compare-stack .row .reason {
+    color: var(--fg); line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .compare-stack .row.was .reason { color: var(--fg-mut); }
+  .compare-stack .pill {
+    padding: 2px 8px; border-radius: 999px;
+    font: 600 10.5px/1.2 var(--sans);
+    letter-spacing: 0.04em;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+  }
+  .compare-stack .pill.a   { color: var(--loss); background: var(--loss-soft); border-color: rgba(217,108,108,0.25); }
+  .compare-stack .pill.b   { color: var(--win);  background: var(--win-soft);  border-color: rgba(127,182,133,0.25); }
+  .compare-stack .pill.tie { color: var(--tie);  background: var(--tie-soft);  border-color: rgba(212,160,86,0.25); }
+  .compare-stack .pill.error,
+  .compare-stack .pill.err { color: var(--err);  background: var(--err-soft);  border-color: rgba(217,108,108,0.25); }
 
   .detail-box {
     display: grid; grid-template-columns: 1fr 1fr;
@@ -1075,6 +1142,8 @@ export const INDEX_HTML = `<!doctype html>
         <div class="cell tie"><div class="n" id="sum-ties">0</div><div class="k">Ties</div></div>
         <div class="cell err"><div class="n" id="sum-errors">0</div><div class="k">Errors</div></div>
         <div class="cell"><div class="n dim" id="sum-rate">—</div><div class="k">Win rate</div></div>
+        <div class="cell" id="sum-delta-up-cell" title="Cases that improved vs. the previous run."><div class="n dim" id="sum-delta-up">—</div><div class="k">Improved</div></div>
+        <div class="cell" id="sum-delta-down-cell" title="Cases that regressed vs. the previous run."><div class="n dim" id="sum-delta-down">—</div><div class="k">Regressed</div></div>
         <div class="cell"><div class="n dim" id="sum-cost">—</div><div class="k">Cost</div></div>
         <div class="cell"><div class="n dim" id="sum-time">—</div><div class="k">Wall time</div></div>
         <div class="cell"><div class="n dim" id="sum-overrides">0</div><div class="k">Overrides</div></div>
@@ -1082,10 +1151,10 @@ export const INDEX_HTML = `<!doctype html>
       <div class="grid-wrap">
         <table class="grid">
           <thead>
-            <tr><th>#</th><th>Model</th><th>Input</th><th>Winner</th><th>Reason</th></tr>
+            <tr><th>#</th><th title="Change vs. the previous run">Δ</th><th>Model</th><th>Input</th><th>Winner</th><th>Reason</th></tr>
           </thead>
           <tbody id="grid-body">
-            <tr><td colspan="5">
+            <tr><td colspan="6">
               <div class="idle-banner">
                 <div class="mark" aria-hidden="true">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1133,7 +1202,46 @@ export const INDEX_HTML = `<!doctype html>
        individual rows can be repainted (glyph, active button, reason field)
        without replaying the whole sweep. */
     cellRows: new Map(),
+    /* Most-recent prior run from the registry. Used to paint per-cell deltas
+       (flipped, improved, regressed, unchanged) next to each result row so
+       users can see whether their last prompt edit actually helped. Keyed
+       by caseIndex|modelA(|modelB) like the others. */
+    previousRun: { id: null, cells: new Map(), loaded: false },
   };
+
+  /** Key used to match a grid cell against the previous-run lookup map. */
+  function compareKey(caseIndex, model, modelB) {
+    return caseIndex + '|' + model + (modelB && modelB !== model ? '|' + modelB : '');
+  }
+
+  /** Normalize a cell's verdict into one of: 'a' | 'b' | 'tie' | 'error'. */
+  function cellVerdict(cell) {
+    const j = cell && cell.judge;
+    if (!j) return null;
+    if ('error' in j && j.error) return 'error';
+    return j.winner || null;
+  }
+
+  /**
+   * Given a previous cell + current cell, classify the transition. "Better"
+   * means the candidate (B) is doing better than it was before. Errors and
+   * missing prior cells render as a neutral "new" state — we don't punish
+   * first-time cases in the delta column.
+   */
+  function classifyDelta(prev, cur) {
+    if (!prev) return { kind: 'new', glyph: '·', label: 'New' };
+    const pv = cellVerdict(prev);
+    const cv = cellVerdict(cur);
+    if (pv === cv) return { kind: 'same', glyph: '·', label: 'No change' };
+    // Rank verdicts by how good they are for the candidate (B):
+    //   error < a (baseline wins) < tie < b (candidate wins)
+    const rank = { error: 0, a: 1, tie: 2, b: 3 };
+    const pr = rank[pv] ?? -1;
+    const cr = rank[cv] ?? -1;
+    if (cr > pr) return { kind: 'up',   glyph: '▲', label: 'Improved (' + (pv || '—') + ' → ' + (cv || '—') + ')' };
+    if (cr < pr) return { kind: 'down', glyph: '▼', label: 'Regressed (' + (pv || '—') + ' → ' + (cv || '—') + ')' };
+    return { kind: 'same', glyph: '·', label: 'No change' };
+  }
 
   function overrideKey(cell) {
     return cell.caseIndex + '|' + cell.model + (cell.modelB ? '|' + cell.modelB : '');
@@ -1373,6 +1481,15 @@ export const INDEX_HTML = `<!doctype html>
     $('sum-rate').classList.add('dim');
     $('sum-cost').classList.add('dim');
     $('sum-time').classList.add('dim');
+    // Delta summary cells — only shown meaningfully when a previous run
+    // exists. Until the first cell of this sweep lands we show "—".
+    const hasPrev = state.previousRun && state.previousRun.cells && state.previousRun.cells.size > 0;
+    $('sum-delta-up').textContent = hasPrev ? '0' : '—';
+    $('sum-delta-down').textContent = hasPrev ? '0' : '—';
+    $('sum-delta-up').classList.toggle('dim', !hasPrev);
+    $('sum-delta-down').classList.toggle('dim', !hasPrev);
+    $('sum-delta-up-cell').classList.remove('delta-up');
+    $('sum-delta-down-cell').classList.remove('delta-down');
     $('progress').textContent = '';
     costRoll.totalUsd = 0;
     costRoll.costed = 0;
@@ -1403,7 +1520,7 @@ export const INDEX_HTML = `<!doctype html>
     return { cls: 'tie', label: 'Tie' };
   }
 
-  const counts = { wins: 0, losses: 0, ties: 0, errors: 0 };
+  const counts = { wins: 0, losses: 0, ties: 0, errors: 0, deltaUp: 0, deltaDown: 0 };
 
   function addCellRow(evt) {
     const cell = evt.cell;
@@ -1416,11 +1533,23 @@ export const INDEX_HTML = `<!doctype html>
     else if (v.cls === 'loss') counts.losses++;
     else if (v.cls === 'tie') counts.ties++;
     else counts.errors++;
+
+    // Previous-run lookup. Uses the same (caseIndex, model, modelB?) tuple
+    // that the override log uses, so compare-prompts and compare-models both
+    // work without per-mode branching.
+    const prevCell = state.previousRun.cells.get(
+      compareKey(cell.caseIndex, cell.model, cell.modelB)
+    ) || null;
+    const delta = classifyDelta(prevCell, cell);
+    if (delta.kind === 'up') counts.deltaUp++;
+    else if (delta.kind === 'down') counts.deltaDown++;
+
     const reason = cell.judge.error || cell.judge.reason || '';
     const row = document.createElement('tr');
     row.className = 'header-row';
     row.innerHTML =
       '<td class="idx">▸ ' + cell.caseIndex + '</td>' +
+      '<td class="delta delta-' + delta.kind + '" title="' + escapeHtml(delta.label) + '">' + delta.glyph + '</td>' +
       '<td class="model">' + escapeHtml(cell.model) + '</td>' +
       '<td class="input" title="' + escapeHtml(caseInput) + '">' + escapeHtml(caseInput) + '</td>' +
       '<td class="verdict ' + v.cls + '" data-label="' + escapeHtml(v.label) + '"></td>' +
@@ -1428,7 +1557,7 @@ export const INDEX_HTML = `<!doctype html>
     const detailRow = document.createElement('tr');
     detailRow.className = 'detail-row';
     detailRow.style.display = 'none';
-    const { td, overrideRow } = buildDetailCell(cell, caseExpected);
+    const { td, overrideRow } = buildDetailCell(cell, caseExpected, prevCell);
     detailRow.appendChild(td);
     detailRow.__ovrRow = overrideRow;
     row.addEventListener('click', () => {
@@ -1453,6 +1582,16 @@ export const INDEX_HTML = `<!doctype html>
     $('sum-losses').textContent = counts.losses;
     $('sum-ties').textContent = counts.ties;
     $('sum-errors').textContent = counts.errors;
+    // Delta stats only update when a prior run was loaded. Without one the
+    // cells stay in the "—" state established by resetGrid().
+    if (state.previousRun.cells.size > 0) {
+      $('sum-delta-up').textContent = String(counts.deltaUp);
+      $('sum-delta-down').textContent = String(counts.deltaDown);
+      $('sum-delta-up').classList.toggle('dim', counts.deltaUp === 0);
+      $('sum-delta-down').classList.toggle('dim', counts.deltaDown === 0);
+      $('sum-delta-up-cell').classList.toggle('delta-up', counts.deltaUp > 0);
+      $('sum-delta-down-cell').classList.toggle('delta-down', counts.deltaDown > 0);
+    }
     const decisive = counts.wins + counts.losses;
     if (decisive === 0) {
       $('sum-rate').textContent = '--';
@@ -1476,11 +1615,11 @@ export const INDEX_HTML = `<!doctype html>
     $('progress').textContent = evt.progress.done + '/' + evt.progress.total;
   }
 
-  function buildDetailCell(cell, caseExpected) {
+  function buildDetailCell(cell, caseExpected, prevCell) {
     const td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
 
-    const banner = buildVerdictBanner(cell, caseExpected);
+    const banner = buildVerdictBanner(cell, caseExpected, prevCell);
     const overrideRow = buildOverrideRow(cell);
     banner.appendChild(overrideRow);
     td.appendChild(banner);
@@ -1494,7 +1633,7 @@ export const INDEX_HTML = `<!doctype html>
     return { td, overrideRow };
   }
 
-  function buildVerdictBanner(cell, caseExpected) {
+  function buildVerdictBanner(cell, caseExpected, prevCell) {
     const j = cell.judge;
     const block = document.createElement('div');
     block.className = 'detail-verdict';
@@ -1545,8 +1684,57 @@ export const INDEX_HTML = `<!doctype html>
       block.appendChild(exp);
     }
 
+    // "Then / Now" stack — only shown when there's a prior run AND the
+    // verdict (or error state) actually changed. Lets you see what the
+    // edit flipped without leaving the pane.
+    if (prevCell && cellVerdict(prevCell) !== cellVerdict(cell)) {
+      const stack = buildCompareStack(prevCell, cell);
+      if (stack) block.appendChild(stack);
+    }
+
     block.addEventListener('click', (e) => e.stopPropagation());
     return block;
+  }
+
+  /** Stacked "Then → Now" view shown inside the detail pane when a verdict
+   *  flipped between the previous run and this one. Reasons are truncated
+   *  visually by the CSS; full text is preserved in the DOM. */
+  function buildCompareStack(prev, cur) {
+    const prevV = cellVerdict(prev);
+    const curV = cellVerdict(cur);
+    const stack = document.createElement('div');
+    stack.className = 'compare-stack';
+
+    const label = document.createElement('div');
+    label.className = 'eyebrow';
+    label.textContent = 'Change from previous run';
+    stack.appendChild(label);
+
+    const render = (kind, cell, verdict) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'row ' + kind;
+      const k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = kind === 'was' ? 'Was' : 'Now';
+      const pill = document.createElement('span');
+      pill.className = 'pill ' + (verdict || 'error');
+      pill.textContent = verdict === 'a' ? 'Baseline'
+        : verdict === 'b' ? 'Candidate'
+        : verdict === 'tie' ? 'Tie'
+        : 'Error';
+      const reason = document.createElement('span');
+      reason.className = 'reason';
+      const j = cell && cell.judge;
+      reason.textContent = (j && (j.error || j.reason)) || '—';
+      rowEl.appendChild(k);
+      rowEl.appendChild(pill);
+      rowEl.appendChild(reason);
+      return rowEl;
+    };
+
+    stack.appendChild(render('was', prev, prevV));
+    stack.appendChild(render('now', cur, curV));
+    return stack;
   }
 
   function detailSide(side, modelName, output) {
@@ -1578,14 +1766,61 @@ export const INDEX_HTML = `<!doctype html>
       activateTab(state.active);
       renderCases();
       setError(null);
-      // Pull overrides + available-models in parallel — the header picker
-      // rehydrates once the allowlist lands. Both calls are non-blocking
+      // Pull overrides + available-models + previous-run in parallel —
+      // the header picker rehydrates once the allowlist lands; the delta
+      // column rehydrates once the registry lookup lands. Non-blocking
       // for the initial render.
       loadOverrides();
       loadAvailableModels();
+      loadPreviousRun();
     } catch (err) {
       setError('failed to load workspace: ' + (err.message || err));
     }
+  }
+
+  /**
+   * Pull the most recent completed run from the registry and index its cells
+   * by (caseIndex, model, modelB?) so the grid can show per-row deltas.
+   * Silent on failure — the UI degrades to "no delta column" instead of
+   * yelling about a registry that might be empty on first use.
+   */
+  async function loadPreviousRun() {
+    try {
+      const listRes = await fetch('/api/runs?limit=10');
+      if (!listRes.ok) return;
+      const listBody = await listRes.json();
+      const runs = (listBody && listBody.runs) || [];
+      const latest = runs.find((r) => r && r.status === 'complete');
+      if (!latest) { afterPreviousRunLoaded(); return; }
+
+      const detailRes = await fetch('/api/runs/' + encodeURIComponent(latest.id));
+      if (!detailRes.ok) { afterPreviousRunLoaded(); return; }
+      const detailBody = await detailRes.json();
+      const cells = (detailBody && detailBody.cells) || [];
+
+      state.previousRun.id = latest.id;
+      state.previousRun.cells = new Map();
+      for (const c of cells) {
+        if (c && typeof c.caseIndex === 'number' && typeof c.model === 'string') {
+          state.previousRun.cells.set(compareKey(c.caseIndex, c.model, c.modelB), c);
+        }
+      }
+      state.previousRun.loaded = true;
+      afterPreviousRunLoaded();
+    } catch {
+      /* Non-fatal — the grid just loses the delta column. */
+      afterPreviousRunLoaded();
+    }
+  }
+
+  function afterPreviousRunLoaded() {
+    // Rebuild the idle-state delta cells so they show "0" instead of "—"
+    // immediately when a previous run exists; otherwise keep them dim.
+    const hasPrev = state.previousRun.cells.size > 0;
+    $('sum-delta-up').textContent = hasPrev ? '0' : '—';
+    $('sum-delta-down').textContent = hasPrev ? '0' : '—';
+    $('sum-delta-up').classList.toggle('dim', true);   // starts dim; lights up once cells arrive
+    $('sum-delta-down').classList.toggle('dim', true);
   }
 
   async function loadAvailableModels() {
@@ -1779,10 +2014,14 @@ export const INDEX_HTML = `<!doctype html>
     setError(null);
     resetGrid();
     counts.wins = 0; counts.losses = 0; counts.ties = 0; counts.errors = 0;
+    counts.deltaUp = 0; counts.deltaDown = 0;
 
     const mock = $('mock-toggle').checked;
     const controller = new AbortController();
     let buffered = '';
+    // Cells we render this sweep — snapshotted into state.previousRun on
+    // 'done' so the NEXT Run click can diff against this one.
+    const completedCells = [];
     try {
       const res = await fetch('/api/run', {
         method: 'POST',
@@ -1810,9 +2049,27 @@ export const INDEX_HTML = `<!doctype html>
           }
           if (!data) continue;
           const payload = JSON.parse(data);
-          if (event === 'cell') addCellRow(payload);
-          else if (event === 'error') setError(payload.message || 'run failed');
-          else if (event === 'done') { /* no-op; summary already built */ }
+          if (event === 'cell') {
+            addCellRow(payload);
+            // Remember the cells we just rendered so we can rotate them into
+            // the "previous run" lookup when the sweep finishes. This makes
+            // the next click of Run diff against what the user just saw.
+            if (payload && payload.cell) completedCells.push(payload.cell);
+          } else if (event === 'error') {
+            setError(payload.message || 'run failed');
+          } else if (event === 'done') {
+            // Rotate freshly-completed cells into the previous-run lookup so
+            // the next Run click paints deltas against this sweep. The map
+            // takes effect for rows added *after* the rotation — the current
+            // grid keeps its own deltas.
+            state.previousRun.cells = new Map();
+            for (const c of completedCells) {
+              if (c && typeof c.caseIndex === 'number' && typeof c.model === 'string') {
+                state.previousRun.cells.set(compareKey(c.caseIndex, c.model, c.modelB), c);
+              }
+            }
+            state.previousRun.loaded = true;
+          }
         }
       }
     } catch (err) {
