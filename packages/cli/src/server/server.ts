@@ -13,6 +13,8 @@ import { resolve } from 'node:path';
 import {
   activeOverrides,
   appendOverride,
+  buildCoachSystemPrompt,
+  buildCoachUserPrompt,
   computeContentKey,
   createConfiguredProviders,
   createMockJudge,
@@ -26,6 +28,7 @@ import {
   listRuns,
   loadConfig,
   parseCasesJsonl,
+  parseCoachResponse,
   presetToRubricText,
   readCells,
   readManifest,
@@ -33,9 +36,11 @@ import {
   renderPrompt,
   resolveCriteria,
   runEval,
+  selectCoachableCells,
   type ActiveOverride,
   type Case,
   type CellResult,
+  type CoachReport,
   type Config,
   type Criteria,
   type Judge,
@@ -86,6 +91,59 @@ export interface WorkspaceSnapshot {
   judgeCriteriaText: string;
   /** The raw config shape, so the UI can tell "this was a preset, editing will flip it to {custom}" from "already {custom}". */
   judgeCriteriaKind: 'preset' | 'custom' | 'file';
+}
+
+/**
+ * Commit a candidate → baseline promotion to git so `git log prompts/` becomes
+ * the prompt trajectory. Best-effort: silently no-ops on a non-git workspace
+ * or when git isn't on PATH. The commit message encodes win/loss/tie/error +
+ * runId so a future "trajectory view" can reconstruct the curve by parsing
+ * the log without needing any new data store.
+ */
+function tryGitCommitPromotion(args: {
+  cwd: string;
+  baselinePath: string;
+  candidatePath: string;
+  summary: { wins: number; losses: number; ties: number; errors: number };
+  runId: string;
+}): boolean {
+  // Lazy-require child_process — the main serve path never needs git, so
+  // keeping the import local avoids loading it on every request.
+  let execFileSync: typeof import('node:child_process').execFileSync;
+  try {
+    ({ execFileSync } = require('node:child_process'));
+  } catch {
+    return false;
+  }
+  try {
+    // Detect git repo; bail silently if not.
+    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: args.cwd, stdio: 'ignore',
+    });
+  } catch {
+    return false;
+  }
+  try {
+    execFileSync('git', ['add', '--', args.baselinePath, args.candidatePath], {
+      cwd: args.cwd, stdio: 'ignore',
+    });
+    const s = args.summary;
+    const msg = [
+      'rubric: promote candidate → baseline',
+      '',
+      `wins=${s.wins} losses=${s.losses} ties=${s.ties} errors=${s.errors}`,
+      `run=${args.runId}`,
+    ].join('\n');
+    execFileSync('git', ['commit', '-m', msg, '--', args.baselinePath, args.candidatePath], {
+      cwd: args.cwd, stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    // Commit can fail when there's nothing to commit (e.g. candidate was
+    // already identical to baseline). Treat as "promoted in-memory but no
+    // git record" — not an error for the caller.
+    return false;
+  }
 }
 
 function loadWorkspace(cwd: string, configPath: string): WorkspaceSnapshot {
@@ -238,6 +296,23 @@ export interface Handlers {
   listOverrides: () => ActiveOverrideWire[];
   /** Read the newline-delimited allowed-models file. Missing/empty returns []. */
   listAvailableModels: () => string[];
+  /** Run the coach: summarize a sweep's losses and propose candidate edits. */
+  runCoach: (opts: { runId: string; mock?: boolean }) => Promise<CoachReport & { runId: string; coachedCells: number }>;
+  /** Promote the current candidate → baseline. Returns stats + new prompt contents. */
+  promoteCandidate: (opts: { runId: string }) => PromoteResult;
+}
+
+export interface PromoteResult {
+  /** Path written to (resolved baseline absolute path). */
+  baselinePath: string;
+  candidatePath: string;
+  /** The run whose win/loss numbers we used to decide promotion is sane. */
+  runId: string;
+  summary: { wins: number; losses: number; ties: number; errors: number };
+  /** New prompt contents after the swap — UI rehydrates with these. */
+  prompts: { baseline: string; candidate: string };
+  /** Informational: did we create a git commit? (false when not a git repo.) */
+  gitCommitted: boolean;
 }
 
 export function makeHandlers(opts: ServerOptions = {}): Handlers {
@@ -449,6 +524,119 @@ export function makeHandlers(opts: ServerOptions = {}): Handlers {
       const actives = activeOverrides(records);
       return Array.from(actives.values()).map(toWire);
     },
+    async runCoach({ runId, mock }) {
+      // Load workspace + the target run's cells. The run must exist in the
+      // registry or we 404.
+      const ws = loadWorkspace(cwd, configPath);
+      const manifest = readManifest(registryRoot, runId); // throws on unknown id
+      void manifest;
+      const cells = readCells(registryRoot, runId);
+
+      // Select the cells worth coaching on (losses + ties, capped). If there's
+      // nothing actionable, short-circuit — calling the LLM to say "no losses!"
+      // is wasteful.
+      const coachable = selectCoachableCells(cells, 10);
+      if (coachable.length === 0) {
+        return {
+          summary: 'No losses or ties to learn from — candidate swept this run.',
+          suggestions: [],
+          runId,
+          coachedCells: 0,
+        };
+      }
+
+      // Build case-input map once so the coach sees "what was the user
+      // actually asking?" alongside the outputs.
+      const caseInputs = new Map<number, string>();
+      ws.cases.forEach((c, i) => { if (typeof c.input === 'string') caseInputs.set(i, c.input); });
+
+      const providers = buildProviders(mock === true, ws.config.providers, ws.baseDir);
+      const judgeProvider = providers.find((p) => p.supports(ws.config.judge.model));
+      if (!judgeProvider) {
+        throw new Error(`no provider accepts judge.model "${ws.config.judge.model}"`);
+      }
+
+      const systemPrompt = buildCoachSystemPrompt();
+      const userPrompt = buildCoachUserPrompt({
+        baselinePrompt: ws.prompts.baseline,
+        candidatePrompt: ws.prompts.candidate,
+        cells: coachable,
+        caseInputs,
+      });
+
+      // Mock mode: return a canned coach response so the UI flow is testable
+      // without real credentials. Mirrors the mock-judge pattern elsewhere.
+      if (mock) {
+        return {
+          summary: '[mock coach] candidate lost on ' + coachable.length + ' case(s). Real coach would propose edits here.',
+          suggestions: [
+            {
+              title: 'Add a concreteness directive',
+              rationale: '[mock] Baseline won on specificity; your candidate generalizes too much.',
+              edit: 'Always cite a concrete example or counter-example in your answer.',
+            },
+          ],
+          runId,
+          coachedCells: coachable.length,
+        };
+      }
+
+      const res = await judgeProvider.generate({
+        modelId: ws.config.judge.model,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.2, // a little warmth helps the coach generate distinct suggestions
+      });
+      const report = parseCoachResponse(res.text);
+      return { ...report, runId, coachedCells: coachable.length };
+    },
+
+    promoteCandidate({ runId }) {
+      const ws = loadWorkspace(cwd, configPath);
+      const manifest = readManifest(registryRoot, runId);
+      // Safety rails: refuse to promote when the run isn't complete, or when
+      // the candidate actually lost. A prompt that lost more than it won is
+      // NOT a promotion — it's a regression waiting to be caught by CI.
+      if (manifest.status !== 'complete') {
+        throw new Error(`run ${runId} is ${manifest.status} — promotion requires a complete run`);
+      }
+      const s = manifest.summary;
+      if (!s) {
+        throw new Error(`run ${runId} has no summary — rerun before promoting`);
+      }
+      if (s.losses > s.wins) {
+        throw new Error(`candidate lost (${s.losses}L vs ${s.wins}W) — refusing to promote a regression`);
+      }
+      if (s.wins === 0) {
+        throw new Error('candidate has zero wins — nothing worth promoting');
+      }
+
+      // The swap: candidate content overwrites baseline on disk. Candidate
+      // file then receives the SAME content (copy-of-baseline), per the
+      // "start from the current best and tweak" flow the user picked.
+      const candidateContent = ws.prompts.candidate;
+      writeFileSync(ws.resolved.baseline, candidateContent, 'utf8');
+      writeFileSync(ws.resolved.candidate, candidateContent, 'utf8');
+
+      // Try to git-commit. Best-effort — not all workspaces are git repos.
+      const gitCommitted = tryGitCommitPromotion({
+        cwd: ws.baseDir,
+        baselinePath: ws.resolved.baseline,
+        candidatePath: ws.resolved.candidate,
+        summary: s,
+        runId,
+      });
+
+      return {
+        baselinePath: ws.resolved.baseline,
+        candidatePath: ws.resolved.candidate,
+        runId,
+        summary: { wins: s.wins, losses: s.losses, ties: s.ties, errors: s.errors },
+        prompts: { baseline: candidateContent, candidate: candidateContent },
+        gitCommitted,
+      };
+    },
+
     listAvailableModels() {
       let raw: string;
       try {
@@ -662,6 +850,51 @@ export function createHttpServer(opts: ServerOptions, handlers: Handlers, indexH
         try {
           handlers.saveConfig(patch);
           sendJson(res, 200, { ok: true });
+        } catch (err) {
+          sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+        }
+        return;
+      }
+
+      if (method === 'POST' && url === '/api/coach') {
+        const body = await readBody(req);
+        let parsed: { runId?: string; mock?: boolean };
+        try { parsed = JSON.parse(body); } catch {
+          sendJson(res, 400, { error: 'body must be JSON' });
+          return;
+        }
+        if (typeof parsed.runId !== 'string' || parsed.runId.length === 0) {
+          sendJson(res, 400, { error: 'runId is required' });
+          return;
+        }
+        const mock = parsed.mock === true || opts.mock === true;
+        try {
+          const runOpts: { runId: string; mock?: boolean } = { runId: parsed.runId };
+          if (mock) runOpts.mock = true;
+          const report = await handlers.runCoach(runOpts);
+          sendJson(res, 200, report);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          const notFound = /not found|ENOENT|no manifest/i.test(msg);
+          sendJson(res, notFound ? 404 : 500, { error: msg });
+        }
+        return;
+      }
+
+      if (method === 'POST' && url === '/api/promote') {
+        const body = await readBody(req);
+        let parsed: { runId?: string };
+        try { parsed = JSON.parse(body); } catch {
+          sendJson(res, 400, { error: 'body must be JSON' });
+          return;
+        }
+        if (typeof parsed.runId !== 'string' || parsed.runId.length === 0) {
+          sendJson(res, 400, { error: 'runId is required' });
+          return;
+        }
+        try {
+          const result = handlers.promoteCandidate({ runId: parsed.runId });
+          sendJson(res, 200, result);
         } catch (err) {
           sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
         }

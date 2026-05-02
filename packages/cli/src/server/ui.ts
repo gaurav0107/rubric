@@ -739,6 +739,171 @@ export const INDEX_HTML = `<!doctype html>
   .compare-stack .pill.error,
   .compare-stack .pill.err { color: var(--err);  background: var(--err-soft);  border-color: rgba(217,108,108,0.25); }
 
+  /* ── Coach pane ─────────────────────────────────────────
+     Lives beneath the summary strip in the results pane. Appears only when
+     the user asks for it (or we auto-run after a sweep). Reads like an
+     editorial sidebar — not a dashboard widget. */
+  .coach {
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-1);
+  }
+  .coach-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-1);
+  }
+  .coach-head .title {
+    font: 600 12px/1 var(--sans);
+    color: var(--fg-hi);
+    letter-spacing: -0.005em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .coach-head .title::before {
+    content: ""; display: inline-block;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .coach-head .spacer { flex: 1; }
+  .coach-head button.coach-run {
+    background: var(--bg-3); color: var(--fg);
+    border: 1px solid var(--line-hi);
+    border-radius: var(--radius-sm);
+    padding: 5px 12px; height: 28px;
+    font: 500 12px/1 var(--sans); cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .coach-head button.coach-run:hover {
+    background: var(--bg-4); color: var(--fg-hi); border-color: var(--line-hi);
+  }
+  .coach-head button.coach-run:disabled { opacity: .5; cursor: not-allowed; }
+
+  .coach-body { padding: 14px 18px 16px; }
+  .coach-empty {
+    color: var(--fg-dim);
+    font: 400 13px/1.5 var(--sans);
+  }
+  .coach-empty .k { color: var(--accent); font-family: var(--mono); font-size: 12.5px; }
+  .coach-summary {
+    color: var(--fg);
+    font-size: 14px; line-height: 1.55;
+    padding: 10px 14px;
+    background: var(--bg-2);
+    border-left: 2px solid var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin-bottom: 14px;
+  }
+  .coach-summary .k {
+    display: block;
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-dim); margin-bottom: 5px;
+  }
+  .coach-list { display: flex; flex-direction: column; gap: 10px; }
+  .coach-item {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-1);
+    padding: 14px 16px 14px;
+    transition: border-color .12s ease;
+  }
+  .coach-item:hover { border-color: var(--line-hi); }
+  .coach-item .head {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .coach-item .n {
+    font-family: var(--mono); font-size: 11.5px;
+    color: var(--accent); font-weight: 500;
+    min-width: 18px;
+  }
+  .coach-item .t {
+    font: 600 14px/1.35 var(--sans); color: var(--fg-hi);
+    letter-spacing: -0.01em;
+  }
+  .coach-item .r {
+    font: 400 13px/1.5 var(--sans); color: var(--fg-mut);
+    margin: 4px 0 10px;
+  }
+  .coach-item .edit {
+    margin: 0 0 10px 0;
+    padding: 10px 12px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    font-family: var(--mono); font-size: 12.5px;
+    color: var(--fg); line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .coach-item .actions {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .coach-item .apply {
+    background: var(--accent); color: #1a1410;
+    border: 0; border-radius: var(--radius-sm);
+    padding: 5px 11px; height: 28px;
+    font: 600 12px/1 var(--sans); cursor: pointer;
+    transition: background .12s ease;
+  }
+  .coach-item .apply:hover { background: var(--accent-hi); }
+  .coach-item .apply.applied {
+    background: var(--win); color: #0f1113;
+  }
+  .coach-item .copy {
+    background: transparent; color: var(--fg-mut);
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 5px 11px; height: 28px;
+    font: 500 12px/1 var(--sans); cursor: pointer;
+  }
+  .coach-item .copy:hover { color: var(--fg-hi); border-color: var(--line-hi); }
+  .coach-loading {
+    color: var(--fg-mut);
+    font: 500 13px/1.5 var(--sans);
+    padding: 6px 0;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .coach-loading .spin {
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid var(--line-hi); border-top-color: var(--accent);
+    animation: coach-spin .8s linear infinite;
+  }
+  @keyframes coach-spin { to { transform: rotate(360deg); } }
+
+  /* ── Promote button ─────────────────────────────────────
+     Lives in the prompts-pane footer next to Save. The accent treatment is
+     intentional: this is the moment the tool celebrates — your prompt moved
+     up a rung. Don't hide it behind a ghost style. */
+  .prompts-pane .footer button.promote {
+    background: var(--accent); color: #1a1410;
+    border: 0;
+    font-weight: 600;
+    margin-left: auto;
+    transition: background .12s ease, opacity .12s ease;
+  }
+  .prompts-pane .footer button.promote:hover { background: var(--accent-hi); color: #1a1410; }
+  .prompts-pane .footer button.promote:disabled {
+    background: var(--bg-3); color: var(--fg-faint); opacity: 1;
+    cursor: not-allowed;
+  }
+  .prompts-pane .footer button.promote .arrow { font-family: var(--mono); opacity: 0.7; margin-left: 2px; }
+
+  /* Brief toast at the bottom — used for promote confirmations. */
+  .toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(14px);
+    padding: 10px 16px;
+    background: var(--bg-2); color: var(--fg-hi);
+    border: 1px solid var(--line-hi);
+    border-radius: var(--radius);
+    font: 500 13px/1.3 var(--sans);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    opacity: 0; pointer-events: none;
+    transition: transform .2s ease, opacity .2s ease;
+    z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .ok { color: var(--win); font-weight: 600; }
+
   .detail-box {
     display: grid; grid-template-columns: 1fr 1fr;
     background: var(--bg-1);
@@ -1123,6 +1288,9 @@ export const INDEX_HTML = `<!doctype html>
       <div class="footer">
         <button id="save-btn" aria-label="Save prompt">Save <kbd>⌘S</kbd></button>
         <span class="hint" id="save-hint">No changes</span>
+        <button id="promote-btn" class="promote" disabled title="Swap candidate into baseline. Enabled after a completed run where candidate didn't lose." aria-label="Promote candidate to baseline">
+          Promote <span class="arrow">→</span>
+        </button>
       </div>
     </section>
 
@@ -1147,6 +1315,16 @@ export const INDEX_HTML = `<!doctype html>
         <div class="cell"><div class="n dim" id="sum-cost">—</div><div class="k">Cost</div></div>
         <div class="cell"><div class="n dim" id="sum-time">—</div><div class="k">Wall time</div></div>
         <div class="cell"><div class="n dim" id="sum-overrides">0</div><div class="k">Overrides</div></div>
+      </div>
+      <div class="coach" id="coach" style="display:none">
+        <div class="coach-head">
+          <span class="title">Coach</span>
+          <span class="spacer"></span>
+          <button id="coach-btn" class="coach-run" disabled title="Ask the judge model to spot patterns in your losses and propose candidate edits">Get suggestions</button>
+        </div>
+        <div class="coach-body" id="coach-body">
+          <div class="coach-empty">After a run completes, click <span class="k">Get suggestions</span> to see what to improve in the candidate prompt.</div>
+        </div>
       </div>
       <div class="grid-wrap">
         <table class="grid">
@@ -1185,6 +1363,8 @@ export const INDEX_HTML = `<!doctype html>
     </div>
   </aside>
 
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1207,7 +1387,26 @@ export const INDEX_HTML = `<!doctype html>
        users can see whether their last prompt edit actually helped. Keyed
        by caseIndex|modelA(|modelB) like the others. */
     previousRun: { id: null, cells: new Map(), loaded: false },
+    /* The run we can coach on / promote against. Set at sweep-done. */
+    currentRunId: null,
+    /* Aggregate W/L of the current in-progress / just-completed sweep. Used
+       by the Promote button to decide enabled-ness without another fetch. */
+    currentSummary: { wins: 0, losses: 0, ties: 0, errors: 0 },
+    /* Set after a successful coach call so re-clicking doesn't re-run. */
+    coachRan: false,
   };
+
+  /** Transient status badge at the bottom — "Promoted", "Applied", etc. */
+  function toast(html, kind) {
+    const el = $('toast');
+    if (!el) return;
+    el.innerHTML = html;
+    el.classList.remove('show');
+    // Re-trigger the transition.
+    requestAnimationFrame(() => el.classList.add('show'));
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), kind === 'persistent' ? 6000 : 2800);
+  }
 
   /** Key used to match a grid cell against the previous-run lookup map. */
   function compareKey(caseIndex, model, modelB) {
@@ -1823,6 +2022,215 @@ export const INDEX_HTML = `<!doctype html>
     $('sum-delta-down').classList.toggle('dim', true);
   }
 
+  /** After a sweep completes, pull the newest run from the registry so Coach
+   *  and Promote know which run to operate on. Falls back silently if the
+   *  registry query fails. */
+  async function refreshCurrentRun() {
+    try {
+      const res = await fetch('/api/runs?limit=1');
+      if (!res.ok) return;
+      const body = await res.json();
+      const latest = (body && body.runs && body.runs[0]) || null;
+      if (latest && latest.id) {
+        state.currentRunId = latest.id;
+        state.currentSummary = latest.summary || { wins: 0, losses: 0, ties: 0, errors: 0 };
+        state.coachRan = false;
+        updateWorkbenchButtons();
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  /** Enable/disable Coach and Promote based on state. Coach requires a run.
+   *  Promote additionally requires candidate to not have lost. */
+  function updateWorkbenchButtons() {
+    const coachBtn = $('coach-btn');
+    const promoteBtn = $('promote-btn');
+    const coachPane = $('coach');
+    const hasRun = Boolean(state.currentRunId);
+
+    // Coach pane — show once there's any run to coach on.
+    coachPane.style.display = hasRun ? '' : 'none';
+    coachBtn.disabled = !hasRun || state.coachRan;
+    coachBtn.textContent = state.coachRan ? 'Refresh suggestions' : (hasRun ? 'Get suggestions' : 'Get suggestions');
+
+    // Promote — requires wins > 0 and losses <= wins (matches server safety
+    // rails so the button disables before the user wastes a click).
+    const s = state.currentSummary;
+    const canPromote = hasRun && s.wins > 0 && s.losses <= s.wins;
+    promoteBtn.disabled = !canPromote;
+    if (!canPromote) {
+      if (!hasRun) promoteBtn.title = 'Run the eval first.';
+      else if (s.wins === 0) promoteBtn.title = 'Candidate has zero wins — nothing to promote.';
+      else promoteBtn.title = 'Candidate lost more than it won (' + s.losses + 'L vs ' + s.wins + 'W) — refine before promoting.';
+    } else {
+      promoteBtn.title = 'Swap candidate → baseline. Wins ' + s.wins + ', losses ' + s.losses + '.';
+    }
+  }
+
+  async function runCoach() {
+    if (!state.currentRunId) return;
+    const btn = $('coach-btn');
+    const body = $('coach-body');
+    btn.disabled = true;
+    body.innerHTML = '<div class="coach-loading"><span class="spin"></span>Asking the coach...</div>';
+    try {
+      const mock = $('mock-toggle').checked;
+      const res = await fetch('/api/coach', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ runId: state.currentRunId, mock }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || ('HTTP ' + res.status));
+      }
+      const report = await res.json();
+      renderCoachReport(report);
+      state.coachRan = true;
+    } catch (err) {
+      body.innerHTML = '';
+      const div = document.createElement('div');
+      div.className = 'coach-empty';
+      div.textContent = 'Coach failed: ' + (err.message || err);
+      body.appendChild(div);
+    } finally {
+      updateWorkbenchButtons();
+    }
+  }
+
+  function renderCoachReport(report) {
+    const body = $('coach-body');
+    body.innerHTML = '';
+    if (report.summary) {
+      const s = document.createElement('div');
+      s.className = 'coach-summary';
+      const k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = 'Summary · ' + (report.coachedCells || 0) + ' case(s) analyzed';
+      const txt = document.createElement('span');
+      txt.textContent = report.summary;
+      s.appendChild(k);
+      s.appendChild(txt);
+      body.appendChild(s);
+    }
+    if (!report.suggestions || report.suggestions.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'coach-empty';
+      empty.textContent = 'No suggestions — candidate either swept the run or coach returned an empty list.';
+      body.appendChild(empty);
+      return;
+    }
+    const list = document.createElement('div');
+    list.className = 'coach-list';
+    report.suggestions.forEach((sug, i) => {
+      const item = document.createElement('div');
+      item.className = 'coach-item';
+
+      const head = document.createElement('div');
+      head.className = 'head';
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = String(i + 1).padStart(2, '0');
+      const t = document.createElement('span'); t.className = 't'; t.textContent = sug.title;
+      head.appendChild(n); head.appendChild(t);
+      item.appendChild(head);
+
+      const r = document.createElement('div');
+      r.className = 'r'; r.textContent = sug.rationale;
+      item.appendChild(r);
+
+      const edit = document.createElement('pre');
+      edit.className = 'edit'; edit.textContent = sug.edit;
+      item.appendChild(edit);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const apply = document.createElement('button');
+      apply.className = 'apply'; apply.type = 'button';
+      apply.textContent = 'Apply to candidate';
+      apply.addEventListener('click', () => applySuggestion(sug, apply));
+      const copy = document.createElement('button');
+      copy.className = 'copy'; copy.type = 'button';
+      copy.textContent = 'Copy';
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(sug.edit); copy.textContent = 'Copied'; setTimeout(() => copy.textContent = 'Copy', 1500); } catch { /* ignore */ }
+      });
+      actions.appendChild(apply);
+      actions.appendChild(copy);
+      item.appendChild(actions);
+
+      list.appendChild(item);
+    });
+    body.appendChild(list);
+  }
+
+  /** Append the suggestion's edit text to the candidate prompt. Doesn't
+   *  auto-save — the user reviews, then hits ⌘S. Switches to the Candidate
+   *  tab so the change is visible immediately. */
+  function applySuggestion(sug, btn) {
+    if (!state.workspace) return;
+    // Load current candidate (either from textarea if active, or from state).
+    const ta = $('prompt-editor');
+    const onCandidateTab = state.active === 'candidate';
+    const current = onCandidateTab ? ta.value : state.workspace.prompts.candidate;
+    // Append with a blank line separator. If the edit already exists in the
+    // prompt (from a prior Apply), we skip duplicating.
+    const already = current.indexOf(sug.edit.trim()) !== -1;
+    const next = already ? current : (current.replace(/\s+$/, '') + '\n\n' + sug.edit.trim() + '\n');
+    // Update in-memory state and reflect in textarea if we're on the tab.
+    state.workspace.prompts.candidate = next;
+    if (!onCandidateTab) {
+      // Switch tabs so the user sees the change.
+      state.active = 'candidate';
+      for (const b of document.querySelectorAll('.tabs button')) {
+        b.classList.toggle('active', b.dataset.which === 'candidate');
+      }
+    }
+    ta.value = next;
+    setDirty(true);
+    if (btn) {
+      btn.classList.add('applied');
+      btn.textContent = already ? 'Already applied' : 'Applied ✓';
+      setTimeout(() => { btn.classList.remove('applied'); btn.textContent = 'Apply to candidate'; }, 2200);
+    }
+    toast('<span class="ok">Applied</span> &nbsp;·&nbsp; review the candidate tab, then press ⌘S to save.');
+  }
+
+  async function promoteCandidate() {
+    if (!state.currentRunId) return;
+    if (!confirm('Promote candidate → baseline?\n\nThis overwrites baseline.md with the current candidate, starts candidate fresh from that baseline, and writes a git commit recording the trajectory.')) return;
+    const btn = $('promote-btn');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/promote', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ runId: state.currentRunId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || ('HTTP ' + res.status));
+      }
+      const result = await res.json();
+      // Update in-memory prompts, refresh the editor, clear dirty.
+      state.workspace.prompts.baseline = result.prompts.baseline;
+      state.workspace.prompts.candidate = result.prompts.candidate;
+      const ta = $('prompt-editor');
+      if (state.active === 'baseline' || state.active === 'candidate') {
+        ta.value = state.workspace.prompts[state.active];
+      }
+      setDirty(false);
+      // Promote exits with a fresh baseline; the previous run is now against
+      // the *old* baseline, so Promote should disable until another sweep.
+      state.currentRunId = null;
+      state.currentSummary = { wins: 0, losses: 0, ties: 0, errors: 0 };
+      updateWorkbenchButtons();
+      const gitBit = result.gitCommitted ? ' · git commit written' : ' · no git (uncommitted workspace)';
+      toast('<span class="ok">Promoted</span> &nbsp;·&nbsp; ' + result.summary.wins + 'W / ' + result.summary.losses + 'L' + gitBit);
+    } catch (err) {
+      toast('Promote failed: ' + (err.message || err));
+      updateWorkbenchButtons();
+    }
+  }
+
   async function loadAvailableModels() {
     let available = [];
     try {
@@ -2069,6 +2477,10 @@ export const INDEX_HTML = `<!doctype html>
               }
             }
             state.previousRun.loaded = true;
+            // Snapshot the run id from the registry so Coach + Promote know
+            // which run to operate on. Fire-and-forget; button states will
+            // update once it lands.
+            refreshCurrentRun();
           }
         }
       }
@@ -2127,6 +2539,13 @@ export const INDEX_HTML = `<!doctype html>
     }
   });
   $('run-btn').addEventListener('click', runSweep);
+  $('coach-btn').addEventListener('click', runCoach);
+  $('promote-btn').addEventListener('click', promoteCandidate);
+
+  // On workspace load, ask the registry if there's already a completed run
+  // to coach on / promote from. Lets users land mid-session without having
+  // to re-run.
+  setTimeout(() => { refreshCurrentRun(); }, 50);
 
   // ── Runs drawer ────────────────────────────────────────────────────────────
   // Browse the local registry (~/.rubric/runs), open one for summary+cells, or

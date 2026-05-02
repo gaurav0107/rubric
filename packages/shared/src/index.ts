@@ -19,3 +19,4 @@ export * from './redact.ts';
 export * from './runs/registry.ts';
 export * from './cache/judge-cache.ts';
 export * from './overrides/log.ts';
+export * from './coach.ts';
