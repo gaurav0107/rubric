@@ -2174,7 +2174,7 @@ export const INDEX_HTML = `<!doctype html>
     // Append with a blank line separator. If the edit already exists in the
     // prompt (from a prior Apply), we skip duplicating.
     const already = current.indexOf(sug.edit.trim()) !== -1;
-    const next = already ? current : (current.replace(/\s+$/, '') + '\n\n' + sug.edit.trim() + '\n');
+    const next = already ? current : (current.replace(/\\s+$/, '') + '\\n\\n' + sug.edit.trim() + '\\n');
     // Update in-memory state and reflect in textarea if we're on the tab.
     state.workspace.prompts.candidate = next;
     if (!onCandidateTab) {
@@ -2196,7 +2196,7 @@ export const INDEX_HTML = `<!doctype html>
 
   async function promoteCandidate() {
     if (!state.currentRunId) return;
-    if (!confirm('Promote candidate → baseline?\n\nThis overwrites baseline.md with the current candidate, starts candidate fresh from that baseline, and writes a git commit recording the trajectory.')) return;
+    if (!confirm('Promote candidate → baseline?\\n\\nThis overwrites baseline.md with the current candidate, starts candidate fresh from that baseline, and writes a git commit recording the trajectory.')) return;
     const btn = $('promote-btn');
     btn.disabled = true;
     try {
