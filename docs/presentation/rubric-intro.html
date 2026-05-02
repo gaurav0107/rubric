@@ -1,0 +1,1528 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>rubric · pairwise prompt evaluation for pull requests</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,400&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ============================================================
+     rubric · intro deck
+     Editorial dark. Warm slate, single ochre accent. Fraunces for
+     display, Geist for body, JetBrains Mono for code. Designed to
+     feel like an eng-team talk at Linear, not a SaaS landing.
+     ============================================================ */
+  :root {
+    --bg-0:        #0f1113;
+    --bg-1:        #15181b;
+    --bg-2:        #1b1f23;
+    --bg-3:        #23282d;
+    --bg-4:        #2d3339;
+
+    --line:        rgba(255,255,255,0.06);
+    --line-hi:     rgba(255,255,255,0.11);
+
+    --fg:          #e6e8eb;
+    --fg-hi:       #ffffff;
+    --fg-mut:      #9aa0a6;
+    --fg-dim:      #6b7177;
+    --fg-faint:    #4a4f55;
+
+    --accent:      #d4a056;
+    --accent-hi:   #e7b36a;
+    --accent-soft: rgba(212,160,86,0.12);
+    --accent-line: rgba(212,160,86,0.35);
+
+    --win:         #7fb685;
+    --win-soft:    rgba(127,182,133,0.14);
+    --loss:        #d96c6c;
+    --loss-soft:   rgba(217,108,108,0.14);
+    --tie:         #d4a056;
+    --tie-soft:    rgba(212,160,86,0.12);
+
+    --display: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --sans:    "Geist", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  html { background: var(--bg-0); }
+
+  body {
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.5;
+    letter-spacing: -0.004em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+    /* Subtle noise texture so the dark fields aren't dead. Pure CSS, no asset. */
+    background-image:
+      radial-gradient(ellipse at 15% 10%, rgba(212,160,86,0.03), transparent 45%),
+      radial-gradient(ellipse at 85% 90%, rgba(127,182,133,0.025), transparent 45%);
+  }
+
+  ::selection { background: var(--accent-soft); color: var(--fg-hi); }
+
+  /* ── Slide stage ─────────────────────────────────────────── */
+  .stage {
+    position: fixed; inset: 0;
+    display: grid; place-items: center;
+    padding: 48px 56px;
+  }
+  .slide {
+    width: min(1200px, 100%);
+    height: min(720px, 100%);
+    max-height: calc(100vh - 96px);
+    position: relative;
+    display: none;
+    animation: enter .55s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .slide.active { display: block; }
+
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Stagger children of the active slide. */
+  .slide.active [data-stagger] {
+    animation: rise .7s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .slide.active [data-stagger="1"] { animation-delay: .05s; }
+  .slide.active [data-stagger="2"] { animation-delay: .14s; }
+  .slide.active [data-stagger="3"] { animation-delay: .23s; }
+  .slide.active [data-stagger="4"] { animation-delay: .32s; }
+  .slide.active [data-stagger="5"] { animation-delay: .41s; }
+  .slide.active [data-stagger="6"] { animation-delay: .50s; }
+  .slide.active [data-stagger="7"] { animation-delay: .59s; }
+  .slide.active [data-stagger="8"] { animation-delay: .68s; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Typography primitives ──────────────────────────────── */
+  h1, h2, h3, h4 { margin: 0; font-weight: 500; letter-spacing: -0.018em; }
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(56px, 7vw, 88px);
+    font-weight: 300;
+    line-height: 1.02;
+    color: var(--fg-hi);
+    letter-spacing: -0.03em;
+  }
+  h1 em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent);
+  }
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(36px, 4.2vw, 54px);
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--fg-hi);
+    letter-spacing: -0.025em;
+  }
+  h2 em { font-style: italic; color: var(--accent); font-weight: 400; }
+  h3 {
+    font-family: var(--sans);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--fg-hi);
+    letter-spacing: -0.015em;
+  }
+  p { margin: 0 0 16px; color: var(--fg); }
+  p.lead {
+    font-size: 22px; line-height: 1.5; color: var(--fg);
+    max-width: 56ch;
+  }
+  .mut { color: var(--fg-mut); }
+  .dim { color: var(--fg-dim); }
+
+  /* Small label — the one piece of structural chrome on every slide. */
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .eyebrow::before {
+    content: ""; display: inline-block;
+    width: 8px; height: 1px;
+    background: var(--accent);
+    vertical-align: middle;
+    margin-right: 10px;
+    margin-bottom: 3px;
+  }
+
+  code, pre, kbd { font-family: var(--mono); font-feature-settings: "zero", "ss02"; letter-spacing: 0; }
+  code.inline {
+    padding: 1px 6px 2px; font-size: 0.88em;
+    background: var(--bg-3); color: var(--fg-hi);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  kbd {
+    display: inline-block;
+    padding: 2px 7px 3px;
+    font-size: 11.5px; line-height: 1;
+    color: var(--fg); background: var(--bg-3);
+    border: 1px solid var(--line-hi);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    vertical-align: baseline;
+  }
+
+  /* ── Shared layouts ─────────────────────────────────────── */
+  .slide-inner { height: 100%; display: flex; flex-direction: column; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; height: 100%; align-items: center; }
+  .split.asym { grid-template-columns: 5fr 7fr; gap: 64px; }
+  .split.asym-left { grid-template-columns: 7fr 5fr; gap: 64px; }
+
+  /* ── Shared panels / cards ──────────────────────────────── */
+  .panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 24px 28px;
+  }
+  .panel.code {
+    background: var(--bg-2);
+    padding: 22px 26px;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--fg);
+    overflow: hidden;
+  }
+
+  /* ── Code coloring (soft, editorial — never rainbow) ────── */
+  .tok-c { color: var(--fg-faint); }    /* comment */
+  .tok-k { color: var(--fg-mut); }      /* key */
+  .tok-s { color: var(--win); }         /* string */
+  .tok-n { color: var(--accent); }      /* number / literal */
+  .tok-f { color: var(--fg-hi); }       /* flag / cmd */
+  .tok-p { color: var(--fg-dim); }      /* punctuation */
+
+  /* ── Shell blocks ───────────────────────────────────────── */
+  .shell {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 24px 22px;
+    font-family: var(--mono); font-size: 14px; line-height: 1.7;
+  }
+  .shell .cmd { color: var(--fg-hi); }
+  .shell .cmd::before { content: "$ "; color: var(--fg-faint); }
+  .shell .out { color: var(--fg-mut); }
+
+  /* ── Slide 1 — title ────────────────────────────────────── */
+  .s1 .wordmark {
+    display: inline-flex; align-items: center; gap: 14px;
+    font-family: var(--display); font-weight: 300;
+    font-size: 160px; line-height: 0.9;
+    color: var(--fg-hi);
+    letter-spacing: -0.04em;
+  }
+  .s1 .mark {
+    width: 72px; height: 72px;
+    background: var(--accent);
+    border-radius: 12px;
+    box-shadow: 0 0 0 10px rgba(212,160,86,0.10);
+    flex-shrink: 0;
+    margin-right: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+  .s1 .mark::after {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.22), transparent 40%);
+  }
+  .s1 .subtitle {
+    font-family: var(--display); font-style: italic; font-weight: 400;
+    font-size: 38px; line-height: 1.2; color: var(--fg-mut);
+    max-width: 22ch;
+    letter-spacing: -0.01em;
+  }
+  .s1 .subtitle em { color: var(--accent); font-style: italic; }
+  .s1 .cover {
+    height: 100%; display: grid;
+    grid-template-rows: 1fr auto; gap: 40px;
+  }
+  .s1 .meta {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 40px;
+    color: var(--fg-dim); font-size: 13px;
+    padding-top: 18px; border-top: 1px solid var(--line);
+  }
+  .s1 .meta .who { font-family: var(--mono); color: var(--fg-mut); }
+  .s1 .meta .ver { font-family: var(--mono); color: var(--fg-mut); letter-spacing: 0; }
+
+  /* ── Slide 2 — the problem ─────────────────────────────── */
+  .compare {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 22px;
+    margin-top: 28px;
+  }
+  .compare .col {
+    padding: 24px 26px;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    min-height: 340px;
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  .compare .col .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    font: 600 10.5px/1.4 var(--sans);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border-radius: 999px;
+    margin-bottom: 18px;
+    align-self: flex-start;
+  }
+  .compare .col.bad .tag  { color: var(--loss); background: var(--loss-soft); border: 1px solid rgba(217,108,108,0.25); }
+  .compare .col.good .tag { color: var(--win);  background: var(--win-soft);  border: 1px solid rgba(127,182,133,0.25); }
+  .compare .col h3 { margin-bottom: 16px; }
+  .compare .col ul {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .compare .col li {
+    padding-left: 26px; position: relative; font-size: 15.5px;
+    color: var(--fg); line-height: 1.55;
+  }
+  .compare .col li .k {
+    font-family: var(--mono); font-size: 13px;
+    color: var(--fg-mut);
+  }
+  .compare .col li::before {
+    content: ""; position: absolute; left: 0; top: 10px;
+    width: 14px; height: 2px;
+    background: var(--fg-faint);
+  }
+  .compare .col.good li::before { background: var(--accent); }
+
+  /* ── Slide 3 — flow diagram ────────────────────────────── */
+  .flow {
+    margin-top: 22px;
+    width: 100%;
+  }
+  .flow svg { width: 100%; height: auto; display: block; }
+
+  /* ── Slide 4 — quickstart ──────────────────────────────── */
+  .steps {
+    display: grid; grid-template-columns: auto 1fr; gap: 18px 26px;
+    margin-top: 24px;
+  }
+  .steps .n {
+    font-family: var(--display); font-style: italic;
+    font-size: 28px; color: var(--accent); font-weight: 400;
+    line-height: 1; padding-top: 22px;
+    min-width: 36px;
+  }
+  .steps .what { padding-top: 18px; }
+  .steps .what .title {
+    font: 500 15.5px/1.3 var(--sans); color: var(--fg-hi); margin-bottom: 10px;
+  }
+  .steps .shell { margin-top: 4px; }
+
+  /* ── Slide 5 — config ──────────────────────────────────── */
+  .config-wrap { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: start; }
+  .config-notes { font-size: 14.5px; line-height: 1.6; color: var(--fg-mut); }
+  .config-notes .note { margin-bottom: 18px; }
+  .config-notes .note .k {
+    display: block;
+    font-family: var(--mono); font-size: 12px;
+    color: var(--accent); margin-bottom: 4px;
+    letter-spacing: 0;
+  }
+
+  /* ── Slide 6 — three-pane mock ─────────────────────────── */
+  .mock {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.35), 0 2px 0 rgba(255,255,255,0.02) inset;
+    margin-top: 18px;
+  }
+  .mock .chrome {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-2);
+  }
+  .mock .chrome .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bg-4); }
+  .mock .chrome .dot:nth-child(1) { background: #d96c6c; }
+  .mock .chrome .dot:nth-child(2) { background: #d4a056; }
+  .mock .chrome .dot:nth-child(3) { background: #7fb685; }
+  .mock .chrome .url {
+    margin-left: 8px;
+    font-family: var(--mono); font-size: 11.5px;
+    color: var(--fg-dim);
+  }
+  .mock .header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .mock .header .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--fg-hi); }
+  .mock .header .brand .b {
+    width: 10px; height: 10px; background: var(--accent); border-radius: 2px;
+  }
+  .mock .header .spacer { flex: 1; }
+  .mock .header .pill {
+    padding: 4px 10px; border: 1px solid var(--line);
+    border-radius: 6px; font: 500 11.5px/1 var(--sans);
+    color: var(--fg-mut);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .mock .header .pill .k { color: var(--fg-dim); font-size: 10.5px; }
+  .mock .header .pill .v { color: var(--fg); font-family: var(--mono); font-size: 11.5px; }
+  .mock .header .primary {
+    padding: 4px 11px;
+    background: var(--accent); color: #1a1410;
+    border-radius: 6px; font-weight: 600; font-size: 12px;
+  }
+
+  .mock .panes {
+    display: grid;
+    grid-template-columns: 1fr 0.9fr 1.3fr;
+    height: 340px;
+  }
+  .mock .pane {
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .mock .pane:last-child { border-right: 0; }
+  .mock .pane-title {
+    padding: 10px 14px;
+    font: 600 11px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-mut);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .mock .pane-title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--win); }
+
+  .mock .tabs { display: flex; padding: 0 12px; gap: 2px; border-bottom: 1px solid var(--line); font-size: 12px; }
+  .mock .tabs .tab { padding: 8px 10px; color: var(--fg-mut); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .mock .tabs .tab.active { color: var(--fg-hi); border-bottom-color: var(--accent); font-weight: 500; }
+
+  .mock .editor {
+    flex: 1; padding: 14px 16px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--fg);
+    line-height: 1.6;
+  }
+  .mock .editor .c { color: var(--fg-dim); }
+  .mock .editor .h { color: var(--fg-hi); }
+
+  .mock .cases { overflow: hidden; padding: 4px 0; }
+  .mock .case-row { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .mock .case-row:last-child { border-bottom: 0; }
+  .mock .case-row .meta {
+    font: 500 10.5px/1 var(--sans);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--fg-dim); margin-bottom: 5px;
+  }
+  .mock .case-row .meta .tag {
+    font-family: var(--mono);
+    background: var(--bg-3); color: var(--fg-mut);
+    padding: 2px 6px; border-radius: 3px;
+    letter-spacing: 0; text-transform: none;
+    font-size: 10.5px; margin-left: 6px;
+  }
+  .mock .case-row .input {
+    font-family: var(--mono); font-size: 12px; color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .mock .summary {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1px solid var(--line);
+  }
+  .mock .summary .cell {
+    padding: 10px 10px 9px;
+    border-right: 1px solid var(--line);
+  }
+  .mock .summary .cell:last-child { border-right: 0; }
+  .mock .summary .n {
+    font: 600 18px/1 var(--sans);
+    color: var(--fg-hi);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .mock .summary .k {
+    margin-top: 4px;
+    font: 500 10px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-dim);
+  }
+  .mock .summary .n.win  { color: var(--win); }
+  .mock .summary .n.loss { color: var(--loss); }
+  .mock .summary .n.tie  { color: var(--tie); }
+  .mock .summary .n.dim  { color: var(--fg-faint); }
+
+  .mock .grid-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .mock .grid-table th, .mock .grid-table td {
+    padding: 7px 12px; text-align: left; border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  .mock .grid-table th {
+    font: 600 10px/1 var(--sans);
+    color: var(--fg-dim); letter-spacing: 0.06em; text-transform: uppercase;
+    border-bottom-color: var(--line-hi);
+  }
+  .mock .grid-table td.idx { font-family: var(--mono); color: var(--fg-mut); width: 30px; }
+  .mock .grid-table td.delta { font-family: var(--mono); width: 16px; text-align: center; }
+  .mock .grid-table td.delta.up   { color: var(--win); }
+  .mock .grid-table td.delta.down { color: var(--loss); }
+  .mock .grid-table td.delta.same { color: var(--fg-faint); }
+  .mock .grid-table td.input { font-family: var(--mono); color: var(--fg); max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mock .verdict-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font: 600 10px/1.3 var(--sans); letter-spacing: 0.04em;
+    border: 1px solid transparent;
+  }
+  .mock .verdict-pill.b { color: var(--win); background: var(--win-soft); border-color: rgba(127,182,133,0.25); }
+  .mock .verdict-pill.a { color: var(--loss); background: var(--loss-soft); border-color: rgba(217,108,108,0.25); }
+  .mock .verdict-pill.t { color: var(--tie); background: var(--tie-soft); border-color: rgba(212,160,86,0.25); }
+
+  /* Callout dots on the mock */
+  .mock-wrap { position: relative; }
+  .callout {
+    position: absolute;
+    display: inline-flex; align-items: center; gap: 10px;
+    font: 500 13px/1.3 var(--sans);
+    color: var(--fg);
+  }
+  .callout .num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent); color: #1a1410;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .callout .txt {
+    font-family: var(--mono); font-size: 11.5px; color: var(--fg-mut);
+    white-space: nowrap;
+  }
+  .callout.c1 { top: 66px; left: -16px; transform: translateX(-100%); }
+  .callout.c2 { top: 170px; left: -16px; transform: translateX(-100%); }
+  .callout.c3 { top: 140px; right: -16px; transform: translateX(100%); }
+  .callout.c4 { bottom: 16px; right: -16px; transform: translateX(100%); }
+
+  /* ── Slide 7 — PR comment ──────────────────────────────── */
+  .gh {
+    background: #ffffff;
+    color: #1f2328;
+    border-radius: 10px;
+    padding: 28px 30px 30px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", sans-serif;
+    font-size: 14px; line-height: 1.5;
+    margin-top: 18px;
+  }
+  .gh .gh-head {
+    display: flex; align-items: center; gap: 12px;
+    padding-bottom: 14px; border-bottom: 1px solid #d0d7de;
+    margin-bottom: 16px;
+  }
+  .gh .gh-head .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, #d4a056, #c18f46);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 600;
+    font-family: var(--sans);
+  }
+  .gh .gh-head .avatar::after { content: "R"; }
+  .gh .gh-head .who {
+    font: 600 14px/1.3 -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #24292f;
+  }
+  .gh .gh-head .when { color: #59636e; font-size: 13px; }
+  .gh h1 { font-family: var(--sans); font-size: 20px; font-weight: 600; color: #1f2328; margin: 0 0 10px; letter-spacing: -0.015em; }
+  .gh .status {
+    padding: 10px 14px;
+    background: #ffebe9; border-left: 3px solid #cf222e;
+    border-radius: 4px; margin-bottom: 16px;
+    font-weight: 500; color: #82071e;
+  }
+  .gh .counts {
+    display: flex; gap: 24px;
+    padding: 12px 0 14px;
+    border-bottom: 1px solid #eaeef2;
+    margin-bottom: 18px;
+    font-size: 13.5px;
+  }
+  .gh .counts .stat .n { font-weight: 600; color: #1f2328; font-variant-numeric: tabular-nums; }
+  .gh .counts .stat .k { color: #59636e; margin-left: 6px; }
+  .gh .regressions {
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .gh .regressions summary {
+    font-weight: 600; color: #1f2328;
+    cursor: default; list-style: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .gh .regressions summary::before {
+    content: "▾"; color: #59636e; font-size: 10px;
+  }
+  .gh .regressions .case-block {
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid #eaeef2;
+  }
+  .gh .regressions .case-block:first-of-type { border-top: 0; padding-top: 6px; }
+  .gh .regressions .case-block h4 {
+    font-family: var(--sans); font-weight: 600;
+    font-size: 14px; color: #1f2328; margin: 0 0 8px;
+  }
+  .gh .regressions .case-block h4 code {
+    font-family: var(--mono); font-size: 12.5px;
+    background: #eaeef2; padding: 1px 5px; border-radius: 3px;
+    color: #24292f;
+  }
+  .gh .regressions .label {
+    font-size: 12.5px; font-weight: 600; color: #1f2328;
+  }
+  .gh .regressions pre {
+    font-family: var(--mono); font-size: 12px;
+    background: #eaeef2; padding: 6px 8px; border-radius: 4px;
+    margin: 4px 0 10px; overflow: hidden; white-space: pre-wrap;
+    color: #1f2328;
+    line-height: 1.4;
+  }
+  .gh .regressions .two {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;
+  }
+  .gh .regressions .two .col .cap {
+    font-family: var(--sans); font-size: 11.5px; color: #59636e;
+    font-weight: 600; margin-bottom: 4px;
+  }
+
+  /* ── Slide 8 — disagreeing with the judge ─────────────── */
+  .override-ui {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-top: 18px;
+  }
+  .override-ui .lbl {
+    font: 600 10.5px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-dim);
+    margin-right: 12px;
+  }
+  .override-ui .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .override-ui .btn {
+    padding: 6px 14px;
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--bg-2); color: var(--fg-mut);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .override-ui .btn.active.b { background: var(--win-soft); color: var(--win); border-color: rgba(127,182,133,0.35); }
+  .override-ui .btn.a { }
+  .override-ui .reason {
+    flex: 1; min-width: 160px; padding: 7px 12px;
+    font-family: var(--sans); font-size: 12.5px;
+    background: var(--bg-2); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .override-ui .status {
+    margin-top: 12px;
+    font: 500 12px/1.4 var(--sans); color: var(--accent);
+  }
+  .override-ui .status::before {
+    content: "✎ "; color: var(--accent);
+  }
+
+  /* ── Slide 9 — iterating, the Δ loop ──────────────────── */
+  .delta-demo {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 22px; margin-top: 18px;
+  }
+  .delta-demo .col h4 {
+    font: 600 11px/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-mut); margin-bottom: 10px;
+  }
+  .delta-demo .mini-grid {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .delta-demo .mini-grid table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .delta-demo .mini-grid th, .delta-demo .mini-grid td {
+    padding: 8px 12px; border-bottom: 1px solid var(--line);
+    text-align: left;
+  }
+  .delta-demo .mini-grid th {
+    font: 600 10px/1 var(--sans);
+    color: var(--fg-dim); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .delta-demo .mini-grid td.idx { font-family: var(--mono); color: var(--fg-mut); width: 28px; }
+  .delta-demo .mini-grid td.delta { font-family: var(--mono); text-align: center; width: 20px; }
+  .delta-demo .mini-grid td.delta.up { color: var(--win); }
+  .delta-demo .mini-grid td.delta.down { color: var(--loss); }
+  .delta-demo .mini-grid td.delta.same { color: var(--fg-faint); }
+  .delta-demo .mini-grid .vp {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font: 600 10px/1.3 var(--sans); letter-spacing: 0.04em;
+    border: 1px solid transparent;
+  }
+  .delta-demo .mini-grid .vp.b { color: var(--win); background: var(--win-soft); border-color: rgba(127,182,133,0.25); }
+  .delta-demo .mini-grid .vp.a { color: var(--loss); background: var(--loss-soft); border-color: rgba(217,108,108,0.25); }
+  .delta-demo .mini-grid .vp.t { color: var(--tie); background: var(--tie-soft); border-color: rgba(212,160,86,0.25); }
+
+  /* ── Slide 11 — roadmap ───────────────────────────────── */
+  .roadmap { margin-top: 26px; }
+  .roadmap .row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 28px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .roadmap .row:last-child { border-bottom: 0; }
+  .roadmap .ver {
+    font-family: var(--display); font-style: italic;
+    font-size: 24px; color: var(--accent); font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .roadmap .row.past .ver { color: var(--fg-dim); }
+  .roadmap .what .t {
+    font: 600 17px/1.3 var(--sans); color: var(--fg-hi);
+    margin-bottom: 6px;
+  }
+  .roadmap .what .d { font-size: 14.5px; color: var(--fg-mut); line-height: 1.55; }
+  .roadmap .row.past .what .t { color: var(--fg-mut); }
+
+  /* ── Slide 12 — end ───────────────────────────────────── */
+  .s12 {
+    display: grid; place-items: center; height: 100%;
+  }
+  .s12 .inner { text-align: center; display: flex; flex-direction: column; gap: 28px; align-items: center; }
+  .s12 .link {
+    font-family: var(--display); font-style: italic;
+    font-size: 62px; font-weight: 400; color: var(--accent);
+    letter-spacing: -0.025em; line-height: 1;
+  }
+  .s12 .sub {
+    font-size: 18px; color: var(--fg-mut); max-width: 46ch;
+    line-height: 1.55;
+  }
+  .s12 .row {
+    display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; justify-content: center;
+  }
+  .s12 .chip {
+    padding: 7px 14px; border: 1px solid var(--line);
+    border-radius: 999px; color: var(--fg-mut);
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .s12 .sig {
+    margin-top: 44px; font-family: var(--mono); font-size: 12px;
+    color: var(--fg-faint); letter-spacing: 0.04em;
+  }
+
+  /* ── Hud (bottom-right slide indicator + keys) ─────────── */
+  .hud {
+    position: fixed;
+    bottom: 24px; right: 28px;
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--mono); font-size: 12px;
+    color: var(--fg-dim);
+    z-index: 10;
+  }
+  .hud .progress {
+    width: 140px; height: 2px;
+    background: var(--bg-3);
+    border-radius: 2px; overflow: hidden;
+  }
+  .hud .progress .fill {
+    height: 100%; background: var(--accent);
+    width: 0%;
+    transition: width .4s cubic-bezier(.2,.8,.2,1);
+  }
+  .hud .counter { font-variant-numeric: tabular-nums; color: var(--fg-mut); }
+  .hud .counter .total { color: var(--fg-faint); }
+  .hud .hint {
+    color: var(--fg-faint);
+    display: inline-flex; gap: 6px; align-items: center;
+  }
+
+  /* Corner wordmark — bottom-left on every non-title slide. */
+  .corner {
+    position: fixed;
+    bottom: 26px; left: 30px;
+    font-family: var(--display); font-style: italic; font-weight: 400;
+    font-size: 18px; color: var(--fg-dim);
+    letter-spacing: -0.01em;
+    z-index: 10;
+    display: none;
+  }
+  .corner::before {
+    content: ""; display: inline-block;
+    width: 7px; height: 7px; border-radius: 2px;
+    background: var(--accent); margin-right: 10px;
+    vertical-align: 1px;
+  }
+  body[data-slide]:not([data-slide="1"]):not([data-slide="12"]) .corner { display: inline-block; }
+
+  /* ── Print / PDF export ────────────────────────────────── */
+  @media print {
+    html, body { background: #ffffff; color: #1f2328; }
+    body { overflow: visible; }
+    .stage {
+      position: static; padding: 0;
+      display: block;
+    }
+    .slide {
+      display: block !important;
+      page-break-after: always;
+      break-after: page;
+      width: 100%; height: 100vh; max-height: 100vh;
+      padding: 48px 56px;
+      animation: none !important;
+    }
+    .slide [data-stagger] { animation: none !important; opacity: 1 !important; transform: none !important; }
+    .hud, .corner { display: none !important; }
+    .gh { box-shadow: none; border: 1px solid #d0d7de; }
+    .mock { box-shadow: none; }
+  }
+
+  /* Responsive — keep the deck usable on smaller windows. */
+  @media (max-width: 900px) {
+    .stage { padding: 24px; }
+    .split, .split.asym, .split.asym-left, .compare, .config-wrap, .delta-demo {
+      grid-template-columns: 1fr; gap: 20px;
+    }
+    .mock .panes { grid-template-columns: 1fr; height: auto; }
+    .mock .pane { min-height: 140px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .mock .pane:last-child { border-bottom: 0; }
+    .callout { display: none; }
+    .s1 .wordmark { font-size: 22vw; }
+  }
+</style>
+</head>
+<body data-slide="1">
+  <div class="stage" id="stage">
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 1 · Title
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide active s1" data-slide="1">
+      <div class="slide-inner cover">
+        <div>
+          <div class="eyebrow" data-stagger="1">An internal talk · 10 minutes</div>
+          <div data-stagger="2" style="margin-top: 48px; display: flex; align-items: center; gap: 14px;">
+            <span class="mark" aria-hidden="true"></span>
+            <h1 style="font-size: clamp(84px, 13vw, 168px); margin: 0; line-height: 0.9;">
+              rubric
+            </h1>
+          </div>
+          <p class="subtitle" data-stagger="3" style="margin-top: 28px;">
+            Pairwise prompt evaluation<br>for <em>pull requests</em>.
+          </p>
+        </div>
+        <div class="meta" data-stagger="4">
+          <span class="who">Stop shipping prompt edits blind.</span>
+          <span class="ver">v2.2.1 · May 2026</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 2 · The problem
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="2">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">The problem</div>
+        <h2 data-stagger="2" style="margin-top: 16px; max-width: 20ch;">Prompt changes ship with <em>almost no safety net.</em></h2>
+        <p class="lead mut" data-stagger="3" style="margin-top: 20px; max-width: 62ch;">
+          &#8220;Looks better&#8221; usually means &#8220;I tried three examples&#8221;. Then
+          a week later a user hits the fourth example and it&#8217;s worse than what we had.
+        </p>
+
+        <div class="compare" data-stagger="4">
+          <div class="col bad">
+            <span class="tag">Before</span>
+            <h3>Hand-test three cases, ship</h3>
+            <ul>
+              <li>Edit <span class="k">candidate.md</span>. Spot-check on &ldquo;a good one&rdquo;.</li>
+              <li>Merge. Hope.</li>
+              <li>Regressions discovered via a Slack screenshot weeks later.</li>
+              <li>No way to say <em>why</em> the new prompt is better &mdash; just vibes.</li>
+            </ul>
+          </div>
+          <div class="col good">
+            <span class="tag">With rubric</span>
+            <h3>Pairwise sweep, gated on CI</h3>
+            <ul>
+              <li>Every PR runs <span class="k">baseline</span> vs <span class="k">candidate</span> across a real dataset.</li>
+              <li>An LLM judge picks a winner per case; CI fails on regression.</li>
+              <li>PR comment shows the top regressions inline, with reasons.</li>
+              <li>Override the judge when you disagree &mdash; log feeds calibration.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 3 · What rubric does
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="3">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">What rubric does</div>
+        <h2 data-stagger="2" style="margin-top: 16px; max-width: 22ch;">A pairwise sweep across <em>your dataset</em>, judged cell by cell.</h2>
+
+        <div class="flow" data-stagger="3">
+          <svg viewBox="0 0 1120 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="rubric evaluation flow diagram">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#6b7177"/>
+              </marker>
+              <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="#d4a056"/>
+              </marker>
+            </defs>
+
+            <!-- Inputs column -->
+            <g font-family="Geist, sans-serif" font-size="13" fill="#e6e8eb">
+              <!-- baseline.md -->
+              <g transform="translate(40,40)">
+                <rect width="200" height="62" rx="8" fill="#15181b" stroke="rgba(255,255,255,0.06)"/>
+                <text x="14" y="22" font-size="10.5" font-weight="600" fill="#9aa0a6" letter-spacing="0.8">PROMPT</text>
+                <text x="14" y="46" font-family="JetBrains Mono, monospace" font-size="13" fill="#ffffff">baseline.md</text>
+              </g>
+              <!-- candidate.md -->
+              <g transform="translate(40,118)">
+                <rect width="200" height="62" rx="8" fill="#15181b" stroke="rgba(212,160,86,0.35)"/>
+                <text x="14" y="22" font-size="10.5" font-weight="600" fill="#d4a056" letter-spacing="0.8">CANDIDATE</text>
+                <text x="14" y="46" font-family="JetBrains Mono, monospace" font-size="13" fill="#ffffff">candidate.md</text>
+              </g>
+              <!-- dataset -->
+              <g transform="translate(40,196)">
+                <rect width="200" height="62" rx="8" fill="#15181b" stroke="rgba(255,255,255,0.06)"/>
+                <text x="14" y="22" font-size="10.5" font-weight="600" fill="#9aa0a6" letter-spacing="0.8">DATASET</text>
+                <text x="14" y="46" font-family="JetBrains Mono, monospace" font-size="13" fill="#ffffff">cases.jsonl</text>
+              </g>
+              <!-- models -->
+              <g transform="translate(40,274)">
+                <rect width="200" height="52" rx="8" fill="#15181b" stroke="rgba(255,255,255,0.06)"/>
+                <text x="14" y="19" font-size="10.5" font-weight="600" fill="#9aa0a6" letter-spacing="0.8">MODELS</text>
+                <text x="14" y="40" font-family="JetBrains Mono, monospace" font-size="12" fill="#ffffff">openai/gpt-5.2, …</text>
+              </g>
+            </g>
+
+            <!-- Engine -->
+            <g transform="translate(340,100)">
+              <rect width="240" height="148" rx="10" fill="#1b1f23" stroke="rgba(255,255,255,0.11)"/>
+              <text x="120" y="30" text-anchor="middle" font-family="Geist, sans-serif" font-size="10.5" font-weight="600" fill="#d4a056" letter-spacing="1.5">ENGINE</text>
+              <text x="120" y="66" text-anchor="middle" font-family="Fraunces, serif" font-style="italic" font-size="22" fill="#ffffff">Plan cells</text>
+              <text x="120" y="90" text-anchor="middle" font-family="Geist, sans-serif" font-size="13" fill="#9aa0a6">cases × models</text>
+              <line x1="30" y1="104" x2="210" y2="104" stroke="rgba(255,255,255,0.06)"/>
+              <text x="120" y="128" text-anchor="middle" font-family="Geist, sans-serif" font-size="13" fill="#9aa0a6">Generate A and B per cell</text>
+            </g>
+
+            <!-- Judge -->
+            <g transform="translate(680,120)">
+              <rect width="200" height="108" rx="10" fill="#15181b" stroke="rgba(212,160,86,0.35)"/>
+              <text x="100" y="30" text-anchor="middle" font-family="Geist, sans-serif" font-size="10.5" font-weight="600" fill="#d4a056" letter-spacing="1.5">JUDGE</text>
+              <text x="100" y="62" text-anchor="middle" font-family="Fraunces, serif" font-style="italic" font-size="20" fill="#ffffff">LLM picks</text>
+              <text x="100" y="90" text-anchor="middle" font-family="Geist, sans-serif" font-size="13" fill="#9aa0a6">a · b · tie</text>
+            </g>
+
+            <!-- Output pills -->
+            <g font-family="Geist, sans-serif" font-size="11" font-weight="600" letter-spacing="1">
+              <g transform="translate(960,60)">
+                <rect width="120" height="34" rx="17" fill="rgba(127,182,133,0.14)" stroke="rgba(127,182,133,0.25)"/>
+                <text x="60" y="22" text-anchor="middle" fill="#7fb685">CAND WINS</text>
+              </g>
+              <g transform="translate(960,112)">
+                <rect width="120" height="34" rx="17" fill="rgba(217,108,108,0.14)" stroke="rgba(217,108,108,0.25)"/>
+                <text x="60" y="22" text-anchor="middle" fill="#d96c6c">BASE WINS</text>
+              </g>
+              <g transform="translate(960,164)">
+                <rect width="120" height="34" rx="17" fill="rgba(212,160,86,0.12)" stroke="rgba(212,160,86,0.25)"/>
+                <text x="60" y="22" text-anchor="middle" fill="#d4a056">TIE</text>
+              </g>
+              <g transform="translate(960,220)">
+                <rect width="120" height="34" rx="17" fill="transparent" stroke="rgba(255,255,255,0.11)"/>
+                <text x="60" y="22" text-anchor="middle" fill="#9aa0a6">CI GATE</text>
+              </g>
+            </g>
+
+            <!-- Arrows -->
+            <g stroke="#6b7177" stroke-width="1.2" fill="none">
+              <path d="M 244,71  C 290,71 290,170 338,170"   marker-end="url(#arrow)"/>
+              <path d="M 244,149 C 290,149 290,174 338,174" marker-end="url(#arrow-accent)" stroke="#d4a056"/>
+              <path d="M 244,227 C 290,227 290,178 338,178" marker-end="url(#arrow)"/>
+              <path d="M 244,300 C 290,300 290,182 338,182" marker-end="url(#arrow)"/>
+
+              <path d="M 580,174 L 678,174" marker-end="url(#arrow-accent)" stroke="#d4a056"/>
+
+              <path d="M 880,174 C 920,174 920,77 960,77"  marker-end="url(#arrow)"/>
+              <path d="M 880,174 C 920,174 920,129 960,129" marker-end="url(#arrow)"/>
+              <path d="M 880,174 C 920,174 920,181 960,181" marker-end="url(#arrow)"/>
+              <path d="M 880,174 C 920,174 920,237 960,237" marker-end="url(#arrow)"/>
+            </g>
+          </svg>
+        </div>
+
+        <p class="mut" data-stagger="4" style="margin-top: 18px; font-size: 14.5px; max-width: 82ch;">
+          Exit code <code class="inline">0</code> on pass. <code class="inline">1</code> on judge errors.
+          <code class="inline">2</code> when the candidate loses more cells than it wins &mdash; that&#8217;s your CI gate.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 4 · Install + quickstart
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="4">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">Install and try it</div>
+        <h2 data-stagger="2" style="margin-top: 16px; max-width: 18ch;">Three commands. <em>No account.</em></h2>
+        <p class="mut" data-stagger="3" style="margin-top: 14px; font-size: 15.5px; max-width: 62ch;">
+          Single-file binary for Linux / macOS / Windows. No Node, no Python, no login wall. Grab it from the GitHub release.
+        </p>
+
+        <div class="steps" data-stagger="4">
+          <div class="n">01</div>
+          <div class="what">
+            <div class="title">Download the binary for your platform.</div>
+            <div class="shell">
+              <div class="cmd"><span class="tok-c"># macOS / Linux (auto-detects arch):</span></div>
+              <div class="cmd">curl -L https://github.com/rubric/rubric/releases/latest/download/rubric-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') -o rubric &amp;&amp; chmod +x rubric</div>
+            </div>
+          </div>
+
+          <div class="n">02</div>
+          <div class="what">
+            <div class="title">Scaffold a workspace.</div>
+            <div class="shell">
+              <div class="cmd">./rubric init</div>
+              <div class="out">  wrote rubric.config.json</div>
+              <div class="out">  wrote prompts/baseline.md, prompts/candidate.md</div>
+              <div class="out">  wrote data/cases.jsonl</div>
+            </div>
+          </div>
+
+          <div class="n">03</div>
+          <div class="what">
+            <div class="title">Run it &mdash; live or mocked.</div>
+            <div class="shell">
+              <div class="cmd">./rubric serve<span class="tok-c">            # three-pane local UI on :5174</span></div>
+              <div class="cmd">./rubric run --fail-on-regress<span class="tok-c">  # CI-shaped sweep</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 5 · Config
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="5">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">Config</div>
+        <h2 data-stagger="2" style="margin-top: 16px; max-width: 22ch;">One JSON file. <em>Everything</em> else lives on disk.</h2>
+
+        <div class="config-wrap" style="margin-top: 32px;" data-stagger="3">
+          <div class="panel code">
+<span class="tok-p">{</span>
+  <span class="tok-k">"prompts"</span><span class="tok-p">: {</span>
+    <span class="tok-k">"baseline"</span><span class="tok-p">:</span>  <span class="tok-s">"prompts/baseline.md"</span><span class="tok-p">,</span>
+    <span class="tok-k">"candidate"</span><span class="tok-p">:</span> <span class="tok-s">"prompts/candidate.md"</span>
+  <span class="tok-p">},</span>
+  <span class="tok-k">"dataset"</span><span class="tok-p">:</span> <span class="tok-s">"data/cases.jsonl"</span><span class="tok-p">,</span>
+  <span class="tok-k">"models"</span><span class="tok-p">: [</span><span class="tok-s">"openai/gpt-5.2"</span><span class="tok-p">],</span>
+  <span class="tok-k">"judge"</span><span class="tok-p">: {</span>
+    <span class="tok-k">"model"</span><span class="tok-p">:</span>     <span class="tok-s">"openai/gpt-5.2"</span><span class="tok-p">,</span>
+    <span class="tok-k">"criteria"</span><span class="tok-p">:</span>  <span class="tok-s">"default"</span>
+  <span class="tok-p">},</span>
+  <span class="tok-k">"mode"</span><span class="tok-p">:</span>        <span class="tok-s">"compare-prompts"</span><span class="tok-p">,</span>
+  <span class="tok-k">"concurrency"</span><span class="tok-p">:</span> <span class="tok-n">4</span>
+<span class="tok-p">}</span>
+          </div>
+
+          <div class="config-notes">
+            <div class="note">
+              <span class="k">prompts</span>
+              Baseline is the control. Candidate is what you&#8217;re proposing in the PR.
+            </div>
+            <div class="note">
+              <span class="k">dataset</span>
+              One JSON object per line. Each needs <code class="inline">input</code>; optional <code class="inline">expected</code> + metadata pass through.
+            </div>
+            <div class="note">
+              <span class="k">models</span>
+              <code class="inline">provider/model</code> format. Supports OpenAI, Groq, OpenRouter, Ollama, and user-declared proxies.
+            </div>
+            <div class="note">
+              <span class="k">judge</span>
+              Another LLM that picks per-cell winners. Override <code class="inline">criteria</code> with prose or a rubric file.
+            </div>
+            <div class="note">
+              <span class="k">mode</span>
+              <code class="inline">compare-prompts</code> (same model, two prompts) or <code class="inline">compare-models</code> (one shared prompt, two models).
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 6 · The UI, three panes
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="6">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">The eval loop, visualized</div>
+        <h2 data-stagger="2" style="margin-top: 12px; max-width: 18ch;"><code style="font-family: var(--display); font-size: 0.86em; font-style: italic; color: var(--accent); font-weight: 400;">rubric serve</code> &mdash; three panes, live diff.</h2>
+
+        <div class="mock-wrap" data-stagger="3" style="margin-top: 12px;">
+          <div class="mock" aria-label="rubric serve UI preview">
+            <div class="chrome">
+              <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              <span class="url">127.0.0.1:5174</span>
+            </div>
+
+            <div class="header">
+              <span class="brand"><span class="b"></span>Rubric</span>
+              <span class="spacer"></span>
+              <span class="pill"><span class="k">Models</span> <span class="v">openai/gpt-5.2</span></span>
+              <span class="pill"><span class="k">Judge</span> <span class="v">openai/gpt-5.2</span></span>
+              <span class="primary">Run</span>
+            </div>
+
+            <div class="panes">
+              <!-- Prompts pane -->
+              <div class="pane">
+                <div class="pane-title"><span class="dot"></span> Prompts</div>
+                <div class="tabs">
+                  <span class="tab">Baseline</span>
+                  <span class="tab active">Candidate</span>
+                  <span class="tab">Judge</span>
+                </div>
+                <div class="editor">
+<span class="h">You are a senior engineer.</span>
+
+<span class="c"># Structure every answer:</span>
+<span class="c"># 1. Direct answer, one line.</span>
+<span class="c"># 2. The load-bearing reason.</span>
+<span class="c"># 3. A concrete example.</span>
+
+Question: {{input}}
+                </div>
+              </div>
+
+              <!-- Cases pane -->
+              <div class="pane">
+                <div class="pane-title">Cases <span style="margin-left:auto;color:var(--fg-dim);font-weight:500;text-transform:none;letter-spacing:0;font-size:11px;font-family:var(--mono);">5</span></div>
+                <div class="cases">
+                  <div class="case-row">
+                    <div class="meta">#0 <span class="tag">retry</span></div>
+                    <div class="input">When is a POST endpoint safe to retry?</div>
+                  </div>
+                  <div class="case-row">
+                    <div class="meta">#1 <span class="tag">node</span></div>
+                    <div class="input">How does Express rate-limit by default?</div>
+                  </div>
+                  <div class="case-row">
+                    <div class="meta">#2 <span class="tag">pg</span></div>
+                    <div class="input">Why might an index slow a query down?</div>
+                  </div>
+                  <div class="case-row">
+                    <div class="meta">#3 <span class="tag">node</span></div>
+                    <div class="input">What breaks first at the event-loop limit?</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Results pane -->
+              <div class="pane">
+                <div class="pane-title">Results <span style="margin-left:auto;color:var(--fg-dim);font-weight:500;text-transform:none;letter-spacing:0;font-size:11px;font-family:var(--mono);">4 / 5</span></div>
+                <div class="summary">
+                  <div class="cell"><div class="n win">3</div><div class="k">Wins</div></div>
+                  <div class="cell"><div class="n loss">1</div><div class="k">Losses</div></div>
+                  <div class="cell"><div class="n tie">0</div><div class="k">Ties</div></div>
+                  <div class="cell"><div class="n">75<span style="font-size:11px;color:var(--fg-dim)">%</span></div><div class="k">Rate</div></div>
+                  <div class="cell"><div class="n win">2</div><div class="k">Δ up</div></div>
+                </div>
+                <table class="grid-table">
+                  <thead>
+                    <tr><th>#</th><th>Δ</th><th>Input</th><th>Winner</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td class="idx">0</td><td class="delta up">▲</td><td class="input">When is a POST endpoint safe to retry?</td><td><span class="verdict-pill b">Cand</span></td></tr>
+                    <tr><td class="idx">1</td><td class="delta up">▲</td><td class="input">How does Express rate-limit by default?</td><td><span class="verdict-pill b">Cand</span></td></tr>
+                    <tr><td class="idx">2</td><td class="delta same">·</td><td class="input">Why might an index slow a query down?</td><td><span class="verdict-pill b">Cand</span></td></tr>
+                    <tr><td class="idx">3</td><td class="delta down">▼</td><td class="input">What breaks first at the event-loop limit?</td><td><span class="verdict-pill a">Base</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Callouts — hidden on mobile -->
+          <div class="callout c1" data-stagger="4"><span class="txt">edit · ⌘S to save</span><span class="num">1</span></div>
+          <div class="callout c2" data-stagger="5"><span class="txt">real inputs from your dataset</span><span class="num">2</span></div>
+          <div class="callout c3" data-stagger="6"><span class="num">3</span><span class="txt">per-case verdict + Δ vs. last run</span></div>
+          <div class="callout c4" data-stagger="7"><span class="num">4</span><span class="txt">click a row to see both outputs</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 7 · PR comment
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="7">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">What lands on the PR</div>
+        <h2 data-stagger="2" style="margin-top: 12px; max-width: 22ch;">The comment shows <em>why</em> &mdash; not just that it regressed.</h2>
+
+        <div class="gh" data-stagger="3">
+          <div class="gh-head">
+            <div class="avatar" aria-hidden="true"></div>
+            <div>
+              <div class="who">rubric-bot</div>
+              <div class="when">commented 2 min ago · <code style="font-family: var(--mono); color: #57606a; font-size: 12.5px;">baseline.md → candidate.md</code></div>
+            </div>
+          </div>
+
+          <h1>rubric</h1>
+          <div class="status"><strong>REGRESSION</strong> &mdash; candidate loses 2 &gt; wins 0 (0.0% win rate)</div>
+          <div class="counts">
+            <div class="stat"><span class="n">0</span><span class="k">wins</span></div>
+            <div class="stat"><span class="n" style="color:#cf222e">2</span><span class="k">losses</span></div>
+            <div class="stat"><span class="n">0</span><span class="k">ties</span></div>
+            <div class="stat"><span class="n">0.0%</span><span class="k">win rate</span></div>
+            <div class="stat"><span class="n">$0.0032</span><span class="k">cost</span></div>
+          </div>
+
+          <details class="regressions" open>
+            <summary>Top regressions (2 of 2 losses)</summary>
+            <div class="case-block">
+              <h4>case-1 · <code>openai/gpt-5.2</code></h4>
+              <div class="label">Input</div>
+              <pre>How does Express handle rate limiting by default?</pre>
+              <div class="label">Why baseline won</div>
+              <pre>Candidate hallucinated a built-in rate limiter that does not exist in the framework.</pre>
+              <div class="two">
+                <div class="col">
+                  <div class="cap">A · baseline (won)</div>
+                  <pre>Express has no built-in rate limiter. Add middleware like express-rate-limit.</pre>
+                </div>
+                <div class="col">
+                  <div class="cap">B · candidate (lost)</div>
+                  <pre>Express includes a built-in rate-limit middleware that activates automatically after 100 req/min per IP.</pre>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div style="margin-top: 14px; font-size: 12.5px; color: #59636e;">
+            Judge: <code style="font-family: var(--mono); background: #eaeef2; padding: 1px 5px; border-radius: 3px;">openai/gpt-5.2</code>
+            &nbsp;·&nbsp; Override any verdict you disagree with via <code style="font-family: var(--mono); background: #eaeef2; padding: 1px 5px; border-radius: 3px;">rubric disagree</code>.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 8 · Disagreeing with the judge
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="8">
+      <div class="slide-inner">
+        <div class="split asym">
+          <div>
+            <div class="eyebrow" data-stagger="1">The judge isn&#8217;t the final word</div>
+            <h2 data-stagger="2" style="margin-top: 12px;">You disagree. <em>Say so.</em></h2>
+            <p class="lead mut" data-stagger="3" style="margin-top: 20px;">
+              The judge is just another LLM. When you think it got a cell wrong, one click
+              records it &mdash; and that log becomes the training corpus for the v2.3 calibration model.
+            </p>
+            <p class="mut" data-stagger="4" style="font-size: 14.5px; margin-top: 18px;">
+              Drive it from the CLI or inline in <code class="inline">rubric serve</code>. Every override
+              appends to <code class="inline">~/.rubric/overrides/&lt;project&gt;.jsonl</code>.
+              The same file. Same log. CLI and UI round-trip.
+            </p>
+          </div>
+
+          <div>
+            <div data-stagger="5">
+              <h3 style="margin-bottom: 12px; font-size: 15px; color: var(--fg-mut); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600;">From the CLI</h3>
+              <div class="shell">
+                <div class="cmd">rubric disagree case-3/openai/gpt-5.2 \</div>
+                <div class="cmd">&nbsp;&nbsp;--verdict A --reason <span class="tok-s">"judge missed the factual error in B"</span></div>
+                <div class="out" style="margin-top:6px;">  ✎ case-3/openai/gpt-5.2 → A — &ldquo;judge missed…&rdquo;</div>
+              </div>
+            </div>
+
+            <div data-stagger="6" style="margin-top: 28px;">
+              <h3 style="margin-bottom: 12px; font-size: 15px; color: var(--fg-mut); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600;">Or inline in serve</h3>
+              <div class="override-ui">
+                <div class="row">
+                  <span class="lbl">Your verdict</span>
+                  <span class="btn a">Baseline</span>
+                  <span class="btn active b">Candidate</span>
+                  <span class="btn">Tie</span>
+                  <span class="reason">judge nailed it</span>
+                </div>
+                <div class="status">You → Candidate · "judge nailed it"</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 9 · Iterating — the Δ loop
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="9">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">The loop that makes it sticky</div>
+        <h2 data-stagger="2" style="margin-top: 12px; max-width: 24ch;">Every run answers &ldquo;<em>did my edit help?</em>&rdquo;</h2>
+        <p class="lead mut" data-stagger="3" style="margin-top: 18px; max-width: 64ch;">
+          After a sweep, edit a prompt and rerun. The grid&#8217;s Δ column marks which cases
+          improved, regressed, or didn&#8217;t move. Click a row to see the old and new judge reason stacked.
+        </p>
+
+        <div class="delta-demo" data-stagger="4">
+          <div class="col">
+            <h4>Run #1 · plain baseline</h4>
+            <div class="mini-grid">
+              <table>
+                <thead><tr><th>#</th><th>Δ</th><th>Winner</th></tr></thead>
+                <tbody>
+                  <tr><td class="idx">0</td><td class="delta same">·</td><td><span class="vp a">Base</span></td></tr>
+                  <tr><td class="idx">1</td><td class="delta same">·</td><td><span class="vp a">Base</span></td></tr>
+                  <tr><td class="idx">2</td><td class="delta same">·</td><td><span class="vp a">Base</span></td></tr>
+                  <tr><td class="idx">3</td><td class="delta same">·</td><td><span class="vp a">Base</span></td></tr>
+                  <tr><td class="idx">4</td><td class="delta same">·</td><td><span class="vp a">Base</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="col">
+            <h4>Run #2 · after editing <code class="inline">candidate.md</code></h4>
+            <div class="mini-grid">
+              <table>
+                <thead><tr><th>#</th><th>Δ</th><th>Winner</th></tr></thead>
+                <tbody>
+                  <tr><td class="idx">0</td><td class="delta up">▲</td><td><span class="vp b">Cand</span></td></tr>
+                  <tr><td class="idx">1</td><td class="delta up">▲</td><td><span class="vp b">Cand</span></td></tr>
+                  <tr><td class="idx">2</td><td class="delta same">·</td><td><span class="vp a">Base</span></td></tr>
+                  <tr><td class="idx">3</td><td class="delta up">▲</td><td><span class="vp t">Tie</span></td></tr>
+                  <tr><td class="idx">4</td><td class="delta down">▼</td><td><span class="vp a">Base</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <p class="mut" data-stagger="5" style="margin-top: 20px; font-size: 14px; max-width: 72ch;">
+          Click row 3 in run #2 and the detail pane shows <strong style="color:var(--fg-hi);font-weight:600">Was: Baseline</strong> &rarr; <strong style="color:var(--fg-hi);font-weight:600">Now: Tie</strong> with both reasons, so
+          you can see exactly what the edit changed.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 10 · CI integration
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="10">
+      <div class="slide-inner">
+        <div class="split asym">
+          <div>
+            <div class="eyebrow" data-stagger="1">On GitHub</div>
+            <h2 data-stagger="2" style="margin-top: 12px;">Drop one file into <em>.github/workflows/</em></h2>
+            <p class="lead mut" data-stagger="3" style="margin-top: 20px; font-size: 18px;">
+              The Action downloads the release binary &mdash; no npm, no Node setup, no auth beyond
+              your <code class="inline">OPENAI_API_KEY</code> secret. ~15&nbsp;s install, ~40&nbsp;s for a 50-case sweep.
+            </p>
+            <p class="mut" data-stagger="4" style="font-size: 14px; margin-top: 20px;">
+              The comment is idempotent &mdash; subsequent runs update the same comment via a hidden marker instead of stacking.
+              Paths trigger on prompt edits only so CI doesn&#8217;t run on unrelated changes.
+            </p>
+          </div>
+          <div data-stagger="5">
+            <div class="panel code" style="font-size: 13px; line-height: 1.75;">
+<span class="tok-c"># .github/workflows/rubric.yml</span>
+<span class="tok-k">on</span><span class="tok-p">:</span>
+  <span class="tok-k">pull_request</span><span class="tok-p">:</span>
+    <span class="tok-k">paths</span><span class="tok-p">:</span> [<span class="tok-s">'prompts/**'</span><span class="tok-p">,</span> <span class="tok-s">'data/**'</span><span class="tok-p">,</span> <span class="tok-s">'rubric.config.json'</span>]
+
+<span class="tok-k">jobs</span><span class="tok-p">:</span>
+  <span class="tok-k">eval</span><span class="tok-p">:</span>
+    <span class="tok-k">runs-on</span><span class="tok-p">:</span> ubuntu-latest
+    <span class="tok-k">permissions</span><span class="tok-p">: {</span> <span class="tok-k">pull-requests</span><span class="tok-p">:</span> write<span class="tok-p">,</span> <span class="tok-k">contents</span><span class="tok-p">:</span> read <span class="tok-p">}</span>
+    <span class="tok-k">steps</span><span class="tok-p">:</span>
+      - <span class="tok-k">uses</span><span class="tok-p">:</span> actions/checkout@v4
+      - <span class="tok-k">uses</span><span class="tok-p">:</span> rubric/rubric@v2
+        <span class="tok-k">with</span><span class="tok-p">:</span>
+          <span class="tok-k">fail-on-regress</span><span class="tok-p">:</span> <span class="tok-n">true</span>
+        <span class="tok-k">env</span><span class="tok-p">:</span>
+          <span class="tok-k">OPENAI_API_KEY</span><span class="tok-p">:</span> <span class="tok-f">${{ secrets.OPENAI_API_KEY }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 11 · Roadmap
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="11">
+      <div class="slide-inner">
+        <div class="eyebrow" data-stagger="1">Where this is going</div>
+        <h2 data-stagger="2" style="margin-top: 12px; max-width: 22ch;">v2.3 learns to score <em>the judge.</em></h2>
+
+        <div class="roadmap">
+          <div class="row past" data-stagger="3">
+            <div class="ver">v2.2</div>
+            <div class="what">
+              <div class="t">Radical cut &mdash; the pairwise wedge</div>
+              <div class="d">Stripped finetune, calibrate, history, share, pull, failure clustering. Focused the whole tool on one loop: baseline vs. candidate, gated on CI.</div>
+            </div>
+          </div>
+          <div class="row" data-stagger="4">
+            <div class="ver">v2.2.1</div>
+            <div class="what">
+              <div class="t">In-UI overrides, compare-models, top-regressions in PR</div>
+              <div class="d">Override buttons in serve. Δ column shows which cases moved since last run. PR comment surfaces the three worst losses inline with inputs + reasons.</div>
+            </div>
+          </div>
+          <div class="row" data-stagger="5">
+            <div class="ver">v2.3</div>
+            <div class="what">
+              <div class="t">Residual-classifier calibration</div>
+              <div class="d">Train a small classifier on the override log. Output: per-cell &ldquo;judge likely wrong&rdquo; score &mdash; surfaced in the comment as <code class="inline">trusted</code> / <code class="inline">review</code> / <code class="inline">flagged</code>. The override log you&#8217;re building today is the training set.</div>
+            </div>
+          </div>
+          <div class="row" data-stagger="6">
+            <div class="ver">later</div>
+            <div class="what">
+              <div class="t">Hosted sandbox at rubric.dev</div>
+              <div class="d">Shareable URLs for prompt bakeoffs. Anonymous try-it, fork-to-local. Nothing ships until the local CLI has real users using it weekly.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════════════════════════
+         Slide 12 · End
+         ════════════════════════════════════════════════════════ -->
+    <section class="slide s12" data-slide="12">
+      <div class="inner">
+        <div class="eyebrow" data-stagger="1">Start using it this week</div>
+        <div class="link" data-stagger="2">rubric.dev</div>
+        <div class="sub" data-stagger="3">
+          Download a binary. Point it at your prompt folder. Open a PR.
+          Tell me where it breaks on your stack.
+        </div>
+        <div class="row" data-stagger="4">
+          <span class="chip">github.com/rubric/rubric</span>
+          <span class="chip">npm · soon</span>
+          <span class="chip">brew · soon</span>
+        </div>
+        <div class="sig" data-stagger="5">— built in the open, MIT license</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ── HUD ─────────────────────────────────────────── -->
+  <div class="corner">rubric</div>
+  <div class="hud">
+    <span class="hint"><kbd>←</kbd> <kbd>→</kbd> <kbd>space</kbd></span>
+    <div class="progress"><div class="fill" id="progress"></div></div>
+    <span class="counter"><span id="cur">1</span><span class="total"> / <span id="tot">12</span></span></span>
+  </div>
+
+<script>
+  (() => {
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const total = slides.length;
+    const totEl = document.getElementById('tot');
+    const curEl = document.getElementById('cur');
+    const progress = document.getElementById('progress');
+    totEl.textContent = total;
+
+    let i = 0;
+
+    // Support deep-linking via #slide-N or ?slide=N so the deck is shareable.
+    function initialIndex() {
+      const hash = location.hash.match(/#slide-(\d+)/);
+      if (hash) return Math.max(0, Math.min(total - 1, parseInt(hash[1], 10) - 1));
+      const qp = new URLSearchParams(location.search).get('slide');
+      if (qp) return Math.max(0, Math.min(total - 1, parseInt(qp, 10) - 1));
+      return 0;
+    }
+
+    function show(n) {
+      n = Math.max(0, Math.min(total - 1, n));
+      slides[i].classList.remove('active');
+      i = n;
+      slides[i].classList.add('active');
+      document.body.dataset.slide = String(i + 1);
+      curEl.textContent = i + 1;
+      progress.style.width = ((i + 1) / total * 100) + '%';
+      history.replaceState(null, '', '#slide-' + (i + 1));
+    }
+
+    function next() { if (i < total - 1) show(i + 1); }
+    function prev() { if (i > 0) show(i - 1); }
+
+    window.addEventListener('keydown', (e) => {
+      // Ignore modifier-bearing combos so browser shortcuts stay intact.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ' || e.key === 'l' || e.key === 'j') {
+        e.preventDefault(); next();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'h' || e.key === 'k') {
+        e.preventDefault(); prev();
+      } else if (e.key === 'Home') {
+        e.preventDefault(); show(0);
+      } else if (e.key === 'End') {
+        e.preventDefault(); show(total - 1);
+      } else if (/^[1-9]$/.test(e.key)) {
+        // Number-key jumps. "0" would ambiguously mean 10; use Home instead.
+        show(parseInt(e.key, 10) - 1);
+      } else if (e.key === '0') {
+        show(9); // 10th slide
+      }
+    });
+
+    // Click-to-advance on the stage, but let interactive bits inside a slide
+    // keep their own click handlers (none yet, but future-proofs the deck).
+    document.getElementById('stage').addEventListener('click', (e) => {
+      const tag = e.target.tagName;
+      if (tag === 'A' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'DETAILS' || tag === 'SUMMARY' || e.target.closest('details,summary,a,button')) return;
+      next();
+    });
+
+    show(initialIndex());
+  })();
+</script>
+</body>
+</html>
