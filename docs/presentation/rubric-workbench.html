@@ -1,0 +1,1365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rubric · a workbench for prompt iteration</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,300;1,9..144,400&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  /* ============================================================
+     rubric · workbench deck
+     Fluid typography, responsive grids, no fixed pixel boxes.
+     Same Graphite palette as the tool itself: warm slate + ochre.
+     ============================================================ */
+  :root {
+    /* Surfaces */
+    --bg-0: #0f1113;
+    --bg-1: #15181b;
+    --bg-2: #1b1f23;
+    --bg-3: #23282d;
+    --bg-4: #2d3339;
+
+    --line:    rgba(255,255,255,0.06);
+    --line-hi: rgba(255,255,255,0.11);
+
+    --fg:       #e6e8eb;
+    --fg-hi:    #ffffff;
+    --fg-mut:   #9aa0a6;
+    --fg-dim:   #6b7177;
+    --fg-faint: #4a4f55;
+
+    --accent:      #d4a056;
+    --accent-hi:   #e7b36a;
+    --accent-soft: rgba(212,160,86,0.12);
+    --accent-line: rgba(212,160,86,0.35);
+
+    --win:       #7fb685;
+    --win-soft:  rgba(127,182,133,0.14);
+    --loss:      #d96c6c;
+    --loss-soft: rgba(217,108,108,0.14);
+    --tie:       #d4a056;
+
+    --display: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --sans:    "Geist", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    --mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    /* Fluid type scale — scales with viewport width but clamped at both ends. */
+    --step--2: clamp(0.6875rem, 0.62rem + 0.3vw, 0.8125rem);
+    --step--1: clamp(0.8125rem, 0.72rem + 0.45vw, 0.9375rem);
+    --step-0:  clamp(0.9375rem, 0.82rem + 0.55vw, 1.0625rem);
+    --step-1:  clamp(1.0625rem, 0.92rem + 0.7vw, 1.25rem);
+    --step-2:  clamp(1.25rem, 1.02rem + 1vw, 1.5rem);
+    --step-3:  clamp(1.5rem, 1.15rem + 1.6vw, 2rem);
+    --step-4:  clamp(1.875rem, 1.35rem + 2.4vw, 2.75rem);
+    --step-5:  clamp(2.5rem, 1.7rem + 3.8vw, 4.25rem);
+    --step-6:  clamp(3.25rem, 1.9rem + 6.4vw, 6.5rem);
+
+    /* Fluid spacing */
+    --pad:    clamp(1.5rem, 0.8rem + 3vw, 4rem);
+    --pad-sm: clamp(0.75rem, 0.4rem + 1.5vw, 1.5rem);
+    --gap:    clamp(1rem, 0.6rem + 2vw, 2.5rem);
+
+    --radius:    8px;
+    --radius-sm: 5px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { background: var(--bg-0); font-size: 16px; }
+
+  body {
+    background: var(--bg-0);
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.5;
+    letter-spacing: -0.004em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 18% 8%, rgba(212,160,86,0.04), transparent 55%),
+      radial-gradient(ellipse 60% 50% at 82% 92%, rgba(127,182,133,0.025), transparent 55%);
+  }
+
+  ::selection { background: var(--accent-soft); color: var(--fg-hi); }
+
+  /* ── Slide stage ─────────────────────────────────────────
+     Full viewport, flexible padding, content centers vertically so short
+     slides look balanced and long slides pack toward the top. */
+  .stage {
+    position: fixed; inset: 0;
+    display: grid;
+    place-items: center;
+    overflow: auto;
+    padding: var(--pad);
+  }
+  .slide {
+    width: min(1440px, 100%);
+    max-height: 100%;
+    position: relative;
+    display: none;
+    animation: enter .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .slide.active { display: flex; flex-direction: column; justify-content: center; }
+
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .slide.active [data-stagger] { animation: rise .7s cubic-bezier(.2,.8,.2,1) both; }
+  .slide.active [data-stagger="1"] { animation-delay: .05s; }
+  .slide.active [data-stagger="2"] { animation-delay: .14s; }
+  .slide.active [data-stagger="3"] { animation-delay: .23s; }
+  .slide.active [data-stagger="4"] { animation-delay: .32s; }
+  .slide.active [data-stagger="5"] { animation-delay: .41s; }
+  .slide.active [data-stagger="6"] { animation-delay: .50s; }
+  .slide.active [data-stagger="7"] { animation-delay: .59s; }
+  .slide.active [data-stagger="8"] { animation-delay: .68s; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Typography ─────────────────────────────────────────── */
+  h1, h2, h3, h4 { margin: 0; font-weight: 500; letter-spacing: -0.018em; }
+  h1 {
+    font-family: var(--display);
+    font-size: var(--step-6);
+    font-weight: 300;
+    line-height: 0.95;
+    color: var(--fg-hi);
+    letter-spacing: -0.035em;
+  }
+  h1 em { font-style: italic; color: var(--accent); font-weight: 400; }
+  h2 {
+    font-family: var(--display);
+    font-size: var(--step-5);
+    font-weight: 400;
+    line-height: 1.05;
+    color: var(--fg-hi);
+    letter-spacing: -0.028em;
+  }
+  h2 em { font-style: italic; color: var(--accent); font-weight: 400; }
+  h3 {
+    font: 600 var(--step-2)/1.25 var(--sans);
+    color: var(--fg-hi);
+    letter-spacing: -0.015em;
+  }
+  p { margin: 0 0 0.9em; color: var(--fg); }
+  p.lead { font-size: var(--step-1); line-height: 1.5; color: var(--fg); max-width: 56ch; }
+
+  .mut { color: var(--fg-mut); }
+  .dim { color: var(--fg-dim); }
+
+  .eyebrow {
+    font: 600 var(--step--2)/1 var(--sans);
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent);
+    display: inline-flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before {
+    content: ""; display: inline-block;
+    width: 10px; height: 1px; background: var(--accent);
+  }
+
+  code, pre, kbd {
+    font-family: var(--mono);
+    font-feature-settings: "zero", "ss02";
+    letter-spacing: 0;
+  }
+  code.inline {
+    padding: 1px 6px 2px; font-size: 0.88em;
+    background: var(--bg-3); color: var(--fg-hi);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  kbd {
+    display: inline-block;
+    padding: 2px 7px 3px;
+    font-size: 0.78em; line-height: 1;
+    color: var(--fg); background: var(--bg-3);
+    border: 1px solid var(--line-hi);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    vertical-align: baseline;
+  }
+
+  /* ── Shared layout helpers ──────────────────────────────── */
+  .stack   { display: flex; flex-direction: column; gap: var(--gap); }
+  .stack.sm { gap: calc(var(--gap) * 0.5); }
+  .stack.xs { gap: 0.6rem; }
+
+  .split {
+    display: grid; gap: var(--gap);
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 860px) {
+    .split.two      { grid-template-columns: 1fr 1fr; align-items: center; }
+    .split.asym     { grid-template-columns: 5fr 7fr; align-items: center; }
+    .split.asym-r   { grid-template-columns: 7fr 5fr; align-items: center; }
+    .split.side     { grid-template-columns: minmax(260px, 1fr) 2fr; align-items: start; }
+  }
+
+  /* ── Panels ─────────────────────────────────────────────── */
+  .panel {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: clamp(1rem, 0.6rem + 1.5vw, 1.75rem);
+  }
+  .panel.code {
+    background: var(--bg-2);
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    line-height: 1.7;
+    color: var(--fg);
+    overflow: auto;
+  }
+  .tok-c { color: var(--fg-faint); }
+  .tok-k { color: var(--fg-mut); }
+  .tok-s { color: var(--win); }
+  .tok-n { color: var(--accent); }
+  .tok-f { color: var(--fg-hi); }
+  .tok-p { color: var(--fg-dim); }
+
+  .shell {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: clamp(0.9rem, 0.5rem + 1vw, 1.25rem) clamp(1rem, 0.6rem + 1.2vw, 1.5rem);
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+  .shell .cmd { color: var(--fg-hi); white-space: nowrap; }
+  .shell .cmd::before { content: "$ "; color: var(--fg-faint); }
+  .shell .out { color: var(--fg-mut); }
+
+  /* ── Slide 1 · Title ──────────────────────────────────── */
+  .s-title { justify-content: space-between; min-height: min(720px, 82vh); }
+  .wordmark {
+    display: inline-flex; align-items: center;
+    gap: clamp(0.5rem, 0.3rem + 0.8vw, 1rem);
+    font: 300 var(--step-6)/0.9 var(--display);
+    color: var(--fg-hi);
+    letter-spacing: -0.04em;
+  }
+  .wordmark .mark {
+    width: clamp(40px, 4vw + 12px, 84px);
+    aspect-ratio: 1;
+    background: var(--accent);
+    border-radius: clamp(8px, 0.8vw, 14px);
+    box-shadow: 0 0 0 clamp(6px, 0.8vw, 12px) rgba(212,160,86,0.10);
+    position: relative; overflow: hidden;
+  }
+  .wordmark .mark::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.22), transparent 40%);
+  }
+  .subtitle {
+    font: 400 var(--step-4)/1.1 var(--display);
+    font-style: italic;
+    color: var(--fg-mut);
+    letter-spacing: -0.018em;
+    max-width: 22ch;
+    margin-top: clamp(0.5rem, 1vw, 1.5rem);
+  }
+  .subtitle em { color: var(--accent); font-style: italic; }
+  .title-meta {
+    display: flex; flex-wrap: wrap; gap: 1rem 2rem;
+    justify-content: space-between; align-items: baseline;
+    padding-top: clamp(0.8rem, 1vw, 1.25rem);
+    border-top: 1px solid var(--line);
+    color: var(--fg-dim);
+    font-family: var(--mono); font-size: var(--step--1);
+  }
+
+  /* ── Contrast cards (slide 2) ───────────────────────────── */
+  .contrast {
+    display: grid; gap: var(--gap);
+    grid-template-columns: 1fr;
+    margin-top: var(--gap);
+  }
+  @media (min-width: 760px) { .contrast { grid-template-columns: 1fr 1fr; } }
+  .card {
+    padding: clamp(1.25rem, 0.8rem + 1.5vw, 2rem);
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: flex; flex-direction: column;
+  }
+  .card .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    font: 600 var(--step--2)/1.4 var(--sans);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+    align-self: flex-start;
+  }
+  .card.bad  .tag { color: var(--loss); background: var(--loss-soft); border: 1px solid rgba(217,108,108,0.25); }
+  .card.good .tag { color: var(--win);  background: var(--win-soft);  border: 1px solid rgba(127,182,133,0.25); }
+  .card h3 { margin-bottom: 0.9rem; }
+  .card ul {
+    list-style: none; padding: 0; margin: 0;
+    display: flex; flex-direction: column; gap: 0.7rem;
+  }
+  .card li {
+    padding-left: 1.5rem; position: relative;
+    color: var(--fg); line-height: 1.55;
+    font-size: var(--step-0);
+  }
+  .card li::before {
+    content: ""; position: absolute; left: 0; top: 0.65em;
+    width: 0.8rem; height: 2px; background: var(--fg-faint);
+  }
+  .card.good li::before { background: var(--accent); }
+
+  /* ── The loop (slide 3) ─────────────────────────────────── */
+  .loop {
+    display: grid;
+    gap: clamp(0.6rem, 1vw, 1rem);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    margin-top: var(--gap);
+  }
+  .loop-step {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: clamp(0.85rem, 0.5rem + 0.8vw, 1.25rem);
+    position: relative;
+    display: flex; flex-direction: column;
+    gap: 0.4rem;
+    min-height: 110px;
+  }
+  .loop-step .n {
+    font: 400 var(--step-1)/1 var(--display);
+    font-style: italic;
+    color: var(--accent);
+  }
+  .loop-step .t {
+    font: 600 var(--step-0)/1.3 var(--sans);
+    color: var(--fg-hi);
+  }
+  .loop-step .d {
+    font: 400 var(--step--1)/1.5 var(--sans);
+    color: var(--fg-mut);
+  }
+  .loop-step.active {
+    border-color: var(--accent-line);
+    background: linear-gradient(180deg, var(--accent-soft), transparent 80%);
+  }
+  .loop-arrow {
+    color: var(--fg-faint);
+    font: 400 var(--step-2)/1 var(--mono);
+    text-align: center;
+    padding: 0.5rem 0;
+  }
+
+  /* ── Quickstart steps (slide 4) ─────────────────────────── */
+  .steps {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: clamp(0.8rem, 1vw, 1.25rem) clamp(1rem, 1.5vw, 1.75rem);
+    margin-top: var(--gap);
+  }
+  .steps .n {
+    font: 400 var(--step-3)/1 var(--display);
+    font-style: italic;
+    color: var(--accent);
+    padding-top: 0.9rem;
+  }
+  .steps .what { padding-top: 0.7rem; }
+  .steps .t { font: 500 var(--step-0)/1.3 var(--sans); color: var(--fg-hi); margin-bottom: 0.55rem; }
+  .steps .shell { margin-top: 0; }
+
+  /* ── UI mockup (slide 5) ────────────────────────────────── */
+  .mock {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    font-size: var(--step--1);
+    container-type: inline-size;
+  }
+  .mock .chrome {
+    display: flex; align-items: center; gap: 8px;
+    padding: clamp(0.5rem, 1vw, 0.7rem) clamp(0.8rem, 1.2vw, 1rem);
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--line);
+  }
+  .mock .chrome .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .mock .chrome .dot:nth-child(1) { background: #d96c6c; }
+  .mock .chrome .dot:nth-child(2) { background: #d4a056; }
+  .mock .chrome .dot:nth-child(3) { background: #7fb685; }
+  .mock .chrome .url {
+    margin-left: 0.5rem;
+    font-family: var(--mono); font-size: var(--step--2);
+    color: var(--fg-dim);
+  }
+  .mock .topbar {
+    display: flex; align-items: center; gap: clamp(0.4rem, 1vw, 0.75rem);
+    padding: clamp(0.5rem, 1vw, 0.75rem) clamp(0.8rem, 1.5vw, 1.1rem);
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .mock .topbar .brand {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-weight: 600; color: var(--fg-hi);
+    font-size: var(--step-0);
+  }
+  .mock .topbar .brand .b { width: 10px; height: 10px; background: var(--accent); border-radius: 2px; }
+  .mock .topbar .spacer { flex: 1; }
+  .mock .topbar .pill {
+    padding: 3px 9px; border-radius: 5px;
+    font: 500 var(--step--2)/1.3 var(--sans);
+    color: var(--fg-mut);
+    background: var(--bg-2); border: 1px solid var(--line);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .mock .topbar .pill .v { font-family: var(--mono); color: var(--fg); }
+  .mock .topbar .primary {
+    padding: 4px 12px; border-radius: 5px;
+    background: var(--accent); color: #1a1410;
+    font-weight: 600; font-size: var(--step--1);
+  }
+  .mock .panes {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  @container (min-width: 720px) {
+    .mock .panes { grid-template-columns: 1fr 0.85fr 1.3fr; }
+    .mock .pane { border-right: 1px solid var(--line); }
+    .mock .pane:last-child { border-right: 0; }
+  }
+  @container (max-width: 719px) {
+    .mock .pane { border-bottom: 1px solid var(--line); }
+    .mock .pane:last-child { border-bottom: 0; }
+  }
+  .mock .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .mock .pane-title {
+    padding: clamp(0.5rem, 1vw, 0.7rem) clamp(0.7rem, 1.2vw, 1rem);
+    font: 600 var(--step--2)/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-mut);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .mock .pane-title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--win); }
+  .mock .tabs {
+    display: flex; padding: 0 0.7rem; gap: 2px;
+    border-bottom: 1px solid var(--line);
+    font-size: var(--step--1);
+  }
+  .mock .tabs .tab {
+    padding: 0.5rem 0.7rem;
+    color: var(--fg-mut);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .mock .tabs .tab.active {
+    color: var(--fg-hi);
+    border-bottom-color: var(--accent);
+    font-weight: 500;
+  }
+  .mock .editor {
+    padding: clamp(0.7rem, 1vw, 1rem);
+    font-family: var(--mono);
+    font-size: var(--step--2);
+    color: var(--fg);
+    line-height: 1.6;
+    overflow: hidden;
+  }
+  .mock .editor .c { color: var(--fg-dim); }
+  .mock .editor .h { color: var(--fg-hi); }
+
+  .mock .cases { padding: 0.25rem 0; overflow: hidden; }
+  .mock .case-row {
+    padding: clamp(0.5rem, 1vw, 0.75rem) clamp(0.7rem, 1.2vw, 1rem);
+    border-bottom: 1px solid var(--line);
+  }
+  .mock .case-row:last-child { border-bottom: 0; }
+  .mock .case-row .meta {
+    font: 500 var(--step--2)/1 var(--sans);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--fg-dim); margin-bottom: 4px;
+  }
+  .mock .case-row .meta .tag {
+    font-family: var(--mono);
+    background: var(--bg-3); color: var(--fg-mut);
+    padding: 2px 6px; border-radius: 3px;
+    letter-spacing: 0; text-transform: none;
+    font-size: var(--step--2); margin-left: 6px;
+  }
+  .mock .case-row .input {
+    font-family: var(--mono); font-size: var(--step--1);
+    color: var(--fg);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .mock .summary {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    border-bottom: 1px solid var(--line);
+  }
+  .mock .summary .cell {
+    padding: clamp(0.5rem, 1vw, 0.75rem) 0.6rem;
+    border-right: 1px solid var(--line);
+  }
+  .mock .summary .cell:last-child { border-right: 0; }
+  .mock .summary .n {
+    font: 600 var(--step-1)/1 var(--sans);
+    color: var(--fg-hi);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .mock .summary .n.win  { color: var(--win); }
+  .mock .summary .n.loss { color: var(--loss); }
+  .mock .summary .n.tie  { color: var(--tie); }
+  .mock .summary .n.dim  { color: var(--fg-faint); }
+  .mock .summary .k {
+    margin-top: 0.2rem;
+    font: 500 var(--step--2)/1 var(--sans);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--fg-dim);
+  }
+
+  .mock .coach-strip {
+    padding: clamp(0.6rem, 1vw, 0.9rem) clamp(0.8rem, 1.2vw, 1rem);
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    display: flex; gap: 0.7rem; align-items: flex-start;
+  }
+  .mock .coach-strip::before {
+    content: ""; flex-shrink: 0;
+    width: 5px; border-radius: 3px; background: var(--accent);
+    align-self: stretch;
+  }
+  .mock .coach-strip .t {
+    font: 600 var(--step--2)/1 var(--sans);
+    color: var(--accent); letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .mock .coach-strip .m {
+    font: 400 var(--step--1)/1.5 var(--sans); color: var(--fg);
+  }
+
+  .mock .grid-table {
+    width: 100%; border-collapse: collapse;
+    font-size: var(--step--2);
+  }
+  .mock .grid-table th, .mock .grid-table td {
+    padding: clamp(0.4rem, 0.8vw, 0.55rem) clamp(0.5rem, 1vw, 0.8rem);
+    text-align: left; border-bottom: 1px solid var(--line);
+  }
+  .mock .grid-table th {
+    font: 600 var(--step--2)/1 var(--sans);
+    color: var(--fg-dim); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .mock .grid-table td.idx   { font-family: var(--mono); color: var(--fg-mut); width: 32px; }
+  .mock .grid-table td.delta { font-family: var(--mono); width: 20px; text-align: center; }
+  .mock .grid-table td.delta.up   { color: var(--win); }
+  .mock .grid-table td.delta.down { color: var(--loss); }
+  .mock .grid-table td.delta.same { color: var(--fg-faint); }
+  .mock .grid-table td.input { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 0; }
+  .vp {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font: 600 var(--step--2)/1.3 var(--sans);
+    border: 1px solid transparent;
+  }
+  .vp.b { color: var(--win);  background: var(--win-soft);  border-color: rgba(127,182,133,0.25); }
+  .vp.a { color: var(--loss); background: var(--loss-soft); border-color: rgba(217,108,108,0.25); }
+  .vp.t { color: var(--tie);  background: var(--accent-soft); border-color: var(--accent-line); }
+
+  /* ── Coach detail (slide 6) ─────────────────────────────── */
+  .coach-showcase {
+    display: grid; gap: var(--gap);
+    grid-template-columns: 1fr;
+    margin-top: var(--gap);
+  }
+  @media (min-width: 860px) { .coach-showcase { grid-template-columns: 1fr 1.4fr; align-items: start; } }
+  .coach-item {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: clamp(0.9rem, 0.6rem + 0.8vw, 1.25rem);
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .coach-item .head {
+    display: flex; align-items: baseline; gap: 0.6rem;
+  }
+  .coach-item .head .n { font-family: var(--mono); font-size: var(--step--2); color: var(--accent); font-weight: 500; min-width: 22px; }
+  .coach-item .head .t { font: 600 var(--step-0)/1.3 var(--sans); color: var(--fg-hi); }
+  .coach-item .r { font: 400 var(--step--1)/1.5 var(--sans); color: var(--fg-mut); }
+  .coach-item .edit {
+    margin: 0;
+    padding: clamp(0.6rem, 1vw, 0.85rem);
+    background: var(--bg-2); color: var(--fg);
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    font-family: var(--mono); font-size: var(--step--1);
+    line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+  }
+  .coach-item .apply {
+    align-self: flex-start;
+    padding: 5px 11px;
+    background: var(--accent); color: #1a1410;
+    border-radius: var(--radius-sm);
+    font: 600 var(--step--2)/1 var(--sans);
+  }
+
+  /* ── Trajectory block (slide 7) ─────────────────────────── */
+  .traj {
+    display: grid; gap: var(--gap);
+    grid-template-columns: 1fr;
+    margin-top: var(--gap);
+  }
+  @media (min-width: 860px) { .traj { grid-template-columns: 1.1fr 0.9fr; align-items: start; } }
+  .traj-log {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: clamp(1rem, 0.6rem + 1vw, 1.35rem);
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    line-height: 1.75;
+  }
+  .traj-log .commit { color: var(--accent); font-weight: 500; }
+  .traj-log .meta   { color: var(--fg-dim); }
+  .traj-log .msg    { color: var(--fg-hi); }
+  .traj-log .stats  { color: var(--fg-mut); }
+  .traj-log hr      { border: 0; border-top: 1px solid var(--line); margin: 0.8rem 0; }
+
+  .curve {
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: clamp(1rem, 0.6rem + 1vw, 1.35rem);
+  }
+  .curve svg { width: 100%; height: auto; display: block; }
+  .curve .cap {
+    font: 500 var(--step--2)/1 var(--sans);
+    color: var(--fg-dim);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-top: 0.8rem;
+  }
+
+  /* ── CI snippet (slide 9) ───────────────────────────────── */
+  .gh {
+    background: #ffffff; color: #1f2328;
+    border-radius: var(--radius);
+    padding: clamp(1rem, 0.6rem + 1.2vw, 1.75rem) clamp(1.1rem, 0.6rem + 1.4vw, 2rem);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.5;
+  }
+  .gh-head {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 0.7rem; border-bottom: 1px solid #d0d7de;
+    margin-bottom: 0.9rem;
+  }
+  .gh .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, #d4a056, #c18f46);
+    color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 13px;
+  }
+  .gh .avatar::after { content: "R"; }
+  .gh .who { font-weight: 600; color: #24292f; }
+  .gh .when { color: #59636e; font-size: 13px; }
+  .gh h4 {
+    font-family: var(--sans); font-weight: 600; color: #1f2328;
+    font-size: var(--step-1);
+    margin: 0 0 0.4rem;
+  }
+  .gh .status {
+    padding: 9px 14px;
+    background: #ffebe9; border-left: 3px solid #cf222e;
+    border-radius: 4px; margin-bottom: 1rem;
+    font-weight: 500; color: #82071e;
+  }
+  .gh .counts {
+    display: flex; flex-wrap: wrap; gap: 0.6rem 1.5rem;
+    padding: 0.7rem 0 0.9rem; border-bottom: 1px solid #eaeef2;
+    margin-bottom: 1rem; font-size: 13.5px;
+  }
+  .gh .counts .stat .n { font-weight: 600; color: #1f2328; font-variant-numeric: tabular-nums; }
+  .gh .counts .stat .k { color: #59636e; margin-left: 5px; }
+  .gh details {
+    background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+    padding: 0.8rem 1rem;
+  }
+  .gh summary { font-weight: 600; color: #1f2328; list-style: none; display: flex; gap: 6px; align-items: center; }
+  .gh summary::before { content: "▾"; color: #59636e; font-size: 10px; }
+  .gh pre {
+    font-family: var(--mono); font-size: 12px;
+    background: #eaeef2; padding: 6px 8px; border-radius: 4px;
+    margin: 4px 0 10px; white-space: pre-wrap; color: #1f2328;
+    line-height: 1.4;
+  }
+  .gh .two {
+    display: grid; gap: 0.6rem;
+    grid-template-columns: 1fr;
+    margin-top: 0.5rem;
+  }
+  @media (min-width: 640px) { .gh .two { grid-template-columns: 1fr 1fr; } }
+  .gh .cap { font-size: 11.5px; color: #59636e; font-weight: 600; margin-bottom: 2px; }
+
+  /* ── Roadmap (slide 10) ─────────────────────────────────── */
+  .roadmap { margin-top: var(--gap); }
+  .roadmap .row {
+    display: grid;
+    grid-template-columns: clamp(60px, 7vw, 96px) 1fr;
+    gap: clamp(0.9rem, 1.4vw, 1.5rem);
+    padding: clamp(0.8rem, 1vw, 1.2rem) 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .roadmap .row:last-child { border-bottom: 0; }
+  .roadmap .ver {
+    font: 400 var(--step-2)/1 var(--display);
+    font-style: italic; color: var(--accent);
+  }
+  .roadmap .row.past .ver { color: var(--fg-dim); }
+  .roadmap .t { font: 600 var(--step-0)/1.3 var(--sans); color: var(--fg-hi); margin-bottom: 0.25rem; }
+  .roadmap .d { font: 400 var(--step--1)/1.5 var(--sans); color: var(--fg-mut); }
+  .roadmap .row.past .t { color: var(--fg-mut); }
+
+  /* ── End slide ──────────────────────────────────────────── */
+  .s-end { justify-content: center; align-items: center; text-align: center; }
+  .s-end .link {
+    font: 400 var(--step-5)/1 var(--display);
+    font-style: italic;
+    color: var(--accent);
+    letter-spacing: -0.028em;
+  }
+  .s-end .sub {
+    font-size: var(--step-1);
+    color: var(--fg-mut);
+    max-width: 48ch;
+    line-height: 1.55;
+    margin-top: 1.2rem;
+  }
+  .s-end .chips {
+    display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;
+    margin-top: 1.3rem;
+  }
+  .s-end .chip {
+    padding: 7px 14px; border: 1px solid var(--line);
+    border-radius: 999px; color: var(--fg-mut);
+    font-family: var(--mono); font-size: var(--step--1);
+  }
+  .s-end .sig {
+    margin-top: 2.5rem;
+    font-family: var(--mono); font-size: var(--step--2);
+    color: var(--fg-faint); letter-spacing: 0.04em;
+  }
+
+  /* ── HUD (global) ───────────────────────────────────────── */
+  .hud {
+    position: fixed;
+    bottom: clamp(12px, 2vw, 24px);
+    right: clamp(14px, 2vw, 28px);
+    display: flex; align-items: center; gap: clamp(10px, 1.2vw, 14px);
+    font-family: var(--mono); font-size: var(--step--2);
+    color: var(--fg-dim);
+    z-index: 10;
+  }
+  .hud .progress {
+    width: clamp(80px, 12vw, 160px); height: 2px;
+    background: var(--bg-3); border-radius: 2px; overflow: hidden;
+  }
+  .hud .progress .fill {
+    height: 100%; background: var(--accent); width: 0%;
+    transition: width .4s cubic-bezier(.2,.8,.2,1);
+  }
+  .hud .counter { font-variant-numeric: tabular-nums; color: var(--fg-mut); }
+  .hud .counter .total { color: var(--fg-faint); }
+  .hud .hint { color: var(--fg-faint); display: inline-flex; gap: 4px; align-items: center; }
+  @media (max-width: 600px) { .hud .hint { display: none; } }
+
+  .corner {
+    position: fixed;
+    bottom: clamp(12px, 2vw, 26px);
+    left: clamp(14px, 2vw, 30px);
+    font: 400 var(--step--1)/1 var(--display);
+    font-style: italic; color: var(--fg-dim);
+    z-index: 10;
+    display: none;
+  }
+  .corner::before {
+    content: ""; display: inline-block;
+    width: 6px; height: 6px; border-radius: 2px;
+    background: var(--accent); margin-right: 8px;
+    vertical-align: 1px;
+  }
+  body[data-slide]:not([data-slide="1"]):not([data-slide="10"]) .corner { display: inline-block; }
+
+  /* ── Print / export to PDF ──────────────────────────────── */
+  @media print {
+    html, body { background: #fff; color: #1f2328; overflow: visible; }
+    .stage { position: static; padding: 0; display: block; }
+    .slide {
+      display: block !important;
+      page-break-after: always; break-after: page;
+      width: 100%; height: auto; min-height: 100vh;
+      padding: 2.5rem 3rem;
+      animation: none !important;
+    }
+    .slide [data-stagger] { animation: none !important; opacity: 1 !important; transform: none !important; }
+    .hud, .corner { display: none !important; }
+    .gh { box-shadow: none; border: 1px solid #d0d7de; }
+    .mock { box-shadow: none; }
+  }
+</style>
+</head>
+<body data-slide="1">
+  <div class="stage" id="stage">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 1 · Title
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide active s-title" data-slide="1">
+      <div data-stagger="1" class="eyebrow">How to use rubric · 2026</div>
+      <div class="stack" style="gap: clamp(1rem, 2vw, 2rem); margin-top: auto; margin-bottom: auto;">
+        <div class="wordmark" data-stagger="2">
+          <span class="mark" aria-hidden="true"></span>
+          <span>Rubric</span>
+        </div>
+        <div class="subtitle" data-stagger="3">
+          A workbench for<br>
+          <em>prompt iteration.</em>
+        </div>
+      </div>
+      <div class="title-meta" data-stagger="4">
+        <span>Stop editing prompts blind.</span>
+        <span>v2.2.1 · May 2026</span>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 2 · The problem
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="2">
+      <div class="eyebrow" data-stagger="1">The problem</div>
+      <h2 data-stagger="2" style="margin-top: 0.6rem; max-width: 22ch;">
+        Iterating on a prompt is <em>guessing.</em>
+      </h2>
+      <p class="lead mut" data-stagger="3" style="margin-top: 1rem;">
+        We have <code class="inline">git diff</code>, <code class="inline">test --watch</code>,
+        REPLs, linters. For prompts we have… a ChatGPT tab open in another window
+        and a feeling.
+      </p>
+
+      <div class="contrast">
+        <div class="card bad" data-stagger="4">
+          <span class="tag">Today</span>
+          <h3>Edit, spot-check, ship</h3>
+          <ul>
+            <li>Tweak <code class="inline">candidate.md</code>. Paste it into a tab. Try three examples.</li>
+            <li>Merge. Hope.</li>
+            <li>Discover the regression via a Slack screenshot weeks later.</li>
+            <li>No idea whether yesterday's version was better or worse than today's.</li>
+          </ul>
+        </div>
+        <div class="card good" data-stagger="5">
+          <span class="tag">With rubric</span>
+          <h3>Edit, run, coach, promote</h3>
+          <ul>
+            <li>Edit. A real dataset runs against both baseline and candidate.</li>
+            <li>See which cases flipped and <em>why.</em></li>
+            <li>A coach reads the losses and suggests specific edits to try.</li>
+            <li>When candidate wins, promote it. Git records the trajectory.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 3 · The loop
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="3">
+      <div class="eyebrow" data-stagger="1">The workbench loop</div>
+      <h2 data-stagger="2" style="margin-top: 0.6rem; max-width: 22ch;">
+        One cycle. <em>Measurably better</em> every day.
+      </h2>
+      <p class="lead mut" data-stagger="3" style="margin-top: 1rem;">
+        You sit down at your workspace, run the cycle two or three times, promote
+        once, close the lid. The prompt just got better. Do it daily for a month
+        and the curve is compounding.
+      </p>
+
+      <div class="loop">
+        <div class="loop-step" data-stagger="4">
+          <span class="n">01</span>
+          <span class="t">Edit</span>
+          <span class="d">Tweak <code class="inline">candidate.md</code> in the Prompts pane.</span>
+        </div>
+        <div class="loop-step" data-stagger="5">
+          <span class="n">02</span>
+          <span class="t">Run</span>
+          <span class="d">Sweep candidate vs. baseline across your dataset.</span>
+        </div>
+        <div class="loop-step active" data-stagger="6">
+          <span class="n">03</span>
+          <span class="t">Coach</span>
+          <span class="d">Judge model reads the losses. Proposes specific edits.</span>
+        </div>
+        <div class="loop-step" data-stagger="7">
+          <span class="n">04</span>
+          <span class="t">Apply</span>
+          <span class="d">One click inserts the suggestion. Re-run.</span>
+        </div>
+        <div class="loop-step" data-stagger="8">
+          <span class="n">05</span>
+          <span class="t">Promote</span>
+          <span class="d">Candidate beats baseline. Swap. Git commits the trajectory.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 4 · Setup
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="4">
+      <div class="eyebrow" data-stagger="1">Setup · under two minutes</div>
+      <h2 data-stagger="2" style="margin-top: 0.6rem;">
+        Three commands. <em>No account.</em>
+      </h2>
+      <p data-stagger="3" class="mut" style="margin-top: 0.7rem; max-width: 60ch; font-size: var(--step-0);">
+        Single-file binary. No Node, no Python, no login wall. Edit prompt files
+        on disk; rubric is a thin layer over the eval engine.
+      </p>
+
+      <div class="steps">
+        <div class="n" data-stagger="4">01</div>
+        <div class="what" data-stagger="4">
+          <div class="t">Download the binary.</div>
+          <div class="shell">
+            <div class="cmd"><span class="tok-c"># macOS / Linux — resolves arch automatically</span></div>
+            <div class="cmd">curl -L github.com/rubric/rubric/releases/latest/download/rubric-$(uname -s).tar.gz | tar -xz</div>
+          </div>
+        </div>
+
+        <div class="n" data-stagger="5">02</div>
+        <div class="what" data-stagger="5">
+          <div class="t">Scaffold a workspace.</div>
+          <div class="shell">
+            <div class="cmd">./rubric init</div>
+            <div class="out">  wrote rubric.config.json</div>
+            <div class="out">  wrote prompts/baseline.md, prompts/candidate.md</div>
+            <div class="out">  wrote data/cases.jsonl</div>
+          </div>
+        </div>
+
+        <div class="n" data-stagger="6">03</div>
+        <div class="what" data-stagger="6">
+          <div class="t">Open the workbench.</div>
+          <div class="shell">
+            <div class="cmd">./rubric serve<span class="tok-c">           # three-pane UI on :5174</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 5 · The UI
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="5">
+      <div class="eyebrow" data-stagger="1">The workbench, at a glance</div>
+      <h2 data-stagger="2" style="margin-top: 0.6rem; max-width: 22ch; font-size: var(--step-4);">
+        Three panes. <em>One loop.</em>
+      </h2>
+
+      <div class="mock" data-stagger="3" style="margin-top: var(--gap);">
+        <div class="chrome">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="url">127.0.0.1:5174</span>
+        </div>
+        <div class="topbar">
+          <span class="brand"><span class="b"></span>Rubric</span>
+          <span class="spacer"></span>
+          <span class="pill">Models <span class="v">openai/gpt-5.2</span></span>
+          <span class="pill">Judge <span class="v">openai/gpt-5.2</span></span>
+          <span class="primary">Run</span>
+        </div>
+        <div class="panes">
+          <div class="pane">
+            <div class="pane-title"><span class="dot"></span>Prompts</div>
+            <div class="tabs">
+              <span class="tab">Baseline</span>
+              <span class="tab active">Candidate</span>
+              <span class="tab">Judge</span>
+            </div>
+            <div class="editor">
+<span class="h">You are a senior engineer.</span>
+
+<span class="c"># Structure every answer:</span>
+<span class="c"># 1. Direct answer, one line.</span>
+<span class="c"># 2. The load-bearing reason.</span>
+<span class="c"># 3. A concrete example.</span>
+
+Question: {{input}}
+            </div>
+          </div>
+          <div class="pane">
+            <div class="pane-title">Cases</div>
+            <div class="cases">
+              <div class="case-row">
+                <div class="meta">#0 <span class="tag">retry</span></div>
+                <div class="input">When is a POST endpoint safe to retry?</div>
+              </div>
+              <div class="case-row">
+                <div class="meta">#1 <span class="tag">node</span></div>
+                <div class="input">How does Express rate-limit by default?</div>
+              </div>
+              <div class="case-row">
+                <div class="meta">#2 <span class="tag">pg</span></div>
+                <div class="input">Why might an index slow a query down?</div>
+              </div>
+              <div class="case-row">
+                <div class="meta">#3 <span class="tag">node</span></div>
+                <div class="input">What breaks first at the event-loop limit?</div>
+              </div>
+            </div>
+          </div>
+          <div class="pane">
+            <div class="pane-title">Results</div>
+            <div class="summary">
+              <div class="cell"><div class="n win">3</div><div class="k">Wins</div></div>
+              <div class="cell"><div class="n loss">1</div><div class="k">Losses</div></div>
+              <div class="cell"><div class="n tie">0</div><div class="k">Ties</div></div>
+              <div class="cell"><div class="n">75<span style="font-size:0.65em;color:var(--fg-dim)">%</span></div><div class="k">Rate</div></div>
+              <div class="cell"><div class="n win">2</div><div class="k">Δ up</div></div>
+            </div>
+            <div class="coach-strip">
+              <div>
+                <div class="t">Coach</div>
+                <div class="m">Your candidate loses mainly by forcing an example even when the best answer is a one-line fact.</div>
+              </div>
+            </div>
+            <table class="grid-table">
+              <thead><tr><th>#</th><th>Δ</th><th>Input</th><th>Winner</th></tr></thead>
+              <tbody>
+                <tr><td class="idx">0</td><td class="delta up">▲</td><td class="input">When is a POST endpoint safe to retry?</td><td><span class="vp b">Cand</span></td></tr>
+                <tr><td class="idx">1</td><td class="delta up">▲</td><td class="input">How does Express rate-limit by default?</td><td><span class="vp b">Cand</span></td></tr>
+                <tr><td class="idx">2</td><td class="delta same">·</td><td class="input">Why might an index slow a query down?</td><td><span class="vp b">Cand</span></td></tr>
+                <tr><td class="idx">3</td><td class="delta down">▼</td><td class="input">What breaks first at the event-loop limit?</td><td><span class="vp a">Base</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 6 · Coach
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="6">
+      <div class="eyebrow" data-stagger="1">The feature that changes everything</div>
+      <h2 data-stagger="2" style="margin-top: 0.6rem; max-width: 22ch;">
+        The judge stops being a <em>referee</em>.<br>
+        It becomes a <em>coach</em>.
+      </h2>
+
+      <div class="coach-showcase">
+        <div data-stagger="3">
+          <p class="lead mut">
+            After a sweep, the coach reads all the losses together, spots the pattern, and proposes concrete edits to <code class="inline">candidate.md</code>.
+          </p>
+          <p class="mut" style="margin-top: 1rem; font-size: var(--step-0);">
+            Not "the candidate needs improvement." Specific: <em>"Case 1: you suggested 'nullable with a default' up front, which can rewrite/lock tables in some engines. Add a migration-safety rule."</em>
+          </p>
+          <p class="mut" style="margin-top: 1rem; font-size: var(--step-0);">
+            One click appends the suggested edit into your candidate prompt. Save, re-run. The loss either flips, or it doesn't — either way you learn.
+          </p>
+        </div>
+
+        <div class="stack sm" data-stagger="4">
+          <div class="coach-item">
+            <div class="head">
+              <span class="n">01</span>
+              <span class="t">Avoid risky migration guidance</span>
+            </div>
+            <div class="r">Case 1: candidate suggested adding a DEFAULT on ALTER TABLE. Baseline explicitly avoided it and won on safety.</div>
+            <pre class="edit">For large-table schema changes: never recommend adding
+a column with a DEFAULT in the same ADD COLUMN step.
+Add NULLable → backfill → enforce NOT NULL separately.</pre>
+            <span class="apply">Apply to candidate</span>
+          </div>
+          <div class="coach-item">
+            <div class="head">
+              <span class="n">02</span>
+              <span class="t">Make the example optional when it crowds out the answer</span>
+            </div>
+            <div class="r">Cases 4 and 5: the question was answerable in one line. The forced 3-part template made the response lose on brevity.</div>
+            <pre class="edit">If the question can be fully answered by a single
+factual statement, omit section 3 and keep the response
+to 1–2 short sentences.</pre>
+            <span class="apply">Apply to candidate</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 7 · Promote & Trajectory
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="7">
+      <div class="eyebrow" data-stagger="1">Promote · the bar moves up</div>
+      <h2 data-stagger="2" style="margin-top: 0.6rem; max-width: 22ch;">
+        When candidate wins, <em>promote.</em>
+      </h2>
+      <p class="lead mut" data-stagger="3" style="margin-top: 1rem;">
+        One click swaps candidate → baseline, resets candidate to the new baseline,
+        and writes a git commit. <code class="inline">git log prompts/</code> is now
+        the story of how your prompt got better.
+      </p>
+
+      <div class="traj">
+        <div class="traj-log" data-stagger="4">
+          <div><span class="commit">9ec7b85</span> <span class="meta">· today · 16:42</span></div>
+          <div class="msg">rubric: promote candidate → baseline</div>
+          <div class="stats">wins=4 losses=1 ties=0 · <em>+18% win rate</em></div>
+          <hr>
+          <div><span class="commit">3364f46</span> <span class="meta">· today · 11:08</span></div>
+          <div class="msg">rubric: promote candidate → baseline</div>
+          <div class="stats">wins=3 losses=2 ties=0 · <em>+6% win rate</em></div>
+          <hr>
+          <div><span class="commit">ed5847b</span> <span class="meta">· yesterday</span></div>
+          <div class="msg">rubric: promote candidate → baseline</div>
+          <div class="stats">wins=3 losses=1 ties=1 · <em>+12% win rate</em></div>
+          <hr>
+          <div><span class="commit">927d879</span> <span class="meta">· two days ago</span></div>
+          <div class="msg">rubric: promote candidate → baseline</div>
+          <div class="stats">wins=3 losses=2 ties=0 · <em>+8% win rate</em></div>
+        </div>
+
+        <div class="curve" data-stagger="5">
+          <svg viewBox="0 0 400 180" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="win rate trajectory">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#d4a056" stop-opacity="0.3"/>
+                <stop offset="1" stop-color="#d4a056" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <!-- axes -->
+            <line x1="30" y1="155" x2="380" y2="155" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+            <line x1="30" y1="20"  x2="30"  y2="155" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+            <!-- trajectory -->
+            <path d="M 40,130 L 110,115 L 180,95 L 250,70 L 320,45 L 370,35"
+                  fill="none" stroke="#d4a056" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- fill -->
+            <path d="M 40,130 L 110,115 L 180,95 L 250,70 L 320,45 L 370,35 L 370,155 L 40,155 Z" fill="url(#g)"/>
+            <!-- points -->
+            <g fill="#d4a056">
+              <circle cx="40"  cy="130" r="3.5"/>
+              <circle cx="110" cy="115" r="3.5"/>
+              <circle cx="180" cy="95"  r="3.5"/>
+              <circle cx="250" cy="70"  r="3.5"/>
+              <circle cx="320" cy="45"  r="3.5"/>
+              <circle cx="370" cy="35"  r="3.5"/>
+            </g>
+            <!-- labels -->
+            <g font-family="JetBrains Mono, monospace" font-size="9" fill="#6b7177" text-anchor="middle">
+              <text x="40"  y="172">Mon</text>
+              <text x="110" y="172">Tue</text>
+              <text x="180" y="172">Wed</text>
+              <text x="250" y="172">Thu</text>
+              <text x="320" y="172">Fri</text>
+              <text x="370" y="172">Today</text>
+            </g>
+            <!-- y labels -->
+            <g font-family="JetBrains Mono, monospace" font-size="9" fill="#4a4f55" text-anchor="end">
+              <text x="24" y="155">40%</text>
+              <text x="24" y="95">60%</text>
+              <text x="24" y="35">80%</text>
+            </g>
+          </svg>
+          <div class="cap">Win rate · 7 day trajectory</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 8 · Disagree
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="8">
+      <div class="split asym">
+        <div>
+          <div class="eyebrow" data-stagger="1">The judge isn't the final word</div>
+          <h2 data-stagger="2" style="margin-top: 0.6rem;">
+            When you disagree, <em>say so.</em>
+          </h2>
+          <p class="lead mut" data-stagger="3" style="margin-top: 1rem;">
+            The judge is just another LLM. When you think it got a cell wrong, one click records the override — and that log becomes the training corpus for v2.3 calibration.
+          </p>
+          <p class="mut" data-stagger="4" style="font-size: var(--step--1); margin-top: 1rem;">
+            Works from the CLI and inline in the workbench. Same log either way:
+            <code class="inline">~/.rubric/overrides/&lt;project&gt;.jsonl</code>
+          </p>
+        </div>
+        <div class="stack sm" data-stagger="5">
+          <div class="shell">
+            <div class="cmd">rubric disagree case-3/openai/gpt-5.2 \</div>
+            <div class="cmd">&nbsp;&nbsp;--verdict A --reason <span class="tok-s">"judge missed the factual error in B"</span></div>
+            <div class="out" style="margin-top: 0.5rem;">  ✎ case-3/openai/gpt-5.2 → A — "judge missed…"</div>
+          </div>
+          <div class="panel" style="padding: 1rem 1.2rem;">
+            <div style="font: 600 var(--step--2)/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-dim); margin-bottom: 0.6rem;">Or inline, in serve</div>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+              <span style="font: 600 var(--step--2)/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-dim); margin-right: 0.3rem;">Your verdict</span>
+              <span style="padding: 6px 10px; background: var(--bg-2); color: var(--fg-mut); border: 1px solid var(--line); border-radius: 5px; font-family: var(--mono); font-size: var(--step--1);">Baseline</span>
+              <span style="padding: 6px 10px; background: var(--win-soft); color: var(--win); border: 1px solid rgba(127,182,133,0.35); border-radius: 5px; font-family: var(--mono); font-size: var(--step--1);">Candidate</span>
+              <span style="padding: 6px 10px; background: var(--bg-2); color: var(--fg-mut); border: 1px solid var(--line); border-radius: 5px; font-family: var(--mono); font-size: var(--step--1);">Tie</span>
+            </div>
+            <div style="margin-top: 0.6rem; color: var(--accent); font-size: var(--step--1);">✎ You → Candidate · "judge nailed it"</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 9 · CI gate
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide" data-slide="9">
+      <div class="split side">
+        <div>
+          <div class="eyebrow" data-stagger="1">After you promote</div>
+          <h2 data-stagger="2" style="margin-top: 0.6rem; font-size: var(--step-4);">
+            CI protects the <em>bar.</em>
+          </h2>
+          <p class="lead mut" data-stagger="3" style="margin-top: 1rem; font-size: var(--step-0);">
+            Once the prompt is good, tag the commit and let GitHub Actions gate future PRs against regressions. The PR comment shows top regressions inline.
+          </p>
+          <p class="mut" data-stagger="4" style="font-size: var(--step--1); margin-top: 1rem;">
+            The Action installs the release binary, takes ~15s to set up, and exits with code 2 when candidate loses more than it wins.
+          </p>
+        </div>
+        <div class="gh" data-stagger="5">
+          <div class="gh-head">
+            <div class="avatar" aria-hidden="true"></div>
+            <div>
+              <div class="who">rubric-bot</div>
+              <div class="when">commented 2 min ago</div>
+            </div>
+          </div>
+          <h4>Rubric</h4>
+          <div class="status"><strong>REGRESSION</strong> — candidate loses 2 &gt; wins 0</div>
+          <div class="counts">
+            <div class="stat"><span class="n">0</span><span class="k">wins</span></div>
+            <div class="stat"><span class="n" style="color:#cf222e">2</span><span class="k">losses</span></div>
+            <div class="stat"><span class="n">0.0%</span><span class="k">win rate</span></div>
+            <div class="stat"><span class="n">$0.003</span><span class="k">cost</span></div>
+          </div>
+          <details open>
+            <summary>Top regressions (2 of 2 losses)</summary>
+            <div style="margin-top: 0.75rem;">
+              <h4 style="font-size: 14px;">case-1 · <code style="font-family: var(--mono); font-size: 12px; background: #eaeef2; padding: 1px 5px; border-radius: 3px;">openai/gpt-5.2</code></h4>
+              <div style="font-size: 12.5px; font-weight: 600; color: #1f2328; margin: 4px 0;">Why baseline won</div>
+              <pre>Candidate hallucinated a built-in rate limiter that does not exist in the framework.</pre>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Slide 10 · End
+         ═══════════════════════════════════════════════════════ -->
+    <section class="slide s-end" data-slide="10">
+      <div class="eyebrow" data-stagger="1">Try it this week</div>
+      <div class="link" data-stagger="2" style="margin-top: 1.5rem;">rubric.dev</div>
+      <div class="sub" data-stagger="3">
+        Download a binary. Point it at your prompt folder.<br>
+        Run the loop. Ship a prompt that's measurably better<br>
+        than yesterday's.
+      </div>
+      <div class="chips" data-stagger="4">
+        <span class="chip">github.com/rubric/rubric</span>
+        <span class="chip">brew install rubric · soon</span>
+        <span class="chip">v2.3 · calibration classifier · next</span>
+      </div>
+      <div class="sig" data-stagger="5">Built in the open · MIT</div>
+    </section>
+
+  </div>
+
+  <div class="corner">rubric · workbench</div>
+  <div class="hud">
+    <span class="hint"><kbd>←</kbd> <kbd>→</kbd> <kbd>space</kbd></span>
+    <div class="progress"><div class="fill" id="progress"></div></div>
+    <span class="counter"><span id="cur">1</span><span class="total"> / <span id="tot">10</span></span></span>
+  </div>
+
+<script>
+  (() => {
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const total = slides.length;
+    const totEl = document.getElementById('tot');
+    const curEl = document.getElementById('cur');
+    const progress = document.getElementById('progress');
+    totEl.textContent = total;
+
+    let i = 0;
+
+    function initialIndex() {
+      const hash = location.hash.match(/#slide-(\d+)/);
+      if (hash) return Math.max(0, Math.min(total - 1, parseInt(hash[1], 10) - 1));
+      const qp = new URLSearchParams(location.search).get('slide');
+      if (qp) return Math.max(0, Math.min(total - 1, parseInt(qp, 10) - 1));
+      return 0;
+    }
+
+    function show(n) {
+      n = Math.max(0, Math.min(total - 1, n));
+      slides[i].classList.remove('active');
+      i = n;
+      slides[i].classList.add('active');
+      document.body.dataset.slide = String(i + 1);
+      curEl.textContent = i + 1;
+      progress.style.width = ((i + 1) / total * 100) + '%';
+      history.replaceState(null, '', '#slide-' + (i + 1));
+    }
+
+    function next() { if (i < total - 1) show(i + 1); }
+    function prev() { if (i > 0) show(i - 1); }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key;
+      if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' || k === 'l' || k === 'j') {
+        e.preventDefault(); next();
+      } else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'h' || k === 'k') {
+        e.preventDefault(); prev();
+      } else if (k === 'Home') {
+        e.preventDefault(); show(0);
+      } else if (k === 'End') {
+        e.preventDefault(); show(total - 1);
+      } else if (/^[1-9]$/.test(k)) {
+        show(parseInt(k, 10) - 1);
+      } else if (k === '0') {
+        show(9);
+      }
+    });
+
+    document.getElementById('stage').addEventListener('click', (e) => {
+      const t = e.target;
+      if (!t) return;
+      const tag = t.tagName;
+      if (tag === 'A' || tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (t.closest && t.closest('details,summary,a,button')) return;
+      next();
+    });
+
+    show(initialIndex());
+  })();
+</script>
+</body>
+</html>
