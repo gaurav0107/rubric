@@ -23,13 +23,71 @@ The workbench loop is the primary job. CI gating is a consequence of it.
 
 ## Install
 
-One command on macOS or Linux:
+Pick the line for your platform. Paste it into a terminal. **Run the four commands one at a time** — don't try to paste them as a block, some terminals break multi-line paste.
+
+**macOS — Apple Silicon (M1/M2/M3/M4):**
 
 ```bash
-curl -L https://github.com/gaurav0107/rubric/releases/latest/download/rubric-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') -o rubric && chmod +x rubric && sudo mv rubric /usr/local/bin/
+curl -fL -o rubric https://github.com/gaurav0107/rubric/releases/latest/download/rubric-darwin-arm64
 ```
 
-Or pick the binary for your platform from [the latest release](https://github.com/gaurav0107/rubric/releases/latest) — `rubric-{linux,darwin,windows}-{x64,arm64}`.
+**macOS — Intel:**
+
+```bash
+curl -fL -o rubric https://github.com/gaurav0107/rubric/releases/latest/download/rubric-darwin-x64
+```
+
+**Linux — x64:**
+
+```bash
+curl -fL -o rubric https://github.com/gaurav0107/rubric/releases/latest/download/rubric-linux-x64
+```
+
+**Linux — ARM64:**
+
+```bash
+curl -fL -o rubric https://github.com/gaurav0107/rubric/releases/latest/download/rubric-linux-arm64
+```
+
+**Windows:** [download `rubric-windows-x64.exe`](https://github.com/gaurav0107/rubric/releases/latest) from the release page.
+
+Then, on macOS / Linux:
+
+```bash
+chmod +x rubric
+```
+
+```bash
+sudo mv rubric /usr/local/bin/
+```
+
+```bash
+rubric quickstart
+```
+
+If `rubric quickstart` prints a win/loss summary, you're done.
+
+### Troubleshooting
+
+**macOS: `zsh: killed` or the command exits silently.** Gatekeeper blocked the unsigned binary. Clear it:
+
+```bash
+xattr -d com.apple.quarantine /usr/local/bin/rubric
+```
+
+Then re-run `rubric quickstart`.
+
+**`chmod: rubric: No such file or directory`.** The `curl` line didn't finish — usually because the command got split across two pasted lines and `curl` ran without a URL. Re-paste the `curl` command as a single line.
+
+**`zsh: parse error near ')'`.** Smart-quote conversion when copying from the rendered GitHub README. Retype the command instead of pasting, or use the per-platform commands above (no shell substitutions, nothing to break).
+
+### One-liner, for people who want it
+
+Works in Bash / zsh if you paste it cleanly on one line — but fails on smart-quote conversion from some rendered doc views. Prefer the per-platform commands above if in doubt.
+
+```bash
+curl -fL -o rubric "https://github.com/gaurav0107/rubric/releases/latest/download/rubric-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/')" && chmod +x rubric && sudo mv rubric /usr/local/bin/
+```
 
 ---
 
