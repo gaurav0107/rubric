@@ -26,10 +26,10 @@ The workbench loop is the primary job. CI gating is a consequence of it.
 One command on macOS or Linux:
 
 ```bash
-curl -L https://github.com/rubric/rubric/releases/latest/download/rubric-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') -o rubric && chmod +x rubric && sudo mv rubric /usr/local/bin/
+curl -L https://github.com/gaurav0107/rubric/releases/latest/download/rubric-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/') -o rubric && chmod +x rubric && sudo mv rubric /usr/local/bin/
 ```
 
-Or pick the binary for your platform from [the latest release](https://github.com/rubric/rubric/releases/latest) — `rubric-{linux,darwin,windows}-{x64,arm64}`.
+Or pick the binary for your platform from [the latest release](https://github.com/gaurav0107/rubric/releases/latest) — `rubric-{linux,darwin,windows}-{x64,arm64}`.
 
 ---
 
@@ -196,10 +196,9 @@ jobs:
     permissions: { pull-requests: write, contents: read }
     steps:
       - uses: actions/checkout@v4
-      - uses: rubric/rubric@v2
+      - uses: gaurav0107/rubric@v2.2.1
         with:
           fail-on-regress: true
-          # version: v2.2.1    # pin instead of floating
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
@@ -285,4 +284,4 @@ data/cases.jsonl         # committed
 - [`CHANGELOG.md`](CHANGELOG.md) — what shipped when and why.
 - [`examples/drift-detector.yml`](examples/drift-detector.yml) — scheduled drift-detection workflow.
 
-MIT. Built in the open at [github.com/rubric/rubric](https://github.com/rubric/rubric).
+MIT. Built in the open at [github.com/gaurav0107/rubric](https://github.com/gaurav0107/rubric).
